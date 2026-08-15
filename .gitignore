@@ -1,0 +1,27 @@
+# .NET build output
+**/bin/
+**/obj/
+artifacts/
+TestResults/
+
+# IDE and user state
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Published executables stay outside version control
+publish/
+publish-*/
+*.exe
+*.pdb
+
+# WebView2 browser profiles and local caches
+*.WebView2/
+EBWebView/
+
+# Operating-system files
+Thumbs.db
+Desktop.ini
+.DS_Store
