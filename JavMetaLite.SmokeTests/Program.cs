@@ -97,7 +97,9 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("JAVLibrary HTML 解析", TestHtmlParser),
     ("高清海报自动裁切", TestPosterCropping),
     ("NFO 生成", TestNfoWriter),
-    ("完整封套 fanart 与 Sample Images 输出", TestArtworkOutput)
+    ("完整封套 fanart 与 Sample Images 输出", TestArtworkOutput),
+    ("v0.4 文件整理计划与安全执行", TestFileOrganization),
+    ("v0.4 本地运行日志", TestAppLog)
 };
 
 var failures = new List<string>();
@@ -397,6 +399,131 @@ static async Task TestArtworkOutput()
     {
         Directory.Delete(root, true);
     }
+}
+
+static async Task TestFileOrganization()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.OrganizationTests.{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    try
+    {
+        var originalMovieDirectory = Path.Combine(root, "SNOS-255-UC");
+        Directory.CreateDirectory(originalMovieDirectory);
+        var sourcePath = Path.Combine(originalMovieDirectory, "489155.com@SNOS-255-UC.mp4");
+        await File.WriteAllBytesAsync(sourcePath, [0x01, 0x02, 0x03]);
+        var metadata = new MovieMetadata
+        {
+            Id = "snos-255",
+            Title = "初始标题",
+            SourceName = "libredmm",
+            SourceDisplayName = "LibreDMM"
+        };
+        var saveOptions = new JavMetaLite.Core.Models.SaveOptions(true, false, false, false, false);
+        var organizationOptions = new OrganizationOptions(true, true);
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            saveOptions,
+            organizationOptions);
+
+        var expectedDirectory = Path.Combine(root, "SNOS-255");
+        var expectedVideoPath = Path.Combine(expectedDirectory, "SNOS-255.mp4");
+        AssertEqual(expectedVideoPath, plan.TargetVideoPath);
+        AssertEqual("False", plan.HasBlockingConflicts.ToString());
+        AssertEqual("True", plan.Changes.Any(change => change.Kind == PlannedChangeKind.CreateFolder).ToString());
+        AssertEqual("True", plan.Changes.Any(change => change.Kind == PlannedChangeKind.MoveAndRenameVideo).ToString());
+
+        using var outputService = new OutputService();
+        var organizer = new FileOrganizationService(outputService);
+        var result = await organizer.ExecuteAsync(plan, metadata, false);
+        AssertEqual("False", File.Exists(sourcePath).ToString());
+        AssertEqual("True", File.Exists(expectedVideoPath).ToString());
+        AssertEqual("True", File.Exists(Path.Combine(expectedDirectory, "SNOS-255.nfo")).ToString());
+        AssertEqual("True", result.VideoMoved.ToString());
+
+        var overwritePlan = FileOrganizationService.BuildPlan(
+            expectedVideoPath,
+            metadata,
+            saveOptions,
+            organizationOptions);
+        AssertEqual("1", overwritePlan.OverwriteConflicts.Count.ToString());
+        var refused = false;
+        try
+        {
+            await organizer.ExecuteAsync(overwritePlan, metadata, false);
+        }
+        catch (IOException)
+        {
+            refused = true;
+        }
+        AssertEqual("True", refused.ToString());
+
+        metadata.Title = "覆盖后的标题";
+        var overwriteResult = await organizer.ExecuteAsync(overwritePlan, metadata, true);
+        var nfo = XDocument.Load(overwriteResult.Outputs.NfoPath!);
+        AssertEqual("覆盖后的标题", nfo.Root?.Element("title")?.Value);
+
+        var secondSource = Path.Combine(root, "another-SNOS-255.mp4");
+        await File.WriteAllBytesAsync(secondSource, [0x04]);
+        var blockedPlan = FileOrganizationService.BuildPlan(
+            secondSource,
+            metadata,
+            saveOptions,
+            organizationOptions);
+        AssertEqual("True", blockedPlan.HasBlockingConflicts.ToString());
+        AssertEqual("True", File.Exists(secondSource).ToString());
+
+        var rollbackSource = Path.Combine(root, "rollback-test.mp4");
+        await File.WriteAllBytesAsync(rollbackSource, [0x05, 0x06]);
+        var rollbackMetadata = new MovieMetadata { Id = "IPX-999", Title = "回滚测试" };
+        var rollbackPlan = FileOrganizationService.BuildPlan(
+            rollbackSource,
+            rollbackMetadata,
+            saveOptions,
+            organizationOptions);
+        var rollbackFailed = false;
+        using (var lockedVideo = new FileStream(rollbackSource, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            try
+            {
+                await organizer.ExecuteAsync(rollbackPlan, rollbackMetadata, false);
+            }
+            catch (IOException)
+            {
+                rollbackFailed = true;
+            }
+        }
+        AssertEqual("True", rollbackFailed.ToString());
+        AssertEqual("True", File.Exists(rollbackSource).ToString());
+        AssertEqual("False", File.Exists(rollbackPlan.TargetVideoPath).ToString());
+        AssertEqual("False", File.Exists(Path.Combine(rollbackPlan.TargetDirectory, "IPX-999.nfo")).ToString());
+    }
+    finally
+    {
+        Directory.Delete(root, true);
+    }
+}
+
+static Task TestAppLog()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.LogTests.{Guid.NewGuid():N}");
+    try
+    {
+        AppLog.ConfigureDirectory(root);
+        AppLog.Info("smoke-log-marker");
+        AssertEqual("True", File.Exists(AppLog.CurrentLogPath).ToString());
+        AssertEqual("True", File.ReadAllText(AppLog.CurrentLogPath).Contains("smoke-log-marker", StringComparison.Ordinal).ToString());
+    }
+    finally
+    {
+        AppLog.ConfigureDirectory(null);
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    return Task.CompletedTask;
 }
 
 static byte[] CreateJpeg(int width, int height, byte red, byte green, byte blue)

@@ -14,7 +14,7 @@ public sealed class OutputService : IDisposable
     {
         _ownsClient = httpClient is null;
         _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(45) };
-        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) JavMetaLite/0.3");
+        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) JavMetaLite/0.4");
         _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("image/jpeg"));
         _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("image/*", 0.9));
     }
@@ -25,9 +25,19 @@ public sealed class OutputService : IDisposable
         SaveOptions options,
         CancellationToken cancellationToken = default)
     {
-        if (!File.Exists(videoPath))
+        return await SaveAsync(videoPath, videoPath, metadata, options, cancellationToken);
+    }
+
+    public async Task<SaveResult> SaveAsync(
+        string sourceVideoPath,
+        string outputVideoPath,
+        MovieMetadata metadata,
+        SaveOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        if (!File.Exists(sourceVideoPath))
         {
-            throw new FileNotFoundException("找不到所选影片。", videoPath);
+            throw new FileNotFoundException("找不到所选影片。", sourceVideoPath);
         }
 
         if (!options.WriteNfo && !options.DownloadPoster && !options.DownloadFanart && !options.DownloadExtrafanart)
@@ -35,8 +45,8 @@ public sealed class OutputService : IDisposable
             throw new InvalidOperationException("请至少选择一种输出：NFO、海报、fanart 或全部剧照。 ");
         }
 
-        var directory = Path.GetDirectoryName(videoPath)!;
-        var baseName = Path.GetFileNameWithoutExtension(videoPath);
+        var directory = Path.GetDirectoryName(outputVideoPath)!;
+        var baseName = Path.GetFileNameWithoutExtension(outputVideoPath);
         var nfoPath = options.WriteNfo ? Path.Combine(directory, $"{baseName}.nfo") : null;
         var posterPath = options.DownloadPoster ? Path.Combine(directory, $"{baseName}-poster.jpg") : null;
         var fanartPath = options.DownloadFanart ? Path.Combine(directory, $"{baseName}-fanart.jpg") : null;
@@ -44,6 +54,7 @@ public sealed class OutputService : IDisposable
         DownloadedImage? cover = null;
         if (options.DownloadPoster || options.DownloadFanart)
         {
+            AppLog.Info($"下载封面 id={metadata.Id} source={metadata.SourceDisplayName}");
             cover = await DownloadBestCoverAsync(metadata, cancellationToken);
         }
 
@@ -107,21 +118,24 @@ public sealed class OutputService : IDisposable
                 cancellationToken);
         }
 
+        AppLog.Info(
+            $"metadata 临时写入完成 base={baseName} nfo={nfoPath is not null} poster={posterPath is not null} " +
+            $"fanart={fanartPath is not null} extrafanart={extraPaths.Length}");
         return new SaveResult(nfoPath, posterPath, fanartPath, extraPaths, options.DownloadFanart && cover is not null);
     }
 
-    public static IReadOnlyList<string> FindExistingOutputFiles(
-        string videoPath,
+    public static IReadOnlyList<string> GetExpectedOutputFiles(
+        string outputVideoPath,
         MovieMetadata metadata,
         SaveOptions options)
     {
-        var directory = Path.GetDirectoryName(videoPath);
+        var directory = Path.GetDirectoryName(outputVideoPath);
         if (string.IsNullOrWhiteSpace(directory))
         {
             return Array.Empty<string>();
         }
 
-        var baseName = Path.GetFileNameWithoutExtension(videoPath);
+        var baseName = Path.GetFileNameWithoutExtension(outputVideoPath);
         var candidates = new List<string>();
         if (options.WriteNfo)
         {
@@ -144,7 +158,15 @@ public sealed class OutputService : IDisposable
             }
         }
 
-        return candidates
+        return candidates;
+    }
+
+    public static IReadOnlyList<string> FindExistingOutputFiles(
+        string videoPath,
+        MovieMetadata metadata,
+        SaveOptions options)
+    {
+        return GetExpectedOutputFiles(videoPath, metadata, options)
             .Where(File.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -170,6 +192,7 @@ public sealed class OutputService : IDisposable
             }
             catch (Exception exception) when (IsRecoverableImageError(exception))
             {
+                AppLog.Warning($"封面下载候选失败：{candidate}", exception);
                 lastError = exception;
             }
         }
@@ -200,6 +223,7 @@ public sealed class OutputService : IDisposable
             catch (Exception exception) when (IsRecoverableImageError(exception))
             {
                 // Individual missing/blocked samples should not prevent the remaining images from being used.
+                AppLog.Warning($"样张下载失败，继续处理其余图片：{url}", exception);
             }
         }
 

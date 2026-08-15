@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Windows;
@@ -22,7 +23,8 @@ public partial class MainWindow : Window
     private readonly JavLibraryClient _javLibraryClient = new();
     private readonly LibreDmmClient _libreDmmClient = new();
     private readonly R18DevClient _r18DevClient = new();
-    private readonly OutputService _outputService = new();
+    private readonly OutputService _outputService;
+    private readonly FileOrganizationService _fileOrganizationService;
     private readonly HttpClient _previewHttpClient = CreatePreviewClient();
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private MovieMetadata _metadata = new();
@@ -31,8 +33,11 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        _outputService = new OutputService();
+        _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
         DataContext = _metadata;
+        AppLog.Info("JavMetaLite v0.4.0 启动");
     }
 
     private void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -114,49 +119,61 @@ public partial class MainWindow : Window
 
     private async Task<MovieMetadata> SearchFromSelectedSourceAsync(string source, string id)
     {
-        if (source == "libredmm")
-        {
-            return await _libreDmmClient.SearchAsync(id, _lifetimeCancellation.Token);
-        }
-
-        if (source == "r18dev")
-        {
-            return await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token);
-        }
-
-        if (source == "javlibrary")
-        {
-            return await _javLibraryClient.SearchAsync(id, _lifetimeCancellation.Token);
-        }
-
-        MovieMetadata? primary = null;
+        AppLog.Info($"开始搜索 metadata source={source} id={id}");
         try
         {
-            primary = await _libreDmmClient.SearchAsync(id, _lifetimeCancellation.Token);
-        }
-        catch (Exception exception) when (IsRecoverableMetadataError(exception))
-        {
-        }
+            if (source == "libredmm")
+            {
+                return await _libreDmmClient.SearchAsync(id, _lifetimeCancellation.Token);
+            }
 
-        if (primary is null)
-        {
-            return await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token);
-        }
+            if (source == "r18dev")
+            {
+                return await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token);
+            }
 
-        if (!MetadataMerger.NeedsFallback(primary))
-        {
-            return primary;
-        }
+            if (source == "javlibrary")
+            {
+                return await _javLibraryClient.SearchAsync(id, _lifetimeCancellation.Token);
+            }
 
-        try
-        {
-            return MetadataMerger.Merge(
-                primary,
-                await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token));
+            MovieMetadata? primary = null;
+            try
+            {
+                primary = await _libreDmmClient.SearchAsync(id, _lifetimeCancellation.Token);
+            }
+            catch (Exception exception) when (IsRecoverableMetadataError(exception))
+            {
+                AppLog.Warning($"自动搜索的 LibreDMM 阶段失败 id={id}", exception);
+            }
+
+            if (primary is null)
+            {
+                AppLog.Info($"LibreDMM 不可用，改用 R18.dev id={id}");
+                return await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token);
+            }
+
+            if (!MetadataMerger.NeedsFallback(primary))
+            {
+                return primary;
+            }
+
+            try
+            {
+                return MetadataMerger.Merge(
+                    primary,
+                    await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token));
+            }
+            catch (Exception exception) when (IsRecoverableMetadataError(exception))
+            {
+                AppLog.Warning($"R18.dev 补全阶段失败，保留 LibreDMM 结果 id={id}", exception);
+                return primary;
+            }
         }
-        catch (Exception exception) when (IsRecoverableMetadataError(exception))
+        catch (Exception exception)
         {
-            return primary;
+            AppLog.Error($"metadata 搜索失败 source={source} id={id}", exception);
+            throw;
         }
     }
 
@@ -180,49 +197,53 @@ public partial class MainWindow : Window
             DownloadFanartCheckBox.IsChecked == true,
             DownloadExtrafanartCheckBox.IsChecked == true,
             OverwriteCheckBox.IsChecked == true);
+        var organizationOptions = new OrganizationOptions(
+            OrganizeFolderCheckBox.IsChecked == true,
+            RenameVideoCheckBox.IsChecked == true);
 
-        if (!options.OverwriteExisting)
+        SavePlan plan;
+        try
         {
-            var conflicts = OutputService.FindExistingOutputFiles(_videoPath, _metadata, options);
-            if (conflicts.Count > 0)
-            {
-                var videoDirectory = Path.GetDirectoryName(_videoPath)!;
-                var displayedFiles = conflicts
-                    .Take(12)
-                    .Select(path => Path.GetRelativePath(videoDirectory, path));
-                var remainingText = conflicts.Count > 12 ? $"\n……另有 {conflicts.Count - 12} 个文件" : string.Empty;
-                var choice = MessageBox.Show(
-                    this,
-                    $"检测到重复文件，是否覆盖？\n\n{string.Join(Environment.NewLine, displayedFiles)}{remainingText}",
-                    "JAV Metadata Lite",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning,
-                    MessageBoxResult.No);
-                if (choice != MessageBoxResult.Yes)
-                {
-                    SetStatus("已取消保存，现有文件未修改", false);
-                    return;
-                }
-
-                options = options with { OverwriteExisting = true };
-            }
+            plan = FileOrganizationService.BuildPlan(_videoPath, _metadata, options, organizationOptions);
+        }
+        catch (Exception exception)
+        {
+            AppLog.Error("无法生成保存预览", exception);
+            ShowError(exception.Message);
+            return;
         }
 
-        await RunBusyAsync("正在生成伴随文件…", async () =>
+        var preview = new SavePreviewWindow(plan) { Owner = this };
+        if (preview.ShowDialog() != true)
         {
-            var result = await _outputService.SaveAsync(_videoPath, _metadata, options, _lifetimeCancellation.Token);
-            var outputs = new[] { result.NfoPath, result.PosterPath, result.FanartPath }
+            AppLog.Info("用户在预览阶段取消保存，未更改文件");
+            SetStatus("已取消，影片和 metadata 均未修改", false);
+            return;
+        }
+
+        await RunBusyAsync("正在安全生成并提交文件…", async () =>
+        {
+            var result = await _fileOrganizationService.ExecuteAsync(
+                plan,
+                _metadata,
+                preview.AllowOverwrite,
+                _lifetimeCancellation.Token);
+            _videoPath = result.VideoPath;
+            FileNameText.Text = Path.GetFileName(result.VideoPath);
+            FilePathText.Text = result.VideoPath;
+            var outputs = new[] { result.Outputs.NfoPath, result.Outputs.PosterPath, result.Outputs.FanartPath }
                 .Where(path => path is not null)
                 .Select(Path.GetFileName)
                 .ToList();
-            if (result.ExtrafanartPaths.Count > 0)
+            if (result.Outputs.ExtrafanartPaths.Count > 0)
             {
-                outputs.Add($"extrafanart（{result.ExtrafanartPaths.Count} 张）");
+                outputs.Add($"extrafanart（{result.Outputs.ExtrafanartPaths.Count} 张）");
             }
-            var fanartNote = result.FanartPath is null
+            var fanartNote = result.Outputs.FanartPath is null
                 ? string.Empty
-                : result.FanartUsedFullCover ? "；fanart 来自完整封套" : string.Empty;
-            SetStatus($"保存完成：{string.Join("、", outputs)}{fanartNote}", true);
+                : result.Outputs.FanartUsedFullCover ? "；fanart 来自完整封套" : string.Empty;
+            var moveNote = result.VideoMoved ? $"；影片已整理为 {Path.GetFileName(result.VideoPath)}" : string.Empty;
+            SetStatus($"保存完成：{string.Join("、", outputs)}{fanartNote}{moveNote}", true);
         });
     }
 
@@ -235,6 +256,7 @@ public partial class MainWindow : Window
         }
 
         _videoPath = path;
+        AppLog.Info($"选择影片 path={path}");
         FileNameText.Text = Path.GetFileName(path);
         FilePathText.Text = path;
         var id = MovieIdParser.TryExtract(path);
@@ -315,6 +337,7 @@ public partial class MainWindow : Window
             }
             catch (Exception exception) when (exception is HttpRequestException or IOException or NotSupportedException or FormatException)
             {
+                AppLog.Warning($"poster 预览候选失败：{candidate}", exception);
             }
         }
 
@@ -344,6 +367,7 @@ public partial class MainWindow : Window
             }
             catch (Exception exception) when (exception is HttpRequestException or IOException or NotSupportedException or FormatException)
             {
+                AppLog.Warning($"fanart 预览候选失败：{candidate}", exception);
             }
         }
 
@@ -443,6 +467,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
+            AppLog.Error(message, exception);
             ShowError(exception.Message);
         }
         finally
@@ -471,6 +496,26 @@ public partial class MainWindow : Window
         MessageBox.Show(this, message, "JAV Metadata Lite", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
+    private void OpenLogs_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Directory.CreateDirectory(AppLog.LogDirectory);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"\"{AppLog.LogDirectory}\"",
+                UseShellExecute = true
+            });
+            SetStatus($"日志目录：{AppLog.LogDirectory}", true);
+        }
+        catch (Exception exception)
+        {
+            AppLog.Error("无法打开日志目录", exception);
+            ShowError($"无法打开日志目录：{exception.Message}");
+        }
+    }
+
     private static bool TryGetDroppedVideo(IDataObject data, out string? path)
     {
         path = null;
@@ -485,6 +530,7 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
+        AppLog.Info("JavMetaLite 关闭");
         _lifetimeCancellation.Cancel();
         _lifetimeCancellation.Dispose();
         _javLibraryClient.Dispose();
