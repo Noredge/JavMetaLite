@@ -6,6 +6,7 @@
 - Replaced the ambiguous overwrite option with “直接保存并覆盖（跳过预览）”.
 - Direct-save mode skips the change preview and overwrites existing NFO or image outputs.
 - Destination movie conflicts still block execution; movie files are never overwritten.
+- Added a deterministic v0.4 filesystem regression suite and a sequential automated release gate.
 
 ## v0.4.0-preview1 — Testing
 

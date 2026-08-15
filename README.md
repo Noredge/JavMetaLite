@@ -47,12 +47,13 @@ dotnet build .\JavMetaLite.App\JavMetaLite.App.csproj
 dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
 ```
 
-运行不依赖测试框架的 smoke tests：
+运行完整自动化测试门槛（核心 smoke、v0.4 文件回归、WPF UI smoke）：
 
 ```powershell
-dotnet run --project .\JavMetaLite.SmokeTests\JavMetaLite.SmokeTests.csproj
-dotnet run --project .\JavMetaLite.UiSmokeTests\JavMetaLite.UiSmokeTests.csproj
+.\scripts\Test-Automated.ps1
 ```
+
+完整自动化测试分层、回归范围和手动检查边界见 [`TESTING.md`](TESTING.md)。
 
 发布 Windows x64 单文件版本：
 
