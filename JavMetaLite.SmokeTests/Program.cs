@@ -419,6 +419,10 @@ static async Task TestFileOrganization()
             SourceDisplayName = "LibreDMM"
         };
         var saveOptions = new JavMetaLite.Core.Models.SaveOptions(true, false, false, false, false);
+        AssertEqual("True", saveOptions.RequiresPreview.ToString());
+        AssertEqual(
+            "False",
+            new JavMetaLite.Core.Models.SaveOptions(true, false, false, false, true).RequiresPreview.ToString());
         var organizationOptions = new OrganizationOptions(true, true);
         var plan = FileOrganizationService.BuildPlan(
             sourcePath,
@@ -426,7 +430,7 @@ static async Task TestFileOrganization()
             saveOptions,
             organizationOptions);
 
-        var expectedDirectory = Path.Combine(root, "SNOS-255");
+        var expectedDirectory = Path.Combine(originalMovieDirectory, "SNOS-255");
         var expectedVideoPath = Path.Combine(expectedDirectory, "SNOS-255.mp4");
         AssertEqual(expectedVideoPath, plan.TargetVideoPath);
         AssertEqual("False", plan.HasBlockingConflicts.ToString());
@@ -463,7 +467,7 @@ static async Task TestFileOrganization()
         var nfo = XDocument.Load(overwriteResult.Outputs.NfoPath!);
         AssertEqual("覆盖后的标题", nfo.Root?.Element("title")?.Value);
 
-        var secondSource = Path.Combine(root, "another-SNOS-255.mp4");
+        var secondSource = Path.Combine(originalMovieDirectory, "another-SNOS-255.mp4");
         await File.WriteAllBytesAsync(secondSource, [0x04]);
         var blockedPlan = FileOrganizationService.BuildPlan(
             secondSource,

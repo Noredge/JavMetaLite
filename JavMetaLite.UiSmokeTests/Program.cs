@@ -57,9 +57,15 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.4 整理选项未创建或没有保持安全的默认关闭状态。 ");
         }
-        if (window.FindName("SaveButton") is not Button saveButton || saveButton.Content?.ToString() != "预览并保存")
+        if (window.FindName("DirectSaveOverwriteCheckBox") is not CheckBox directSaveCheckBox ||
+            directSaveCheckBox.IsChecked == true ||
+            directSaveCheckBox.Content?.ToString() != "直接保存并覆盖（跳过预览）")
         {
-            throw new InvalidOperationException("v0.4 保存前预览入口未创建。 ");
+            throw new InvalidOperationException("v0.4 直接保存选项未创建或没有保持安全的默认关闭状态。 ");
+        }
+        if (window.FindName("SaveButton") is not Button saveButton || saveButton.Content?.ToString() != "保存")
+        {
+            throw new InvalidOperationException("v0.4 保存入口未创建。 ");
         }
 
         var previewPlan = new SavePlan(
@@ -81,7 +87,7 @@ internal static class Program
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True libreDmm=True fanart=True preview=True previewWindow=True organizeDefaultsOff=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True libreDmm=True fanart=True previewWindow=True directSaveDefaultsOff=True organizeDefaultsOff=True");
         window.Close();
         application.Shutdown();
     }

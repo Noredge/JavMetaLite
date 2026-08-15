@@ -196,7 +196,7 @@ public partial class MainWindow : Window
             DownloadPosterCheckBox.IsChecked == true,
             DownloadFanartCheckBox.IsChecked == true,
             DownloadExtrafanartCheckBox.IsChecked == true,
-            OverwriteCheckBox.IsChecked == true);
+            DirectSaveOverwriteCheckBox.IsChecked == true);
         var organizationOptions = new OrganizationOptions(
             OrganizeFolderCheckBox.IsChecked == true,
             RenameVideoCheckBox.IsChecked == true);
@@ -213,12 +213,29 @@ public partial class MainWindow : Window
             return;
         }
 
-        var preview = new SavePreviewWindow(plan) { Owner = this };
-        if (preview.ShowDialog() != true)
+        var allowOverwrite = options.OverwriteExisting;
+        if (options.RequiresPreview)
         {
-            AppLog.Info("用户在预览阶段取消保存，未更改文件");
-            SetStatus("已取消，影片和 metadata 均未修改", false);
-            return;
+            var preview = new SavePreviewWindow(plan) { Owner = this };
+            if (preview.ShowDialog() != true)
+            {
+                AppLog.Info("用户在预览阶段取消保存，未更改文件");
+                SetStatus("已取消，影片和 metadata 均未修改", false);
+                return;
+            }
+
+            allowOverwrite = preview.AllowOverwrite;
+        }
+        else
+        {
+            if (plan.HasBlockingConflicts)
+            {
+                AppLog.Warning("直接保存被影片目标冲突阻止");
+                ShowError(string.Join(Environment.NewLine, plan.BlockingConflicts));
+                return;
+            }
+
+            AppLog.Info("用户启用直接保存并覆盖，跳过变更预览");
         }
 
         await RunBusyAsync("正在安全生成并提交文件…", async () =>
@@ -226,7 +243,7 @@ public partial class MainWindow : Window
             var result = await _fileOrganizationService.ExecuteAsync(
                 plan,
                 _metadata,
-                preview.AllowOverwrite,
+                allowOverwrite,
                 _lifetimeCancellation.Token);
             _videoPath = result.VideoPath;
             FileNameText.Text = Path.GetFileName(result.VideoPath);

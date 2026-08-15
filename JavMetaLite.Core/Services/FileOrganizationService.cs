@@ -29,17 +29,10 @@ public sealed class FileOrganizationService
             : metadata.Id.Trim().ToUpperInvariant();
         var sourceDirectory = Path.GetDirectoryName(sourceVideoPath)!;
         var sourceDirectoryName = new DirectoryInfo(sourceDirectory).Name;
-        var targetDirectory = sourceDirectory;
-        if (organizationOptions.CreateMovieFolder &&
-            !sourceDirectoryName.Equals(normalizedId, StringComparison.OrdinalIgnoreCase))
-        {
-            // A folder such as "SNOS-255-UC" already represents one movie. Place the
-            // standardized folder beside it instead of creating a confusing nested folder.
-            targetDirectory = sourceDirectoryName.Contains(normalizedId, StringComparison.OrdinalIgnoreCase) &&
-                              Directory.GetParent(sourceDirectory) is { } parent
-                ? Path.Combine(parent.FullName, normalizedId)
-                : Path.Combine(sourceDirectory, normalizedId);
-        }
+        var targetDirectory = organizationOptions.CreateMovieFolder &&
+                              !sourceDirectoryName.Equals(normalizedId, StringComparison.OrdinalIgnoreCase)
+            ? Path.Combine(sourceDirectory, normalizedId)
+            : sourceDirectory;
         targetDirectory = Path.GetFullPath(targetDirectory);
 
         var targetBaseName = organizationOptions.RenameVideo

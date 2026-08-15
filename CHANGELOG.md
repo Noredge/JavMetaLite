@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.0-preview2 — Testing
+
+- Changed “整理到番号文件夹” to create the standard-number folder inside the movie's current directory.
+- Replaced the ambiguous overwrite option with “直接保存并覆盖（跳过预览）”.
+- Direct-save mode skips the change preview and overwrites existing NFO or image outputs.
+- Destination movie conflicts still block execution; movie files are never overwritten.
+
 ## v0.4.0-preview1 — Testing
 
 - Added mandatory save preview for metadata creation, overwrite, folder creation, video move, and video rename operations.

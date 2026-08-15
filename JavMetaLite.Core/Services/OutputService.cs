@@ -296,7 +296,7 @@ public sealed class OutputService : IDisposable
         if (conflicts.Length > 0)
         {
             throw new IOException(
-                $"以下文件已经存在：\n{string.Join(Environment.NewLine, conflicts)}\n\n请勾选“允许覆盖已有文件”后重试。 ");
+                $"以下文件已经存在：\n{string.Join(Environment.NewLine, conflicts)}\n\n请勾选“直接保存并覆盖（跳过预览）”后重试。 ");
         }
     }
 
