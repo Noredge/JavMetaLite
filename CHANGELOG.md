@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.0-rc1 — Release candidate
+
+- Promoted the tested v0.4 workflow to its first manual acceptance candidate.
+- Added a numbered acceptance checklist for real sources, overwrite behavior, file safety, logs, and Jellyfin ingestion.
+- No new file-operation behavior was introduced after preview2.
+
 ## v0.4.0-preview2 — Testing
 
 - Changed “整理到番号文件夹” to create the standard-number folder inside the movie's current directory.

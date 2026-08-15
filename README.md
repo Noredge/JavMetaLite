@@ -55,6 +55,8 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
 
 完整自动化测试分层、回归范围和手动检查边界见 [`TESTING.md`](TESTING.md)。
 
+v0.4.0-rc1 的真实来源、文件安全与 Jellyfin 人工验收步骤见 [`MANUAL-ACCEPTANCE-v0.4.0-rc1.md`](MANUAL-ACCEPTANCE-v0.4.0-rc1.md)。
+
 发布 Windows x64 单文件版本：
 
 ```powershell
