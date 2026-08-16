@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.0-rc2 — START-237 retest candidate
+
+- Fixed R18.dev lookup when the guessed content ID differs from the site's actual `content_id`, restoring detailed English/Japanese fields and Gallery images for titles such as START-237.
+- Kept the English R18.dev title while preserving the Japanese title in `originaltitle`.
+- Continued to the next artwork candidate when a preview response is not a decodable image instead of showing a premature preview failure.
+- Added successful-source and failed-preview-candidate details to the local diagnostic log.
+- Added a regression test for the compact-record to actual-content-ID fallback.
+
 ## v0.4.0-rc1 — Release candidate
 
 - Promoted the tested v0.4 workflow to its first manual acceptance candidate.

@@ -242,16 +242,18 @@ D:\JavMetaLite-RC1-Test\Jellyfin-Library
 
 | 用例 | 状态 | 证据或备注 |
 | --- | --- | --- |
-| M01 RC1 启动 | 未执行 | |
-| M02 LibreDMM 与取消预览 | 未执行 | |
-| M03 R18.dev 与推荐整理 | 未执行 | |
-| M04 JAVLibrary 导入 | 未执行 | |
-| M05 直接覆盖 | 未执行 | |
-| M06 影片冲突 | 未执行 | |
-| M07 日志诊断 | 未执行 | |
-| M08 防止重复嵌套 | 未执行 | |
-| M09 Jellyfin 首次导入 | 未执行 | |
-| M10 Jellyfin 覆盖更新 | 未执行 | |
+| M01 RC1 启动 | PASS | |
+| M02 LibreDMM 与取消预览 | PASS | |
+| M03 R18.dev 与推荐整理 | FAIL | START-237 在 R18.dev 与切换 LibreDMM 后均弹出“图片预览下载失败”；R18.dev 原始标题错误地保留英文；poster、fanart 与影片整理成功，但没有全部剧照；影片哈希不变。 |
+| M04 JAVLibrary 导入 | PASS | |
+| M05 直接覆盖 | PASS | |
+| M06 影片冲突 | PASS | 本轮改用 SONE-855。 |
+| M07 日志诊断 | PASS | |
+| M08 防止重复嵌套 | PASS | M03 的来源问题不影响本用例目标。 |
+| M09 Jellyfin 首次导入 | PASS | |
+| M10 Jellyfin 覆盖更新 | PASS | |
+
+RC1 结果：9 PASS / 1 FAIL。M03 已定位并进入 RC2 定向复测。
 
 最简反馈格式：
 

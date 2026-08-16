@@ -37,7 +37,7 @@ public partial class MainWindow : Window
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
         DataContext = _metadata;
-        AppLog.Info("JavMetaLite v0.4.0-rc1 启动");
+        AppLog.Info("JavMetaLite v0.4.0-rc2 启动");
     }
 
     private void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -92,6 +92,9 @@ public partial class MainWindow : Window
             {
                 var result = await SearchFromSelectedSourceAsync(source, _metadata.Id);
                 ApplyMetadata(result);
+                AppLog.Info(
+                    $"metadata 搜索成功 source={GetSourceDisplayName(result)} id={result.Id} " +
+                    $"contentId={result.ContentId} screenshots={result.ScreenshotUrls.Count}");
                 var posterLoaded = await LoadPosterPreviewAsync(result);
                 var fanartLoaded = await LoadFanartPreviewAsync(result);
                 var sourceName = GetSourceDisplayName(result);
@@ -352,7 +355,7 @@ public partial class MainWindow : Window
             {
                 throw;
             }
-            catch (Exception exception) when (exception is HttpRequestException or IOException or NotSupportedException or FormatException)
+            catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidDataException or NotSupportedException or FormatException)
             {
                 AppLog.Warning($"poster 预览候选失败：{candidate}", exception);
             }
@@ -382,7 +385,7 @@ public partial class MainWindow : Window
             {
                 throw;
             }
-            catch (Exception exception) when (exception is HttpRequestException or IOException or NotSupportedException or FormatException)
+            catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidDataException or NotSupportedException or FormatException)
             {
                 AppLog.Warning($"fanart 预览候选失败：{candidate}", exception);
             }
@@ -427,6 +430,7 @@ public partial class MainWindow : Window
             }
             catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidDataException or NotSupportedException or FormatException)
             {
+                AppLog.Warning($"图片预览下载候选失败：{candidate}", exception);
                 lastError = exception;
             }
         }
