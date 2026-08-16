@@ -180,7 +180,7 @@
                             <TextBlock Text="单片模式" Foreground="#72E3A6" FontSize="11" FontWeight="SemiBold" />
                         </Border>
                     </StackPanel>
-                    <TextBlock Text="只处理你当前选择的影片，不移动、不重命名原文件" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                    <TextBlock Text="单片编辑，可选预览或直接保存，并可整理到番号文件夹" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,3,0,0" />
                 </StackPanel>
                 <Button Grid.Column="2" Content="选择影片" Click="ChooseFile_Click" VerticalAlignment="Center" />
             </Grid>
@@ -337,14 +337,25 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <WrapPanel VerticalAlignment="Center">
-                                <CheckBox x:Name="WriteNfoCheckBox" Content="生成 NFO" IsChecked="True" />
-                                <CheckBox x:Name="DownloadPosterCheckBox" Content="高清海报" IsChecked="True" ToolTip="从高清原图自动裁出竖版 poster" />
-                                <CheckBox x:Name="DownloadFanartCheckBox" Content="横版 fanart" IsChecked="True" ToolTip="使用作品的完整横版封套" />
-                                <CheckBox x:Name="DownloadExtrafanartCheckBox" Content="保存全部剧照" IsChecked="False" ToolTip="把 Sample Images 保存到 extrafanart 文件夹" />
-                                <CheckBox x:Name="OverwriteCheckBox" Content="允许覆盖已有文件" />
-                            </WrapPanel>
-                            <Button x:Name="SaveButton" Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="保存到影片旁边" Click="Save_Click" />
+                            <StackPanel VerticalAlignment="Center">
+                                <WrapPanel>
+                                    <TextBlock Text="输出" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
+                                    <CheckBox x:Name="WriteNfoCheckBox" Content="生成 NFO" IsChecked="True" />
+                                    <CheckBox x:Name="DownloadPosterCheckBox" Content="高清海报" IsChecked="True" ToolTip="从高清原图自动裁出竖版 poster" />
+                                    <CheckBox x:Name="DownloadFanartCheckBox" Content="横版 fanart" IsChecked="True" ToolTip="使用作品的完整横版封套" />
+                                    <CheckBox x:Name="DownloadExtrafanartCheckBox" Content="保存全部剧照" IsChecked="False" ToolTip="把 Sample Images 保存到 extrafanart 文件夹" />
+                                </WrapPanel>
+                                <WrapPanel Margin="0,10,0,0">
+                                    <TextBlock Text="保存方式" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
+                                    <CheckBox x:Name="DirectSaveOverwriteCheckBox" Content="直接保存并覆盖（跳过预览）" IsChecked="False" ToolTip="跳过保存前变更预览；已有 NFO 或图片将直接覆盖。影片文件永远不会被覆盖。" />
+                                </WrapPanel>
+                                <WrapPanel Margin="0,10,0,0">
+                                    <TextBlock Text="整理（默认关闭）" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
+                                    <CheckBox x:Name="OrganizeFolderCheckBox" Content="整理到番号文件夹" IsChecked="False" ToolTip="在影片当前目录内创建标准番号子文件夹" />
+                                    <CheckBox x:Name="RenameVideoCheckBox" Content="影片重命名为番号" IsChecked="False" ToolTip="只改变影片文件名，不改变扩展名" />
+                                </WrapPanel>
+                            </StackPanel>
+                            <Button x:Name="SaveButton" Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="保存" Click="Save_Click" />
                         </Grid>
                     </Border>
                 </Grid>
@@ -357,10 +368,12 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#72E3A6" VerticalAlignment="Center" Margin="0,0,9,0" />
                 <TextBlock x:Name="StatusText" Grid.Column="1" Text="准备就绪，请选择或拖入一个影片" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="2" Text="v0.3.0-r4 · LibreDMM / R18.dev 基座" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <Button Grid.Column="2" Content="打开日志" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
+                <TextBlock Grid.Column="3" Text="v0.4.0 · 稳定版" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>

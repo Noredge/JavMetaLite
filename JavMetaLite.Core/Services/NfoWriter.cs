@@ -16,7 +16,7 @@ public static class NfoWriter
     {
         if (File.Exists(destinationPath) && !overwrite)
         {
-            throw new IOException($"NFO 已存在：{destinationPath}\n请勾选“允许覆盖已有文件”后重试。 ");
+            throw new IOException($"NFO 已存在：{destinationPath}\n请勾选“直接保存并覆盖（跳过预览）”后重试。 ");
         }
 
         var directory = Path.GetDirectoryName(destinationPath)

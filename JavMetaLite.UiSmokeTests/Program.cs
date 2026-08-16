@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using JavMetaLite.App;
+using JavMetaLite.Core.Models;
 
 namespace JavMetaLite.UiSmokeTests;
 
@@ -51,8 +52,42 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.3 图片预览或 extrafanart 选项未创建。 ");
         }
+        if (window.FindName("OrganizeFolderCheckBox") is not CheckBox organizeCheckBox || organizeCheckBox.IsChecked == true ||
+            window.FindName("RenameVideoCheckBox") is not CheckBox renameCheckBox || renameCheckBox.IsChecked == true)
+        {
+            throw new InvalidOperationException("v0.4 整理选项未创建或没有保持安全的默认关闭状态。 ");
+        }
+        if (window.FindName("DirectSaveOverwriteCheckBox") is not CheckBox directSaveCheckBox ||
+            directSaveCheckBox.IsChecked == true ||
+            directSaveCheckBox.Content?.ToString() != "直接保存并覆盖（跳过预览）")
+        {
+            throw new InvalidOperationException("v0.4 直接保存选项未创建或没有保持安全的默认关闭状态。 ");
+        }
+        if (window.FindName("SaveButton") is not Button saveButton || saveButton.Content?.ToString() != "保存")
+        {
+            throw new InvalidOperationException("v0.4 保存入口未创建。 ");
+        }
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True libreDmm=True fanart=True");
+        var previewPlan = new SavePlan(
+            "C:\\Media\\source.mp4",
+            "C:\\Media\\IPX-123\\IPX-123.mp4",
+            "C:\\Media\\IPX-123",
+            "IPX-123",
+            new JavMetaLite.Core.Models.SaveOptions(true, false, false, false, false),
+            new OrganizationOptions(true, true),
+            [new PlannedFileChange(PlannedChangeKind.CreateFile, "生成 metadata", "C:\\Media\\IPX-123\\IPX-123.nfo")],
+            [],
+            []);
+        var previewWindow = new SavePreviewWindow(previewPlan) { Owner = window };
+        previewWindow.Show();
+        previewWindow.UpdateLayout();
+        if (!previewWindow.IsVisible || previewWindow.FindName("ConfirmButton") is not Button { IsEnabled: true })
+        {
+            throw new InvalidOperationException("v0.4 保存预览窗口未成功创建。 ");
+        }
+        previewWindow.Close();
+
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True libreDmm=True fanart=True previewWindow=True directSaveDefaultsOff=True organizeDefaultsOff=True");
         window.Close();
         application.Shutdown();
     }

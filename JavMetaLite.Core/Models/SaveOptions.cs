@@ -5,7 +5,10 @@ public sealed record SaveOptions(
     bool DownloadPoster,
     bool DownloadFanart,
     bool DownloadExtrafanart,
-    bool OverwriteExisting);
+    bool OverwriteExisting)
+{
+    public bool RequiresPreview => !OverwriteExisting;
+}
 
 public sealed record SaveResult(
     string? NfoPath,

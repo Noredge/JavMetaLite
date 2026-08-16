@@ -94,10 +94,13 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("LibreDMM JSON 解析与清理", TestLibreDmmParser),
     ("多来源字段补全", TestMetadataMerge),
     ("R18.dev JSON 解析", TestR18Parser),
+    ("R18.dev 实际 content_id 回退", TestR18ContentIdFallback),
     ("JAVLibrary HTML 解析", TestHtmlParser),
     ("高清海报自动裁切", TestPosterCropping),
     ("NFO 生成", TestNfoWriter),
-    ("完整封套 fanart 与 Sample Images 输出", TestArtworkOutput)
+    ("完整封套 fanart 与 Sample Images 输出", TestArtworkOutput),
+    ("v0.4 文件整理计划与安全执行", TestFileOrganization),
+    ("v0.4 本地运行日志", TestAppLog)
 };
 
 var failures = new List<string>();
@@ -289,6 +292,51 @@ static Task TestR18Parser()
     return Task.CompletedTask;
 }
 
+static async Task TestR18ContentIdFallback()
+{
+    const string compactJson = """
+        {
+          "content_id": "1start237",
+          "title": "English compact title",
+          "release_date": "2025-01-09",
+          "images": { "jacket_image": { "large2": "https://pics.dmm.co.jp/mono/movie/adult/1start237/1start237pl.jpg" } }
+        }
+        """;
+    const string detailedJson = """
+        {
+          "dvd_id": "START-237",
+          "content_id": "1start237",
+          "title_en": "English detailed title",
+          "title_ja": "日本語の詳細タイトル",
+          "jacket_full_url": "https://pics.dmm.co.jp/mono/movie/adult/1start237/1start237pl.jpg",
+          "gallery": [
+            { "image_full": "https://pics.dmm.co.jp/digital/video/1start237/1start237-1.jpg" },
+            { "image_full": "https://pics.dmm.co.jp/digital/video/1start237/1start237-2.jpg" }
+          ]
+        }
+        """;
+    using var httpClient = new HttpClient(new FakeJsonHandler(new Dictionary<string, (HttpStatusCode, string)>
+    {
+        ["https://r18.dev/videos/vod/movies/detail/-/combined=start00237/json"] = (HttpStatusCode.NotFound, string.Empty),
+        ["https://r18.dev/videos/vod/movies/detail/-/dvd_id=start237/json"] = (HttpStatusCode.OK, compactJson),
+        ["https://r18.dev/videos/vod/movies/detail/-/combined=1start237/json"] = (HttpStatusCode.OK, detailedJson)
+    }));
+    using var client = new R18DevClient(httpClient);
+    var result = await client.SearchAsync("START-237");
+
+    AssertEqual("START-237", result.Id);
+    AssertEqual("1start237", result.ContentId);
+    AssertEqual("English detailed title", result.Title);
+    AssertEqual("日本語の詳細タイトル", result.OriginalTitle);
+    AssertEqual("2", result.ScreenshotUrls.Count.ToString());
+    AssertEqual(
+        "https://awsimgsrc.dmm.com/dig/mono/movie/1start237/1start237pl.jpg",
+        result.CoverUrl);
+    AssertEqual(
+        "https://awsimgsrc.dmm.com/dig/digital/video/1start237/1start237jp-1.jpg",
+        result.ScreenshotUrls[0]);
+}
+
 static Task TestPosterCropping()
 {
     var landscapePng = Convert.FromBase64String(
@@ -399,6 +447,135 @@ static async Task TestArtworkOutput()
     }
 }
 
+static async Task TestFileOrganization()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.OrganizationTests.{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    try
+    {
+        var originalMovieDirectory = Path.Combine(root, "SNOS-255-UC");
+        Directory.CreateDirectory(originalMovieDirectory);
+        var sourcePath = Path.Combine(originalMovieDirectory, "489155.com@SNOS-255-UC.mp4");
+        await File.WriteAllBytesAsync(sourcePath, [0x01, 0x02, 0x03]);
+        var metadata = new MovieMetadata
+        {
+            Id = "snos-255",
+            Title = "初始标题",
+            SourceName = "libredmm",
+            SourceDisplayName = "LibreDMM"
+        };
+        var saveOptions = new JavMetaLite.Core.Models.SaveOptions(true, false, false, false, false);
+        AssertEqual("True", saveOptions.RequiresPreview.ToString());
+        AssertEqual(
+            "False",
+            new JavMetaLite.Core.Models.SaveOptions(true, false, false, false, true).RequiresPreview.ToString());
+        var organizationOptions = new OrganizationOptions(true, true);
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            saveOptions,
+            organizationOptions);
+
+        var expectedDirectory = Path.Combine(originalMovieDirectory, "SNOS-255");
+        var expectedVideoPath = Path.Combine(expectedDirectory, "SNOS-255.mp4");
+        AssertEqual(expectedVideoPath, plan.TargetVideoPath);
+        AssertEqual("False", plan.HasBlockingConflicts.ToString());
+        AssertEqual("True", plan.Changes.Any(change => change.Kind == PlannedChangeKind.CreateFolder).ToString());
+        AssertEqual("True", plan.Changes.Any(change => change.Kind == PlannedChangeKind.MoveAndRenameVideo).ToString());
+
+        using var outputService = new OutputService();
+        var organizer = new FileOrganizationService(outputService);
+        var result = await organizer.ExecuteAsync(plan, metadata, false);
+        AssertEqual("False", File.Exists(sourcePath).ToString());
+        AssertEqual("True", File.Exists(expectedVideoPath).ToString());
+        AssertEqual("True", File.Exists(Path.Combine(expectedDirectory, "SNOS-255.nfo")).ToString());
+        AssertEqual("True", result.VideoMoved.ToString());
+
+        var overwritePlan = FileOrganizationService.BuildPlan(
+            expectedVideoPath,
+            metadata,
+            saveOptions,
+            organizationOptions);
+        AssertEqual("1", overwritePlan.OverwriteConflicts.Count.ToString());
+        var refused = false;
+        try
+        {
+            await organizer.ExecuteAsync(overwritePlan, metadata, false);
+        }
+        catch (IOException)
+        {
+            refused = true;
+        }
+        AssertEqual("True", refused.ToString());
+
+        metadata.Title = "覆盖后的标题";
+        var overwriteResult = await organizer.ExecuteAsync(overwritePlan, metadata, true);
+        var nfo = XDocument.Load(overwriteResult.Outputs.NfoPath!);
+        AssertEqual("覆盖后的标题", nfo.Root?.Element("title")?.Value);
+
+        var secondSource = Path.Combine(originalMovieDirectory, "another-SNOS-255.mp4");
+        await File.WriteAllBytesAsync(secondSource, [0x04]);
+        var blockedPlan = FileOrganizationService.BuildPlan(
+            secondSource,
+            metadata,
+            saveOptions,
+            organizationOptions);
+        AssertEqual("True", blockedPlan.HasBlockingConflicts.ToString());
+        AssertEqual("True", File.Exists(secondSource).ToString());
+
+        var rollbackSource = Path.Combine(root, "rollback-test.mp4");
+        await File.WriteAllBytesAsync(rollbackSource, [0x05, 0x06]);
+        var rollbackMetadata = new MovieMetadata { Id = "IPX-999", Title = "回滚测试" };
+        var rollbackPlan = FileOrganizationService.BuildPlan(
+            rollbackSource,
+            rollbackMetadata,
+            saveOptions,
+            organizationOptions);
+        var rollbackFailed = false;
+        using (var lockedVideo = new FileStream(rollbackSource, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            try
+            {
+                await organizer.ExecuteAsync(rollbackPlan, rollbackMetadata, false);
+            }
+            catch (IOException)
+            {
+                rollbackFailed = true;
+            }
+        }
+        AssertEqual("True", rollbackFailed.ToString());
+        AssertEqual("True", File.Exists(rollbackSource).ToString());
+        AssertEqual("False", File.Exists(rollbackPlan.TargetVideoPath).ToString());
+        AssertEqual("False", File.Exists(Path.Combine(rollbackPlan.TargetDirectory, "IPX-999.nfo")).ToString());
+    }
+    finally
+    {
+        Directory.Delete(root, true);
+    }
+}
+
+static Task TestAppLog()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.LogTests.{Guid.NewGuid():N}");
+    try
+    {
+        AppLog.ConfigureDirectory(root);
+        AppLog.Info("smoke-log-marker");
+        AssertEqual("True", File.Exists(AppLog.CurrentLogPath).ToString());
+        AssertEqual("True", File.ReadAllText(AppLog.CurrentLogPath).Contains("smoke-log-marker", StringComparison.Ordinal).ToString());
+    }
+    finally
+    {
+        AppLog.ConfigureDirectory(null);
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    return Task.CompletedTask;
+}
+
 static byte[] CreateJpeg(int width, int height, byte red, byte green, byte blue)
 {
     var stride = width * 4;
@@ -443,5 +620,22 @@ internal sealed class FakeImageHandler(IReadOnlyDictionary<string, byte[]> image
         var content = new ByteArrayContent(bytes);
         content.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+    }
+}
+
+internal sealed class FakeJsonHandler(
+    IReadOnlyDictionary<string, (HttpStatusCode Status, string Body)> responses) : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        if (request.RequestUri is null || !responses.TryGetValue(request.RequestUri.AbsoluteUri, out var response))
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+
+        return Task.FromResult(new HttpResponseMessage(response.Status)
+        {
+            Content = new StringContent(response.Body)
+        });
     }
 }

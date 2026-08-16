@@ -29,38 +29,57 @@ public sealed class R18DevClient : IMetadataProvider
         }
 
         var normalized = new string(id.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
-        var combinedId = BuildCombinedContentId(id);
-        var urls = new[]
-        {
-            string.IsNullOrWhiteSpace(combinedId)
-                ? string.Empty
-                : $"https://r18.dev/videos/vod/movies/detail/-/combined={Uri.EscapeDataString(combinedId)}/json",
-            $"https://r18.dev/videos/vod/movies/detail/-/dvd_id={Uri.EscapeDataString(normalized)}/json"
-        }.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase);
-
+        var guessedContentId = BuildCombinedContentId(id);
         Exception? lastError = null;
-        foreach (var url in urls)
+        if (!string.IsNullOrWhiteSpace(guessedContentId))
         {
+            var guessedUrl = BuildCombinedUrl(guessedContentId);
+            var guessedResponse = await TryDownloadJsonAsync(guessedUrl, cancellationToken);
+            lastError = guessedResponse.Error ?? lastError;
+            if (guessedResponse.Json is not null)
+            {
+                try
+                {
+                    return ParseJson(guessedResponse.Json, guessedUrl, id);
+                }
+                catch (Exception exception) when (exception is InvalidDataException or JsonException or MetadataNotFoundException)
+                {
+                    lastError = exception;
+                }
+            }
+        }
+
+        var compactUrl = $"https://r18.dev/videos/vod/movies/detail/-/dvd_id={Uri.EscapeDataString(normalized)}/json";
+        var compactResponse = await TryDownloadJsonAsync(compactUrl, cancellationToken);
+        lastError = compactResponse.Error ?? lastError;
+        if (compactResponse.Json is not null)
+        {
+            var discoveredContentId = GetContentIdFromJson(compactResponse.Json);
+            if (!string.IsNullOrWhiteSpace(discoveredContentId) &&
+                !string.Equals(discoveredContentId, guessedContentId, StringComparison.OrdinalIgnoreCase))
+            {
+                AppLog.Info($"R18.dev 从 dvd_id 解析实际 content_id id={id} contentId={discoveredContentId}");
+                var discoveredUrl = BuildCombinedUrl(discoveredContentId);
+                var discoveredResponse = await TryDownloadJsonAsync(discoveredUrl, cancellationToken);
+                lastError = discoveredResponse.Error ?? lastError;
+                if (discoveredResponse.Json is not null)
+                {
+                    try
+                    {
+                        return ParseJson(discoveredResponse.Json, discoveredUrl, id);
+                    }
+                    catch (Exception exception) when (exception is InvalidDataException or JsonException or MetadataNotFoundException)
+                    {
+                        lastError = exception;
+                    }
+                }
+            }
+
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                request.Headers.Referrer = new Uri("https://r18.dev/");
-                using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-                if (response.StatusCode == HttpStatusCode.NotFound ||
-                    response.Content.Headers.ContentType?.MediaType?.Contains("html", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    continue;
-                }
-
-                response.EnsureSuccessStatusCode();
-                var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                return ParseJson(json, url, id);
+                return ParseJson(compactResponse.Json, compactUrl, id);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception exception) when (exception is HttpRequestException or InvalidDataException or JsonException or MetadataNotFoundException)
+            catch (Exception exception) when (exception is InvalidDataException or JsonException or MetadataNotFoundException)
             {
                 lastError = exception;
             }
@@ -113,7 +132,7 @@ public sealed class R18DevClient : IMetadataProvider
         {
             Id = id,
             Title = FirstNonEmpty(englishTitle, japaneseTitle),
-            OriginalTitle = FirstNonEmpty(japaneseTitle, genericTitle),
+            OriginalTitle = FirstNonEmpty(japaneseTitle, ContainsJapanese(genericTitle) ? genericTitle : string.Empty),
             ReleaseDate = GetString(root, "release_date"),
             RuntimeMinutes = FirstNonEmpty(GetIntString(root, "runtime_mins"), GetIntString(root, "runtime_minutes")),
             Director = FirstNonEmpty(GetPeople(root, "directors", "name_romaji", "name_kanji", "name"), GetString(root, "director")),
@@ -200,6 +219,12 @@ public sealed class R18DevClient : IMetadataProvider
             return fallbackUrl;
         }
 
+        if (Uri.TryCreate(fallbackUrl, UriKind.Absolute, out var fallbackUri) &&
+            fallbackUri.AbsolutePath.Contains("/mono/movie/", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"https://awsimgsrc.dmm.com/dig/mono/movie/{safeContentId}/{safeContentId}pl.jpg";
+        }
+
         return $"https://awsimgsrc.dmm.com/dig/digital/video/{safeContentId}/{safeContentId}pl.jpg";
     }
 
@@ -222,6 +247,57 @@ public sealed class R18DevClient : IMetadataProvider
         var prefix = new string(normalized[..separator].Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
         return string.IsNullOrWhiteSpace(prefix) ? string.Empty : $"{prefix}{number:D5}";
     }
+
+    private static string BuildCombinedUrl(string contentId) =>
+        $"https://r18.dev/videos/vod/movies/detail/-/combined={Uri.EscapeDataString(contentId)}/json";
+
+    private async Task<(string? Json, Exception? Error)> TryDownloadJsonAsync(
+        string url,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Referrer = new Uri("https://r18.dev/");
+            using var response = await _httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+            if (response.StatusCode == HttpStatusCode.NotFound ||
+                response.Content.Headers.ContentType?.MediaType?.Contains("html", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return (null, null);
+            }
+
+            response.EnsureSuccessStatusCode();
+            return (await response.Content.ReadAsStringAsync(cancellationToken), null);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidDataException or TaskCanceledException)
+        {
+            return (null, exception);
+        }
+    }
+
+    private static string GetContentIdFromJson(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return SanitizeContentId(GetString(document.RootElement, "content_id"));
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static bool ContainsJapanese(string value) =>
+        value.Any(character =>
+            character is >= '\u3040' and <= '\u30ff' or >= '\u4e00' and <= '\u9fff');
 
     private static string GetCategories(JsonElement root)
     {
