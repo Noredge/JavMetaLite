@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.0 — Stable
+
+- Promoted RC1 without functional changes after all six focused integration checks passed.
+- Adds independent LibreDMM and R18.dev searching with reviewable per-field candidates and recoverable manual edits.
+- Keeps one lightweight shared source selector for poster and fanart while leaving screenshots tied to the overall search result.
+- Preserves the accepted v0.4 preview, overwrite protection, optional organization, rollback, logging, JAVLibrary fallback, and Jellyfin-compatible output.
+- Acceptance confirmed final metadata and artwork selection, safe cancel/save behavior, Jellyfin ingestion, and unchanged movie SHA-256.
+
 ## v0.5.0-rc1 — Release candidate
 
 - Promoted the fully tested dev5-r5 build without adding new functionality.

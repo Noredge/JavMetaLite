@@ -55,4 +55,4 @@ The following remain manual because they depend on external state or human visua
 
 These checks complement the automated gate; they are not replaced by it.
 
-The focused final integration checklist for the current release candidate is [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md). It reuses the accepted v0.4 file-safety baseline and does not require repeating unchanged JAVLibrary, conflict, or rollback cases.
+The focused final integration checklist and passing result for v0.5.0 is [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md). It reuses the accepted v0.4 file-safety baseline and does not require repeating unchanged JAVLibrary, conflict, or rollback cases.
