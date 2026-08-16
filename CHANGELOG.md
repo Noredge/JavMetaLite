@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.0 — Stable
+
+- Promoted RC2 without functional changes after the complete automated gate and manual acceptance passed.
+- Provides the lightweight single-movie workflow: search, review/edit, preview, and Jellyfin-compatible NFO and artwork output.
+- Adds safe optional organization into a standard-number folder and optional movie renaming, with conflict blocking and rollback protection.
+- Uses LibreDMM for Japanese metadata, R18.dev for English metadata and fallback, and JAVLibrary as the browser-assisted manual source.
+- Preserves the original movie contents; acceptance confirmed that movie SHA-256 remains unchanged after organization and renaming.
+
 ## v0.4.0-rc2 — START-237 retest candidate
 
 - Fixed R18.dev lookup when the guessed content ID differs from the site's actual `content_id`, restoring detailed English/Japanese fields and Gallery images for titles such as START-237.
