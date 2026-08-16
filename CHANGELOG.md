@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.0-dev5-r3 — Cover header alignment
+
+- Moved the shared poster/fanart source badge to the upper-right of the cover header, matching the label-and-source layout used by metadata fields.
+- Kept the poster and fanart source locked together; screenshots and save behavior are unchanged.
+- Added a UI smoke assertion for the source badge position.
+
 ## v0.5.0-dev5-r2 — Unified cover source menu
 
 - Added one compact source badge between the poster and fanart previews, using the same dark two-line candidate menu as metadata fields.

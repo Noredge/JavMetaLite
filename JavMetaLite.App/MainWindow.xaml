@@ -289,13 +289,22 @@
             <Border Grid.Column="0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="14" Padding="18">
                 <Grid>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="3*" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="1.35*" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <Border Background="#0B1016" BorderBrush="#2A3544" BorderThickness="1" CornerRadius="10" ClipToBounds="True">
+                    <Grid x:Name="ArtworkSourceHeader" Margin="0,0,0,7">
+                        <TextBlock Text="封套 / Fanart" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button x:Name="ArtworkSourceButton"
+                                Style="{StaticResource SourceBadgeButton}"
+                                Padding="5,2" Margin="8,0,0,0"
+                                HorizontalAlignment="Right"
+                                Click="ArtworkSourceButton_Click" />
+                    </Grid>
+                    <Border x:Name="PosterPreviewBorder" Grid.Row="1" Background="#0B1016" BorderBrush="#2A3544" BorderThickness="1" CornerRadius="10" ClipToBounds="True">
                         <Grid>
                             <Image x:Name="PosterImage" Stretch="Uniform" Margin="8" />
                             <StackPanel x:Name="DropHint" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
@@ -305,27 +314,15 @@
                             </StackPanel>
                         </Grid>
                     </Border>
-                    <Grid Grid.Row="1" Margin="0,12,0,7">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="封套 / Fanart" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <Button x:Name="ArtworkSourceButton"
-                                Style="{StaticResource SourceBadgeButton}"
-                                Padding="5,2" Margin="8,0,0,0"
-                                HorizontalAlignment="Right"
-                                Click="ArtworkSourceButton_Click" />
-                        <TextBlock x:Name="FanartHintText" Grid.Row="1" Text="等待完整封套" Foreground="{StaticResource MutedBrush}" FontSize="11" HorizontalAlignment="Right" Margin="0,3,0,0" />
-                    </Grid>
-                    <Border Grid.Row="2" MinHeight="105" Background="#0B1016" BorderBrush="#2A3544" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+                    <TextBlock x:Name="FanartHintText" Grid.Row="2" Text="等待完整封套" Foreground="{StaticResource MutedBrush}" FontSize="11" HorizontalAlignment="Right" Margin="0,8,0,7" />
+                    <Border Grid.Row="3" MinHeight="105" Background="#0B1016" BorderBrush="#2A3544" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
                         <Grid>
                             <Image x:Name="FanartImage" Stretch="Uniform" Margin="5" />
                             <TextBlock x:Name="FanartDropHint" Text="搜索后显示完整横版封套" Foreground="#607086" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                     </Border>
-                    <TextBlock x:Name="FileNameText" Grid.Row="3" Text="尚未选择影片" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,14,0,0" />
-                    <TextBlock x:Name="FilePathText" Grid.Row="4" Text="影片将保持原位置" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" />
+                    <TextBlock x:Name="FileNameText" Grid.Row="4" Text="尚未选择影片" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,14,0,0" />
+                    <TextBlock x:Name="FilePathText" Grid.Row="5" Text="影片将保持原位置" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" />
                 </Grid>
             </Border>
 
@@ -508,7 +505,7 @@
                 <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#72E3A6" VerticalAlignment="Center" Margin="0,0,9,0" />
                 <TextBlock x:Name="StatusText" Grid.Column="1" Text="准备就绪，请选择或拖入一个影片" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
                 <Button Grid.Column="2" Content="打开日志" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
-                <TextBlock Grid.Column="3" Text="v0.5.0-dev5-r2 · 统一封套来源" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="v0.5.0-dev5-r3 · 封套来源顶部布局" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>

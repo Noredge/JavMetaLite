@@ -124,6 +124,16 @@ internal static class Program
         {
             throw new InvalidOperationException("多来源结果没有显示统一封套来源候选。 ");
         }
+        var posterPreviewBorder = window.FindName("PosterPreviewBorder") as Border
+            ?? throw new InvalidOperationException("封套预览区域未创建。 ");
+        var artworkSourceHeader = window.FindName("ArtworkSourceHeader") as Grid
+            ?? throw new InvalidOperationException("统一封套来源标题栏未创建。 ");
+        if (!ReferenceEquals(artworkSourceButton.Parent, artworkSourceHeader) ||
+            Grid.GetRow(artworkSourceHeader) >= Grid.GetRow(posterPreviewBorder) ||
+            artworkSourceButton.HorizontalAlignment != HorizontalAlignment.Right)
+        {
+            throw new InvalidOperationException("统一封套来源没有固定在封套预览上方右侧。 ");
+        }
         artworkSourceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         var artworkMenu = artworkSourceButton.ContextMenu
             ?? throw new InvalidOperationException("统一封套候选菜单未创建。 ");
