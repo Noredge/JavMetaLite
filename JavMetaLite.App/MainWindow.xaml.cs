@@ -51,7 +51,7 @@ public partial class MainWindow : Window
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
         ApplyMetadata(_metadata, []);
-        AppLog.Info("JavMetaLite v0.5.0-dev5-r4 启动");
+        AppLog.Info("JavMetaLite v0.5.0-dev5-r5 启动");
     }
 
     private void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -654,8 +654,7 @@ public partial class MainWindow : Window
                 var imageBytes = await DownloadPreviewImageAsync(candidate);
                 var dimensions = PosterImageProcessor.GetDimensions(imageBytes);
                 FanartImage.Source = PosterBitmapFactory.CreateFrozen(PosterImageProcessor.CreateFanartJpeg(imageBytes));
-                FanartHintText.Text = $"{dimensions.Width}×{dimensions.Height}";
-                FanartHintText.Visibility = Visibility.Visible;
+                FanartHintText.Text = $"横板封套：{dimensions.Width}×{dimensions.Height}";
                 return true;
             }
             catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
@@ -725,7 +724,6 @@ public partial class MainWindow : Window
     {
         FanartImage.Source = null;
         FanartHintText.Text = string.Empty;
-        FanartHintText.Visibility = Visibility.Collapsed;
     }
 
     private static string GetSourceDisplayName(MovieMetadata metadata) =>

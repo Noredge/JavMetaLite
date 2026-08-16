@@ -58,10 +58,28 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.3 图片预览或 extrafanart 选项未创建。 ");
         }
-        if (window.FindName("FanartHintText") is not TextBlock { Visibility: Visibility.Collapsed, Text: "" } ||
+        if (window.FindName("FanartHintText") is not TextBlock fanartHintText ||
+            fanartHintText.Visibility != Visibility.Visible ||
+            fanartHintText.Text != string.Empty || fanartHintText.MinHeight < 14 ||
             window.FindName("FanartDropHint") is not null)
         {
-            throw new InvalidOperationException("完整封套尚未加载时不应显示等待提示。 ");
+            throw new InvalidOperationException("完整封套尚未加载时应保留无文字的固定间距。 ");
+        }
+        var initialPosterPreviewBorder = window.FindName("PosterPreviewBorder") as Border
+            ?? throw new InvalidOperationException("封套预览区域未创建。 ");
+        var fanartPreviewBorder = window.FindName("FanartPreviewBorder") as Border
+            ?? throw new InvalidOperationException("Fanart 预览区域未创建。 ");
+        window.UpdateLayout();
+        var posterBottom = initialPosterPreviewBorder.TranslatePoint(new Point(0, initialPosterPreviewBorder.ActualHeight), window).Y;
+        var gapBeforeDimensions = fanartPreviewBorder.TranslatePoint(new Point(0, 0), window).Y - posterBottom;
+        fanartHintText.Text = "横板封套：2184×1468";
+        window.UpdateLayout();
+        posterBottom = initialPosterPreviewBorder.TranslatePoint(new Point(0, initialPosterPreviewBorder.ActualHeight), window).Y;
+        var gapAfterDimensions = fanartPreviewBorder.TranslatePoint(new Point(0, 0), window).Y - posterBottom;
+        fanartHintText.Text = string.Empty;
+        if (Math.Abs(gapBeforeDimensions - gapAfterDimensions) > 0.5)
+        {
+            throw new InvalidOperationException("搜索前后两个封套预览框的间距不一致。 ");
         }
         if (window.FindName("OrganizeFolderCheckBox") is not CheckBox organizeCheckBox || organizeCheckBox.IsChecked == true ||
             window.FindName("RenameVideoCheckBox") is not CheckBox renameCheckBox || renameCheckBox.IsChecked == true)

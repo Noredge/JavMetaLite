@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.0-dev5-r5 — Stable artwork spacing
+
+- Reserved a fixed, text-free status row between poster and fanart before search.
+- Kept the poster/fanart spacing identical after the labeled complete-cover dimensions appear, for example `横板封套：2184×1468`.
+- Added a UI layout regression that compares both states.
+
 ## v0.5.0-dev5-r4 — Simplified cover status
 
 - Removed the “waiting for cover” and “search to show cover” placeholder messages from the artwork area.
