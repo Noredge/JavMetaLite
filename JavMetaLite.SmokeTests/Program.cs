@@ -105,6 +105,7 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("v0.4 文件整理计划与安全执行", TestFileOrganization),
     ("v0.6 本地 sidecar 定位", TestLocalSidecarLocator),
     ("v0.6 安全 NFO 只读解析", TestNfoReader),
+    ("v0.6 本地与在线候选组合", TestLocalMetadataReviewComposition),
     ("v0.4 本地运行日志", TestAppLog)
 };
 
@@ -961,6 +962,96 @@ static async Task TestNfoReader()
     {
         Directory.Delete(root, true);
     }
+}
+
+static Task TestLocalMetadataReviewComposition()
+{
+    var local = new MovieMetadata
+    {
+        Id = "SNOS-255",
+        Title = "本地标题",
+        ActorsText = "本地演员",
+        Actors = [new ActorMetadata("本地演员", "https://local.example/actor.jpg")],
+        SourceName = "local-nfo",
+        SourceDisplayName = "本地 NFO"
+    };
+    var libre = new MovieMetadata
+    {
+        Id = "SNOS-255",
+        Title = "在线日文标题",
+        Director = "在线导演",
+        Plot = "在线简介",
+        ActorsText = "在线演员",
+        Actors = [new ActorMetadata("在线演员", "https://libre.example/actor.jpg")],
+        CoverUrl = "https://libre.example/cover.jpg",
+        ScreenshotUrls = ["https://libre.example/scene.jpg"],
+        SourceName = "libredmm",
+        SourceDisplayName = "LibreDMM"
+    };
+    var r18 = new MovieMetadata
+    {
+        Id = "SNOS-255",
+        Title = "Online English title",
+        Director = "Online director",
+        SourceName = "r18dev",
+        SourceDisplayName = "R18.dev"
+    };
+
+    var onlinePreferred = MetadataMerger.Merge(libre, r18);
+    var composition = LocalMetadataReviewComposer.ComposeWithOnline(
+        local,
+        onlinePreferred,
+        [libre, r18]);
+    AssertEqual("本地标题", composition.Metadata.Title);
+    AssertEqual("在线导演", composition.Metadata.Director);
+    AssertEqual("在线简介", composition.Metadata.Plot);
+    AssertEqual("本地演员", composition.Metadata.ActorsText);
+    AssertEqual("1", composition.Metadata.Actors.Count.ToString());
+    AssertEqual("本地演员", composition.Metadata.Actors[0].Name);
+    AssertEqual("https://libre.example/cover.jpg", composition.Metadata.CoverUrl);
+    AssertEqual("1", composition.Metadata.ScreenshotUrls.Count.ToString());
+    AssertEqual("3", composition.Sources.Count.ToString());
+
+    local.Title = "修改外部本地对象";
+    libre.Title = "修改外部在线对象";
+    using (var review = MetadataReviewSession.Create(
+        composition.Metadata,
+        composition.Sources.ToArray()))
+    {
+        AssertEqual("3", review.GetCandidates(MetadataField.Title).Count.ToString());
+        AssertEqual("local-nfo", review.GetSelectedCandidate(MetadataField.Title)?.Source.Name);
+        AssertEqual("libredmm", review.GetSelectedCandidate(MetadataField.Director)?.Source.Name);
+        AssertEqual("本地标题", review.GetCandidates(MetadataField.Title)[0].Value);
+
+        review.SetManualValue(MetadataField.Title, "手动修正");
+        AssertEqual("manual", review.GetSelectedCandidate(MetadataField.Title)?.Source.Name);
+        AssertEqual("True", review.SelectCandidate(MetadataField.Title, "libredmm").ToString());
+        AssertEqual("在线日文标题", composition.Metadata.Title);
+        AssertEqual("True", review.SelectCandidate(MetadataField.Title, "manual").ToString());
+        AssertEqual("手动修正", composition.Metadata.Title);
+
+        AssertEqual("True", review.SelectCandidate(MetadataField.Actors, "libredmm").ToString());
+        AssertEqual("在线演员", composition.Metadata.ActorsText);
+        AssertEqual("在线演员", composition.Metadata.Actors[0].Name);
+        AssertEqual("https://libre.example/actor.jpg", composition.Metadata.Actors[0].ImageUrl);
+    }
+
+    var refreshedLibre = new MovieMetadata
+    {
+        Id = "SNOS-255",
+        Title = "刷新后的在线标题",
+        SourceName = "libredmm",
+        SourceDisplayName = "LibreDMM"
+    };
+    var refreshed = LocalMetadataReviewComposer.ComposeWithOnline(local, refreshedLibre, [refreshedLibre]);
+    using var refreshedReview = MetadataReviewSession.Create(refreshed.Metadata, refreshed.Sources.ToArray());
+    AssertEqual(
+        "False",
+        refreshedReview.GetCandidates(MetadataField.Title)
+            .Any(candidate => candidate.Value == "在线日文标题" || candidate.Value == "手动修正")
+            .ToString());
+
+    return Task.CompletedTask;
 }
 
 static Task TestAppLog()

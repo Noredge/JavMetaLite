@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.6.0-dev2 — Local NFO review in the main window
+
+- Automatically detects and safely loads a same-name NFO when a movie is selected.
+- Shows loaded values with the existing `本地 NFO` per-field source badges and reports the complete NFO path in the status bar and log.
+- Keeps non-empty local values selected when online sources are searched, while allowing online metadata to fill local blank fields.
+- Places local, LibreDMM, R18.dev, JAVLibrary, and subsequent manual values into the existing candidate menus without adding a second editor.
+- Rebuilds the review session for every new movie and online search so candidates from an earlier movie or earlier response cannot leak forward.
+- Treats malformed or unsafe local NFO files as read-only failures with a clear status and log entry, leaving the original file untouched.
+- Disables saving whenever a pre-existing local NFO was detected; lossless round-trip updates remain intentionally deferred to dev4.
+- Added Core and WPF smoke coverage for local defaults, online blank filling, actor-source consistency, manual restoration, stale-candidate clearing, read-only UI state, and invalid-NFO handling.
+
 ## v0.6.0-dev1 — Local NFO read-only foundation
 
 - Added case-insensitive detection of same-name NFO, poster, and fanart sidecars beside the selected movie.

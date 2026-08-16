@@ -22,7 +22,7 @@ The projects run sequentially because the smoke and UI projects share build outp
 | --- | --- | --- |
 | Core smoke | `JavMetaLite.SmokeTests` | Parsers, metadata merge, v0.5 multi-source orchestration/provenance, unified poster/fanart source selection, safe local sidecar/NFO reads, NFO writing, image conversion, basic organization and logs |
 | v0.4 regression | `JavMetaLite.RegressionTests` | File layout matrix, overwrite policy, conflicts, rollback and input validation |
-| UI smoke | `JavMetaLite.UiSmokeTests` | WPF window construction, dark source selector, v0.5 mixed-source badges, field and unified artwork candidate menus, top-right cover-source placement, text-free pre-search artwork status with stable spacing, per-field switching/manual return, safe defaults and preview window |
+| UI smoke | `JavMetaLite.UiSmokeTests` | WPF window construction, dark source selector, v0.5 mixed-source badges and artwork menus, v0.6 local-NFO loading/default selection/online candidates/manual return/failure safety, stale-candidate clearing, safe defaults and preview window |
 
 The regression runner supports discovery and category filters:
 
@@ -40,6 +40,7 @@ Available categories are `layout`, `overwrite`, `conflict`, `rollback`, and `val
 - HTTP image responses are local in-memory fixtures; the automated gate performs no website requests.
 - Multi-source orchestration uses fake providers to cover two-source success, partial and total failure, ID mismatch, per-source call counts, and diagnostics without live requests.
 - Local NFO fixtures cover valid and partial metadata, unknown-node preservation, malformed XML, wrong roots, oversized files, and DTD/external-entity rejection without touching a real media folder.
+- WPF local-NFO fixtures verify the visible source/path, read-only save state, local-first online composition, manual restoration, invalid-file logging, and complete candidate reset on the next movie.
 - Each test verifies and removes temporary transaction artifacts.
 - A failed test returns a non-zero process exit code and prevents the gate from continuing.
 - A fixed defect should receive a regression case before the fix is considered complete.

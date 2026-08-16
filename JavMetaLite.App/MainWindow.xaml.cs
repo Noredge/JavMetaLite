@@ -42,7 +42,10 @@ public partial class MainWindow : Window
     private MovieMetadata _metadata = new();
     private MetadataReviewSession? _metadataReview;
     private ArtworkCoverReviewSession? _artworkCoverReview;
+    private LocalMetadataBundle? _localMetadataBundle;
+    private MovieMetadata? _localSourceMetadata;
     private string? _videoPath;
+    private bool _localNfoReadOnlyMode;
     private bool _busy;
 
     public MainWindow()
@@ -51,10 +54,10 @@ public partial class MainWindow : Window
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
         ApplyMetadata(_metadata, []);
-        AppLog.Info("JavMetaLite v0.6.0-dev1 启动");
+        AppLog.Info("JavMetaLite v0.6.0-dev2 启动");
     }
 
-    private void ChooseFile_Click(object sender, RoutedEventArgs e)
+    private async void ChooseFile_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
         {
@@ -66,7 +69,7 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog(this) == true)
         {
-            SelectVideo(dialog.FileName);
+            await SelectVideoAsync(dialog.FileName);
         }
     }
 
@@ -76,11 +79,11 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void Window_Drop(object sender, DragEventArgs e)
+    private async void Window_Drop(object sender, DragEventArgs e)
     {
         if (TryGetDroppedVideo(e.Data, out var path))
         {
-            SelectVideo(path!);
+            await SelectVideoAsync(path!);
         }
     }
 
@@ -108,8 +111,7 @@ public partial class MainWindow : Window
             try
             {
                 var outcome = await SearchFromSelectedSourceAsync(source, _metadata.Id);
-                var result = outcome.Metadata;
-                ApplyMetadata(result, outcome.Sources);
+                var result = ApplyOnlineSources(outcome.Metadata, outcome.Sources);
                 var successfulSources = string.Join(
                     "+",
                     outcome.Sources.Select(GetSourceDisplayName).Distinct(StringComparer.OrdinalIgnoreCase));
@@ -119,7 +121,7 @@ public partial class MainWindow : Window
                 AppLog.Info(
                     $"metadata 搜索成功 sources={successfulSources} failedSources={failedSources} id={result.Id} " +
                     $"contentId={result.ContentId} screenshots={result.ScreenshotUrls.Count} " +
-                    $"reviewSources={outcome.Sources.Count}");
+                    $"reviewSources={outcome.Sources.Count} localDefault={_localSourceMetadata is not null}");
                 var posterLoaded = await LoadPosterPreviewAsync(result);
                 var fanartLoaded = await LoadFanartPreviewAsync(result);
                 var sourceName = string.Join(
@@ -131,10 +133,13 @@ public partial class MainWindow : Window
                 var imageSummary = result.ScreenshotUrls.Count > 0
                     ? $"，找到 {result.ScreenshotUrls.Count} 张样张"
                     : "，没有独立样张";
+                var localPrefix = _localSourceMetadata is null
+                    ? $"已从 {sourceName} 读取 {result.Id}"
+                    : $"已加入 {sourceName} 在线候选，当前保留本地 NFO";
                 SetStatus(
                     posterLoaded
-                        ? $"已从 {sourceName} 读取 {result.Id}{imageSummary}{(fanartLoaded ? string.Empty : "；完整封套 fanart 预览未加载")}{degradedNote}"
-                        : $"已从 {sourceName} 读取 {result.Id}；封面预览未加载，不影响资料编辑{degradedNote}",
+                        ? $"{localPrefix}{imageSummary}{(fanartLoaded ? string.Empty : "；完整封套 fanart 预览未加载")}{degradedNote}"
+                        : $"{localPrefix}；封面预览未加载，不影响资料编辑{degradedNote}",
                     string.IsNullOrWhiteSpace(failedSources));
             }
             catch (JavLibraryChallengeException exception)
@@ -207,6 +212,12 @@ public partial class MainWindow : Window
         if (_videoPath is null)
         {
             ShowError("请先选择一个影片文件。 ");
+            return;
+        }
+
+        if (_localNfoReadOnlyMode)
+        {
+            ShowError("当前版本只允许读取和检查已有本地 NFO；安全更新将在后续往返保存阶段开放。原文件没有被修改。");
             return;
         }
 
@@ -283,7 +294,10 @@ public partial class MainWindow : Window
         });
     }
 
-    private void SelectVideo(string path)
+    private Task SelectVideoAsync(string path) =>
+        RunBusyAsync("正在检查影片旁的本地 metadata…", () => SelectVideoCoreAsync(path));
+
+    private async Task SelectVideoCoreAsync(string path)
     {
         if (!File.Exists(path) || !SupportedExtensions.Contains(Path.GetExtension(path)))
         {
@@ -292,6 +306,9 @@ public partial class MainWindow : Window
         }
 
         _videoPath = path;
+        _localMetadataBundle = null;
+        _localSourceMetadata = null;
+        _localNfoReadOnlyMode = false;
         AppLog.Info($"选择影片 path={path}");
         FileNameText.Text = Path.GetFileName(path);
         FilePathText.Text = path;
@@ -299,13 +316,57 @@ public partial class MainWindow : Window
         ApplyMetadata(new MovieMetadata { Id = id ?? string.Empty }, []);
         ClearPosterPreview();
         ClearFanartPreview();
-        if (!string.IsNullOrWhiteSpace(id))
+
+        LocalSidecarPaths sidecars;
+        try
         {
-            SetStatus($"已识别番号 {id}，可以搜索资料", true);
+            sidecars = LocalSidecarLocator.Locate(path);
         }
-        else
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            SetStatus("没有从文件名识别到番号，请手动输入", false);
+            AppLog.Warning($"无法检查本地 sidecar path={path}", exception);
+            SetStatus($"无法检查影片旁的本地文件：{exception.Message}", false);
+            return;
+        }
+
+        if (!sidecars.HasNfo)
+        {
+            SetStatus(
+                !string.IsNullOrWhiteSpace(id)
+                    ? $"已识别番号 {id}，未找到同名本地 NFO，可以搜索资料"
+                    : "没有找到同名本地 NFO，也未从文件名识别到番号，请手动输入",
+                !string.IsNullOrWhiteSpace(id));
+            return;
+        }
+
+        _localNfoReadOnlyMode = true;
+        try
+        {
+            var bundle = await NfoReader.ReadAsync(sidecars, _lifetimeCancellation.Token);
+            var composition = LocalMetadataReviewComposer.CreateLocal(bundle.Metadata);
+            var editable = composition.Metadata;
+            if (string.IsNullOrWhiteSpace(editable.Id))
+            {
+                editable.Id = id ?? string.Empty;
+            }
+
+            _localMetadataBundle = bundle;
+            _localSourceMetadata = composition.Sources[0];
+            ApplyMetadata(editable, composition.Sources);
+            AppLog.Info(
+                $"本地 NFO 载入成功 path={bundle.Sidecars.NfoPath} id={editable.Id} " +
+                $"diagnostics={bundle.Diagnostics.Count}");
+            var diagnosticNote = bundle.Diagnostics.Count == 0
+                ? string.Empty
+                : $"；{string.Join("；", bundle.Diagnostics)}";
+            SetStatus($"已从本地 NFO 载入（只读检查）：{bundle.Sidecars.NfoPath}{diagnosticNote}", true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            AppLog.Warning($"本地 NFO 读取失败 path={sidecars.NfoPath}", exception);
+            SetStatus(
+                $"检测到本地 NFO，但无法安全读取，原文件未修改：{Path.GetFileName(sidecars.NfoPath)}；{exception.Message}",
+                false);
         }
     }
 
@@ -326,16 +387,37 @@ public partial class MainWindow : Window
                     browser.PageUrl ?? url,
                     _metadata.Id,
                     _lifetimeCancellation.Token);
-                ApplyMetadata(result, [result]);
-                var posterLoaded = await LoadPosterPreviewAsync(result);
-                await LoadFanartPreviewAsync(result);
+                var displayed = ApplyOnlineSources(result, [result]);
+                var posterLoaded = await LoadPosterPreviewAsync(displayed);
+                await LoadFanartPreviewAsync(displayed);
+                var localNote = _localSourceMetadata is null ? string.Empty : "，当前保留本地 NFO";
                 SetStatus(
                     posterLoaded
-                        ? $"已从浏览器读取 {result.Id}"
-                        : $"已从浏览器读取 {result.Id}；封面预览未加载，不影响保存",
+                        ? $"已加入浏览器资料候选 {result.Id}{localNote}"
+                        : $"已加入浏览器资料候选 {result.Id}{localNote}；封面预览未加载，不影响资料编辑",
                     true);
             });
         }
+    }
+
+    private MovieMetadata ApplyOnlineSources(
+        MovieMetadata preferredOnlineMetadata,
+        IReadOnlyList<MovieMetadata> onlineSources)
+    {
+        if (_localSourceMetadata is null)
+        {
+            ApplyMetadata(preferredOnlineMetadata, onlineSources);
+            return _metadata;
+        }
+
+        var localForMerge = LocalMetadataReviewComposer.CreateLocal(_localSourceMetadata).Metadata;
+        localForMerge.Id = _metadata.Id;
+        var composition = LocalMetadataReviewComposer.ComposeWithOnline(
+            localForMerge,
+            preferredOnlineMetadata,
+            onlineSources);
+        ApplyMetadata(composition.Metadata, composition.Sources);
+        return _metadata;
     }
 
     private void ApplyMetadata(MovieMetadata result, IReadOnlyList<MovieMetadata> sourceResults)
@@ -768,7 +850,10 @@ public partial class MainWindow : Window
         {
             Mouse.OverrideCursor = null;
             SearchButton.IsEnabled = true;
-            SaveButton.IsEnabled = true;
+            SaveButton.IsEnabled = !_localNfoReadOnlyMode;
+            SaveButton.ToolTip = _localNfoReadOnlyMode
+                ? "dev2 只读检查：已有本地 NFO 的安全更新将在后续阶段开放"
+                : null;
             ArtworkSourceButton.IsEnabled = (_artworkCoverReview?.Candidates.Count ?? 0) > 1;
             _busy = false;
         }
