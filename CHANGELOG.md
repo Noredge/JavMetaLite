@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.0-dev5-r2 — Unified cover source menu
+
+- Added one compact source badge between the poster and fanart previews, using the same dark two-line candidate menu as metadata fields.
+- Locked poster and fanart to a single selected source and refreshed both previews together after a switch.
+- Kept screenshots outside this selector: no cross-source screenshot merge and no separate screenshot-source control.
+- Hid the selector when no cover exists and made it read-only when only one source has a usable cover.
+- Added offline coverage for default source matching, unified switching, immutable source snapshots, screenshot isolation, and the WPF candidate menu.
+
 ## v0.5.0-dev5-r1 — Lightweight artwork flow
 
 - Retired the independent cover/screenshot source selectors introduced in dev5 after hands-on testing showed that they added unnecessary product weight.

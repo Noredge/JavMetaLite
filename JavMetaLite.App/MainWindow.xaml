@@ -306,8 +306,17 @@
                         </Grid>
                     </Border>
                     <Grid Grid.Row="1" Margin="0,12,0,7">
-                        <TextBlock Text="Fanart 预览" FontSize="12" FontWeight="SemiBold" />
-                        <TextBlock x:Name="FanartHintText" Text="等待完整封套" Foreground="{StaticResource MutedBrush}" FontSize="11" HorizontalAlignment="Right" />
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="封套 / Fanart" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button x:Name="ArtworkSourceButton"
+                                Style="{StaticResource SourceBadgeButton}"
+                                Padding="5,2" Margin="8,0,0,0"
+                                HorizontalAlignment="Right"
+                                Click="ArtworkSourceButton_Click" />
+                        <TextBlock x:Name="FanartHintText" Grid.Row="1" Text="等待完整封套" Foreground="{StaticResource MutedBrush}" FontSize="11" HorizontalAlignment="Right" Margin="0,3,0,0" />
                     </Grid>
                     <Border Grid.Row="2" MinHeight="105" Background="#0B1016" BorderBrush="#2A3544" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
                         <Grid>
@@ -499,7 +508,7 @@
                 <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#72E3A6" VerticalAlignment="Center" Margin="0,0,9,0" />
                 <TextBlock x:Name="StatusText" Grid.Column="1" Text="准备就绪，请选择或拖入一个影片" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
                 <Button Grid.Column="2" Content="打开日志" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
-                <TextBlock Grid.Column="3" Text="v0.5.0-dev5-r1 · 轻量图片流程" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="v0.5.0-dev5-r2 · 统一封套来源" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>

@@ -95,6 +95,7 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("多来源字段补全", TestMetadataMerge),
     ("v0.5 多来源搜索编排", TestMetadataSearchCoordinator),
     ("v0.5 字段候选与来源追踪", TestMetadataReviewSession),
+    ("v0.5 poster 与 fanart 统一封套来源", TestArtworkCoverReviewSession),
     ("R18.dev JSON 解析", TestR18Parser),
     ("R18.dev 实际 content_id 回退", TestR18ContentIdFallback),
     ("JAVLibrary HTML 解析", TestHtmlParser),
@@ -422,6 +423,44 @@ static Task TestMetadataReviewSession()
     review.SetManualValue(MetadataField.Plot, string.Empty);
     AssertEqual("manual", review.GetSelectedCandidate(MetadataField.Plot)?.Source.Name);
     AssertEqual(string.Empty, merged.Plot);
+    return Task.CompletedTask;
+}
+
+static Task TestArtworkCoverReviewSession()
+{
+    var primary = new MovieMetadata
+    {
+        Id = "IPZZ-850",
+        CoverUrl = "https://images.example.test/libre-cover.jpg",
+        FallbackCoverUrl = "https://images.example.test/libre-fallback.jpg",
+        PosterUrl = "https://images.example.test/libre-poster.jpg",
+        ScreenshotUrls = ["https://images.example.test/libre-sample.jpg"],
+        SourceName = "libredmm",
+        SourceDisplayName = "LibreDMM"
+    };
+    var fallback = new MovieMetadata
+    {
+        Id = "IPZZ-850",
+        CoverUrl = "https://images.example.test/r18-cover.jpg",
+        PosterUrl = "https://images.example.test/r18-poster.jpg",
+        ScreenshotUrls = ["https://images.example.test/r18-sample.jpg"],
+        SourceName = "r18dev",
+        SourceDisplayName = "R18.dev"
+    };
+    var merged = MetadataMerger.Merge(primary, fallback);
+    var review = ArtworkCoverReviewSession.Create(merged, primary, fallback);
+
+    AssertEqual("2", review.Candidates.Count.ToString());
+    AssertEqual("libredmm", review.SelectedCandidate?.Source.Name);
+    AssertEqual("True", review.SelectSource("r18dev").ToString());
+    AssertEqual("r18dev", review.SelectedCandidate?.Source.Name);
+    AssertEqual("https://images.example.test/r18-cover.jpg", merged.CoverUrl);
+    AssertEqual("https://images.example.test/r18-poster.jpg", merged.PosterUrl);
+    AssertEqual("https://images.example.test/libre-sample.jpg", merged.ScreenshotUrls[0]);
+
+    fallback.CoverUrl = "https://images.example.test/changed-after-review.jpg";
+    AssertEqual("https://images.example.test/r18-cover.jpg", review.SelectedCandidate?.CoverUrl);
+    AssertEqual("False", review.SelectSource("missing").ToString());
     return Task.CompletedTask;
 }
 

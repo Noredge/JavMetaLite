@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Reflection;
 using JavMetaLite.App;
 using JavMetaLite.Core.Models;
+using JavMetaLite.Core.Services;
 
 namespace JavMetaLite.UiSmokeTests;
 
@@ -86,6 +87,7 @@ internal static class Program
         {
             Id = "IPZZ-850",
             Title = "日文标题",
+            CoverUrl = "https://images.example.test/libre-cover.jpg",
             SourceName = "libredmm",
             SourceDisplayName = "LibreDMM"
         };
@@ -94,6 +96,7 @@ internal static class Program
             Id = "IPZZ-850",
             Title = "English title",
             Director = "Director A",
+            CoverUrl = "https://images.example.test/r18-cover.jpg",
             SourceName = "r18dev",
             SourceDisplayName = "R18.dev"
         };
@@ -112,6 +115,27 @@ internal static class Program
         {
             throw new InvalidOperationException("多来源字段应可选，单一来源字段应保持只读。 ");
         }
+
+        var artworkSourceButton = window.FindName("ArtworkSourceButton") as Button
+            ?? throw new InvalidOperationException("统一封套来源标记未创建。 ");
+        if (artworkSourceButton.Visibility != Visibility.Visible ||
+            !artworkSourceButton.IsEnabled ||
+            artworkSourceButton.Content?.ToString() != "LibreDMM ▾")
+        {
+            throw new InvalidOperationException("多来源结果没有显示统一封套来源候选。 ");
+        }
+        artworkSourceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var artworkMenu = artworkSourceButton.ContextMenu
+            ?? throw new InvalidOperationException("统一封套候选菜单未创建。 ");
+        artworkMenu.ApplyTemplate();
+        window.UpdateLayout();
+        var artworkCandidates = artworkMenu.Items.OfType<MenuItem>().ToArray();
+        if (artworkCandidates.Length != 2 ||
+            artworkCandidates.Any(item => item.Tag is not ArtworkCoverCandidate || item.Header is not StackPanel panel || panel.Children.Count != 2))
+        {
+            throw new InvalidOperationException("封套候选没有复用字段候选的双行下拉结构。 ");
+        }
+        artworkMenu.IsOpen = false;
 
         titleSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         var titleMenu = titleSourceText.ContextMenu
@@ -188,7 +212,7 @@ internal static class Program
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True directSaveDefaultsOff=True organizeDefaultsOff=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True directSaveDefaultsOff=True organizeDefaultsOff=True");
         window.Close();
         application.Shutdown();
     }

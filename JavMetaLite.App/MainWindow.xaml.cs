@@ -41,6 +41,7 @@ public partial class MainWindow : Window
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private MovieMetadata _metadata = new();
     private MetadataReviewSession? _metadataReview;
+    private ArtworkCoverReviewSession? _artworkCoverReview;
     private string? _videoPath;
     private bool _busy;
 
@@ -50,7 +51,7 @@ public partial class MainWindow : Window
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
         ApplyMetadata(_metadata, []);
-        AppLog.Info("JavMetaLite v0.5.0-dev5-r1 启动");
+        AppLog.Info("JavMetaLite v0.5.0-dev5-r2 启动");
     }
 
     private void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -349,7 +350,9 @@ public partial class MainWindow : Window
         DataContext = _metadata;
         _metadataReview = MetadataReviewSession.Create(result, sourceResults.ToArray());
         _metadataReview.SelectionChanged += MetadataReview_SelectionChanged;
+        _artworkCoverReview = ArtworkCoverReviewSession.Create(result, sourceResults.ToArray());
         RefreshSourceBadges();
+        RefreshArtworkSourceBadge();
     }
 
     private void MetadataReview_SelectionChanged(object? sender, MetadataSelectionChangedEventArgs eventArgs) =>
@@ -463,6 +466,98 @@ public partial class MainWindow : Window
         var fieldName = GetFieldDisplayName(candidate.Field);
         AppLog.Info($"字段来源切换 field={candidate.Field} source={candidate.Source.Name}");
         SetStatus($"已将“{fieldName}”切换为 {candidate.Source.DisplayName}", true);
+    }
+
+    private void RefreshArtworkSourceBadge()
+    {
+        var candidate = _artworkCoverReview?.SelectedCandidate;
+        var candidates = _artworkCoverReview?.Candidates ?? [];
+        ArtworkSourceButton.Content = candidate is null
+            ? string.Empty
+            : candidates.Count > 1
+                ? $"{candidate.Source.DisplayName} ▾"
+                : candidate.Source.DisplayName;
+        ArtworkSourceButton.Visibility = candidate is null ? Visibility.Collapsed : Visibility.Visible;
+        ArtworkSourceButton.IsEnabled = !_busy && candidates.Count > 1;
+        ArtworkSourceButton.ToolTip = candidate is null
+            ? null
+            : candidates.Count > 1
+                ? $"点击选择封套来源（{candidates.Count} 个候选）；poster 与 fanart 始终共用"
+                : $"封套来源：{candidate.Source.DisplayName}；poster 与 fanart 共用";
+    }
+
+    private void ArtworkSourceButton_Click(object sender, RoutedEventArgs eventArgs)
+    {
+        if (_artworkCoverReview is null || _artworkCoverReview.Candidates.Count <= 1)
+        {
+            return;
+        }
+
+        var selected = _artworkCoverReview.SelectedCandidate;
+        var menu = new ContextMenu
+        {
+            PlacementTarget = ArtworkSourceButton,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+            Style = (Style)FindResource("CandidateContextMenu")
+        };
+
+        foreach (var candidate in _artworkCoverReview.Candidates)
+        {
+            var sourceText = new TextBlock
+            {
+                Text = $"{(candidate == selected ? "✓ " : string.Empty)}{candidate.Source.DisplayName}",
+                Foreground = new SolidColorBrush(Color.FromRgb(111, 168, 255)),
+                FontWeight = FontWeights.SemiBold
+            };
+            var valueText = new TextBlock
+            {
+                Text = candidate.Urls.Count > 1
+                    ? $"poster / fanart 共用 · {candidate.Urls.Count} 个封套地址"
+                    : "poster / fanart 共用此完整封套",
+                Foreground = new SolidColorBrush(Color.FromRgb(184, 197, 214)),
+                FontSize = 11,
+                Margin = new Thickness(0, 3, 0, 0)
+            };
+            var header = new StackPanel();
+            header.Children.Add(sourceText);
+            header.Children.Add(valueText);
+
+            var menuItem = new MenuItem
+            {
+                Header = header,
+                Tag = candidate,
+                Style = (Style)FindResource("CandidateMenuItem"),
+                ToolTip = string.Join(Environment.NewLine, candidate.Urls)
+            };
+            menuItem.Click += async (_, _) => await SelectArtworkSourceCandidateAsync(candidate);
+            menu.Items.Add(menuItem);
+        }
+
+        ArtworkSourceButton.ContextMenu = menu;
+        menu.IsOpen = true;
+        eventArgs.Handled = true;
+    }
+
+    private async Task SelectArtworkSourceCandidateAsync(ArtworkCoverCandidate candidate)
+    {
+        if (_artworkCoverReview?.SelectSource(candidate.Source.Name) != true)
+        {
+            return;
+        }
+
+        RefreshArtworkSourceBadge();
+        AppLog.Info($"统一封套来源切换 source={candidate.Source.Name} posterFanartLocked=true");
+        await RunBusyAsync($"正在加载 {candidate.Source.DisplayName} 封套…", async () =>
+        {
+            var posterLoaded = await LoadPosterPreviewAsync(_metadata);
+            var fanartLoaded = await LoadFanartPreviewAsync(_metadata);
+            var loaded = posterLoaded && fanartLoaded;
+            SetStatus(
+                loaded
+                    ? $"封套与 fanart 已同时切换为 {candidate.Source.DisplayName}"
+                    : $"{candidate.Source.DisplayName} 封套预览加载不完整，可改选其他来源",
+                loaded);
+        });
     }
 
     private static string BuildCandidatePreview(string value)
@@ -655,6 +750,7 @@ public partial class MainWindow : Window
         _busy = true;
         SearchButton.IsEnabled = false;
         SaveButton.IsEnabled = false;
+        ArtworkSourceButton.IsEnabled = false;
         Mouse.OverrideCursor = Cursors.Wait;
         SetStatus(message, null);
 
@@ -675,6 +771,7 @@ public partial class MainWindow : Window
             Mouse.OverrideCursor = null;
             SearchButton.IsEnabled = true;
             SaveButton.IsEnabled = true;
+            ArtworkSourceButton.IsEnabled = (_artworkCoverReview?.Candidates.Count ?? 0) > 1;
             _busy = false;
         }
     }
