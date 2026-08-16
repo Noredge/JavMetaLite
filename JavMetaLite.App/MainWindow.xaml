@@ -27,6 +27,99 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Padding" Value="0,0,0,6" />
         </Style>
+        <Style x:Key="SourceBadgeButton" TargetType="Button">
+            <Setter Property="Foreground" Value="#6FA8FF" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,0,0,6" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Setter Property="Margin" Value="10,0,0,0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="BadgeBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsEnabled" Value="True" />
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="BadgeBorder" Property="Background" Value="#233650" />
+                                <Setter Property="Foreground" Value="#9BC1FF" />
+                            </MultiTrigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Cursor" Value="Arrow" />
+                                <Setter Property="Opacity" Value="0.88" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CandidateContextMenu" TargetType="ContextMenu">
+            <Setter Property="Background" Value="#10161E" />
+            <Setter Property="BorderBrush" Value="#3A4A61" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="4" />
+            <Setter Property="HasDropShadow" Value="False" />
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border x:Name="CandidateMenuRoot"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="6"
+                                SnapsToDevicePixels="True">
+                            <ScrollViewer Background="Transparent"
+                                          CanContentScroll="True"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Auto">
+                                <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" />
+                            </ScrollViewer>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CandidateMenuItem" TargetType="MenuItem">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="MinWidth" Value="300" />
+            <Setter Property="MaxWidth" Value="540" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="CandidateBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter ContentSource="Header" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="CandidateBorder" Property="Background" Value="#244B8F" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style TargetType="TextBox">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             <Setter Property="Background" Value="#10161E" />
@@ -196,13 +289,22 @@
             <Border Grid.Column="0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="14" Padding="18">
                 <Grid>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="3*" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="1.35*" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <Border Background="#0B1016" BorderBrush="#2A3544" BorderThickness="1" CornerRadius="10" ClipToBounds="True">
+                    <Grid x:Name="ArtworkSourceHeader" Margin="0,0,0,7">
+                        <TextBlock Text="封套 / Fanart" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button x:Name="ArtworkSourceButton"
+                                Style="{StaticResource SourceBadgeButton}"
+                                Padding="5,2" Margin="8,0,0,0"
+                                HorizontalAlignment="Right"
+                                Click="ArtworkSourceButton_Click" />
+                    </Grid>
+                    <Border x:Name="PosterPreviewBorder" Grid.Row="1" Background="#0B1016" BorderBrush="#2A3544" BorderThickness="1" CornerRadius="10" ClipToBounds="True">
                         <Grid>
                             <Image x:Name="PosterImage" Stretch="Uniform" Margin="8" />
                             <StackPanel x:Name="DropHint" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
@@ -212,18 +314,14 @@
                             </StackPanel>
                         </Grid>
                     </Border>
-                    <Grid Grid.Row="1" Margin="0,12,0,7">
-                        <TextBlock Text="Fanart 预览" FontSize="12" FontWeight="SemiBold" />
-                        <TextBlock x:Name="FanartHintText" Text="等待完整封套" Foreground="{StaticResource MutedBrush}" FontSize="11" HorizontalAlignment="Right" />
-                    </Grid>
-                    <Border Grid.Row="2" MinHeight="105" Background="#0B1016" BorderBrush="#2A3544" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+                    <TextBlock x:Name="FanartHintText" Grid.Row="2" Text="" MinHeight="14" Foreground="{StaticResource MutedBrush}" FontSize="11" HorizontalAlignment="Right" Margin="0,8,0,7" />
+                    <Border x:Name="FanartPreviewBorder" Grid.Row="3" MinHeight="105" Background="#0B1016" BorderBrush="#2A3544" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
                         <Grid>
                             <Image x:Name="FanartImage" Stretch="Uniform" Margin="5" />
-                            <TextBlock x:Name="FanartDropHint" Text="搜索后显示完整横版封套" Foreground="#607086" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                     </Border>
-                    <TextBlock x:Name="FileNameText" Grid.Row="3" Text="尚未选择影片" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,14,0,0" />
-                    <TextBlock x:Name="FilePathText" Grid.Row="4" Text="影片将保持原位置" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" />
+                    <TextBlock x:Name="FileNameText" Grid.Row="4" Text="尚未选择影片" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,14,0,0" />
+                    <TextBlock x:Name="FilePathText" Grid.Row="5" Text="影片将保持原位置" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" />
                 </Grid>
             </Border>
 
@@ -245,7 +343,7 @@
                                 <ColumnDefinition Width="10" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="10" />
-                                <ColumnDefinition Width="155" />
+                                <ColumnDefinition Width="170" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="番号" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
@@ -253,7 +351,7 @@
                             <Button x:Name="SearchButton" Grid.Column="3" Style="{StaticResource PrimaryButton}" Content="搜索资料" Click="Search_Click" />
                             <Button Grid.Column="5" Content="网页导入" Click="Browser_Click" ToolTip="从 JAVLibrary 详情页读取" />
                             <ComboBox x:Name="SourceComboBox" Grid.Column="7" SelectedIndex="0" Style="{StaticResource DarkComboBox}">
-                                <ComboBoxItem Content="自动补全（推荐）" Tag="auto" IsSelected="True" />
+                                <ComboBoxItem Content="多来源搜索（推荐）" Tag="auto" IsSelected="True" />
                                 <ComboBoxItem Content="LibreDMM" Tag="libredmm" />
                                 <ComboBoxItem Content="R18.dev" Tag="r18dev" />
                                 <ComboBoxItem Content="JAVLibrary" Tag="javlibrary" />
@@ -280,52 +378,85 @@
                             </Grid.RowDefinitions>
 
                             <StackPanel Grid.Row="0" Grid.ColumnSpan="3">
-                                <Label Content="标题" />
+                                <Grid>
+                                    <Label Content="标题" />
+                                    <Button x:Name="TitleSourceText" Tag="Title" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
+                                </Grid>
                                 <TextBox Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,13,0,0">
-                                <Label Content="原始标题" />
+                                <Grid>
+                                    <Label Content="原始标题" />
+                                    <Button x:Name="OriginalTitleSourceText" Tag="OriginalTitle" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
+                                </Grid>
                                 <TextBox Text="{Binding OriginalTitle, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
                             <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,13,0,0">
-                                <Label Content="发行日期" />
+                                <Grid>
+                                    <Label Content="发行日期" />
+                                    <Button x:Name="ReleaseDateSourceText" Tag="ReleaseDate" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
+                                </Grid>
                                 <TextBox Text="{Binding ReleaseDate, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,13,0,0">
-                                <Label Content="时长（分钟）" />
+                                <Grid>
+                                    <Label Content="时长（分钟）" />
+                                    <Button x:Name="RuntimeSourceText" Tag="RuntimeMinutes" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
+                                </Grid>
                                 <TextBox Text="{Binding RuntimeMinutes, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
                             <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,13,0,0">
-                                <Label Content="片商" />
+                                <Grid>
+                                    <Label Content="片商" />
+                                    <Button x:Name="MakerSourceText" Tag="Maker" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
+                                </Grid>
                                 <TextBox Text="{Binding Maker, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Grid.Row="3" Grid.Column="2" Margin="0,13,0,0">
-                                <Label Content="导演" />
+                                <Grid>
+                                    <Label Content="导演" />
+                                    <Button x:Name="DirectorSourceText" Tag="Director" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
+                                </Grid>
                                 <TextBox Text="{Binding Director, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
                             <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,13,0,0">
-                                <Label Content="标签 / 厂牌" />
+                                <Grid>
+                                    <Label Content="标签 / 厂牌" />
+                                    <Button x:Name="LabelSourceText" Tag="Label" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
+                                </Grid>
                                 <TextBox Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Grid.Row="4" Grid.Column="2" Margin="0,13,0,0">
-                                <Label Content="系列" />
+                                <Grid>
+                                    <Label Content="系列" />
+                                    <Button x:Name="SeriesSourceText" Tag="Series" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
+                                </Grid>
                                 <TextBox Text="{Binding Series, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
                             <StackPanel Grid.Row="5" Grid.Column="0" Margin="0,13,0,0">
-                                <Label Content="演员（逗号分隔）" />
+                                <Grid>
+                                    <Label Content="演员（逗号分隔）" />
+                                    <Button x:Name="ActorsSourceText" Tag="Actors" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
+                                </Grid>
                                 <TextBox Text="{Binding ActorsText, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" MinHeight="42" />
                             </StackPanel>
                             <StackPanel Grid.Row="5" Grid.Column="2" Margin="0,13,0,0">
-                                <Label Content="类型（逗号分隔）" />
+                                <Grid>
+                                    <Label Content="类型（逗号分隔）" />
+                                    <Button x:Name="GenresSourceText" Tag="Genres" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
+                                </Grid>
                                 <TextBox Text="{Binding GenresText, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" MinHeight="42" />
                             </StackPanel>
 
                             <StackPanel Grid.Row="6" Grid.ColumnSpan="3" Margin="0,13,0,6">
-                                <Label Content="简介" />
+                                <Grid>
+                                    <Label Content="简介" />
+                                    <Button x:Name="PlotSourceText" Tag="Plot" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
+                                </Grid>
                                 <TextBox Text="{Binding Plot, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="92" VerticalScrollBarVisibility="Auto" />
                             </StackPanel>
                         </Grid>
@@ -373,7 +504,7 @@
                 <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#72E3A6" VerticalAlignment="Center" Margin="0,0,9,0" />
                 <TextBlock x:Name="StatusText" Grid.Column="1" Text="准备就绪，请选择或拖入一个影片" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
                 <Button Grid.Column="2" Content="打开日志" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
-                <TextBlock Grid.Column="3" Text="v0.4.0 · 稳定版" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="v0.5.0 · 稳定版" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>

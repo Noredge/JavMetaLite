@@ -93,6 +93,9 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("番号识别", TestMovieIdParser),
     ("LibreDMM JSON 解析与清理", TestLibreDmmParser),
     ("多来源字段补全", TestMetadataMerge),
+    ("v0.5 多来源搜索编排", TestMetadataSearchCoordinator),
+    ("v0.5 字段候选与来源追踪", TestMetadataReviewSession),
+    ("v0.5 poster 与 fanart 统一封套来源", TestArtworkCoverReviewSession),
     ("R18.dev JSON 解析", TestR18Parser),
     ("R18.dev 实际 content_id 回退", TestR18ContentIdFallback),
     ("JAVLibrary HTML 解析", TestHtmlParser),
@@ -231,6 +234,233 @@ static Task TestMetadataMerge()
     AssertEqual("系列补充", merged.Series);
     AssertEqual("1", merged.ScreenshotUrls.Count.ToString());
     AssertEqual("LibreDMM + R18.dev", merged.SourceDisplayName);
+    return Task.CompletedTask;
+}
+
+static async Task TestMetadataSearchCoordinator()
+{
+    var logRoot = Path.Combine(Path.GetTempPath(), $"JavMetaLite.MultiSourceTests.{Guid.NewGuid():N}");
+    try
+    {
+        AppLog.ConfigureDirectory(logRoot);
+        var primaryMetadata = new MovieMetadata
+        {
+            Id = "IPZZ-850",
+            Title = "日文标题",
+            Plot = "完整日文简介",
+            Director = "日文导演",
+            SourceName = "libredmm",
+            SourceDisplayName = "LibreDMM"
+        };
+        var secondaryMetadata = new MovieMetadata
+        {
+            Id = "IPZZ-850",
+            Title = "English title",
+            Series = "English series",
+            SourceName = "r18dev",
+            SourceDisplayName = "R18.dev"
+        };
+
+        using var primary = FakeMetadataProvider.Success("libredmm", "LibreDMM", primaryMetadata);
+        using var secondary = FakeMetadataProvider.Success("r18dev", "R18.dev", secondaryMetadata);
+        var complete = await MetadataSearchCoordinator.SearchAllAsync("IPZZ-850", primary, secondary);
+        AssertEqual("1", primary.CallCount.ToString());
+        AssertEqual("1", secondary.CallCount.ToString());
+        AssertEqual("2", complete.Sources.Count.ToString());
+        AssertEqual("2", complete.Attempts.Count.ToString());
+        AssertEqual("日文标题", complete.Metadata.Title);
+        AssertEqual("English series", complete.Metadata.Series);
+        AssertEqual("True", complete.Attempts.All(attempt => attempt.Success).ToString());
+
+        using var failedPrimary = FakeMetadataProvider.Failure(
+            "libredmm",
+            "LibreDMM",
+            new HttpRequestException("primary unavailable"));
+        using var survivingSecondary = FakeMetadataProvider.Success("r18dev", "R18.dev", secondaryMetadata);
+        var secondaryOnly = await MetadataSearchCoordinator.SearchAllAsync(
+            "IPZZ-850",
+            failedPrimary,
+            survivingSecondary);
+        AssertEqual("R18.dev", secondaryOnly.Metadata.SourceDisplayName);
+        AssertEqual("1", secondaryOnly.Sources.Count.ToString());
+        AssertEqual("1", failedPrimary.CallCount.ToString());
+        AssertEqual("1", survivingSecondary.CallCount.ToString());
+
+        using var survivingPrimary = FakeMetadataProvider.Success("libredmm", "LibreDMM", primaryMetadata);
+        using var failedSecondary = FakeMetadataProvider.Failure(
+            "r18dev",
+            "R18.dev",
+            new MetadataNotFoundException("R18.dev", "IPZZ-850"));
+        var primaryOnly = await MetadataSearchCoordinator.SearchAllAsync(
+            "IPZZ-850",
+            survivingPrimary,
+            failedSecondary);
+        AssertEqual("LibreDMM", primaryOnly.Metadata.SourceDisplayName);
+        AssertEqual("1", primaryOnly.Sources.Count.ToString());
+
+        using var firstFailure = FakeMetadataProvider.Failure(
+            "libredmm",
+            "LibreDMM",
+            new HttpRequestException("first failed"));
+        using var secondFailure = FakeMetadataProvider.Failure(
+            "r18dev",
+            "R18.dev",
+            new HttpRequestException("second failed"));
+        var bothFailed = false;
+        try
+        {
+            await MetadataSearchCoordinator.SearchAllAsync("IPZZ-850", firstFailure, secondFailure);
+        }
+        catch (MultiSourceSearchException exception)
+        {
+            bothFailed = exception.Attempts.Count == 2 &&
+                exception.Message.Contains("LibreDMM", StringComparison.Ordinal) &&
+                exception.Message.Contains("R18.dev", StringComparison.Ordinal);
+        }
+        AssertEqual("True", bothFailed.ToString());
+
+        using var mismatchedSecondary = FakeMetadataProvider.Success(
+            "r18dev",
+            "R18.dev",
+            new MovieMetadata
+            {
+                Id = "START-237",
+                Title = "Wrong movie",
+                SourceName = "r18dev",
+                SourceDisplayName = "R18.dev"
+            });
+        var mismatchBlocked = false;
+        try
+        {
+            await MetadataSearchCoordinator.SearchAllAsync("IPZZ-850", primary, mismatchedSecondary);
+        }
+        catch (InvalidDataException)
+        {
+            mismatchBlocked = true;
+        }
+        AssertEqual("True", mismatchBlocked.ToString());
+
+        using var singleProvider = FakeMetadataProvider.Success("libredmm", "LibreDMM", primaryMetadata);
+        var singleAttempt = await MetadataSearchCoordinator.SearchSingleAsync("IPZZ-850", singleProvider);
+        AssertEqual("True", singleAttempt.Success.ToString());
+        AssertEqual("1", singleProvider.CallCount.ToString());
+
+        var log = File.ReadAllText(AppLog.CurrentLogPath);
+        AssertEqual("True", log.Contains("mode=multi source=libredmm", StringComparison.Ordinal).ToString());
+        AssertEqual("True", log.Contains("mode=multi source=r18dev", StringComparison.Ordinal).ToString());
+        AssertEqual("True", log.Contains("elapsedMs=", StringComparison.Ordinal).ToString());
+        AssertEqual("True", log.Contains("fields=", StringComparison.Ordinal).ToString());
+        AssertEqual("True", log.Contains("mode=single", StringComparison.Ordinal).ToString());
+    }
+    finally
+    {
+        AppLog.ConfigureDirectory(null);
+        if (Directory.Exists(logRoot))
+        {
+            Directory.Delete(logRoot, true);
+        }
+    }
+}
+
+static Task TestMetadataReviewSession()
+{
+    var primary = new MovieMetadata
+    {
+        Id = "IPZZ-850",
+        Title = "日文标题",
+        ReleaseDate = "2026-06-09",
+        ActorsText = "演员甲",
+        Actors = [new ActorMetadata("演员甲", "https://example.test/actor-ja.jpg")],
+        Plot = "日文简介",
+        SourceName = "libredmm",
+        SourceDisplayName = "LibreDMM",
+        SourceUrl = "https://www.libredmm.com/movies/IPZZ-850"
+    };
+    var fallback = new MovieMetadata
+    {
+        Id = "IPZZ-850",
+        Title = "English title",
+        ReleaseDate = "2026-06-09",
+        Director = "Upstream director value",
+        ActorsText = "Actor A",
+        Actors = [new ActorMetadata("Actor A", "https://example.test/actor-en.jpg")],
+        SourceName = "r18dev",
+        SourceDisplayName = "R18.dev",
+        SourceUrl = "https://r18.dev/test"
+    };
+    var merged = MetadataMerger.Merge(primary, fallback);
+
+    using var review = MetadataReviewSession.Create(merged, primary, fallback);
+    AssertEqual("2", review.Sources.Count.ToString());
+    AssertEqual("2", review.GetCandidates(MetadataField.Title).Count.ToString());
+    AssertEqual("2", review.GetCandidates(MetadataField.ReleaseDate).Count.ToString());
+    AssertEqual("libredmm", review.GetSelectedCandidate(MetadataField.Title)?.Source.Name);
+    AssertEqual("r18dev", review.GetSelectedCandidate(MetadataField.Director)?.Source.Name);
+
+    AssertEqual("True", review.SelectCandidate(MetadataField.Title, "r18dev").ToString());
+    AssertEqual("English title", merged.Title);
+    AssertEqual("r18dev", review.GetSelectedCandidate(MetadataField.Title)?.Source.Name);
+    AssertEqual(
+        "0",
+        review.GetCandidates(MetadataField.Title).Count(candidate => candidate.Source.IsManual).ToString());
+
+    merged.Director = "手动修正导演";
+    AssertEqual("manual", review.GetSelectedCandidate(MetadataField.Director)?.Source.Name);
+    AssertEqual("手动修正导演", review.GetSelectedCandidate(MetadataField.Director)?.Value);
+    review.SetManualValue(MetadataField.Director, "第二次修正");
+    AssertEqual(
+        "1",
+        review.GetCandidates(MetadataField.Director).Count(candidate => candidate.Source.IsManual).ToString());
+    AssertEqual("第二次修正", merged.Director);
+
+    AssertEqual("True", review.SelectCandidate(MetadataField.Actors, "r18dev").ToString());
+    AssertEqual("Actor A", merged.ActorsText);
+    AssertEqual("1", merged.Actors.Count.ToString());
+    AssertEqual("https://example.test/actor-en.jpg", merged.Actors[0].ImageUrl);
+
+    primary.Title = "来源对象后来被修改";
+    AssertEqual("日文标题", review.GetCandidates(MetadataField.Title)[0].Value);
+    review.SetManualValue(MetadataField.Plot, string.Empty);
+    AssertEqual("manual", review.GetSelectedCandidate(MetadataField.Plot)?.Source.Name);
+    AssertEqual(string.Empty, merged.Plot);
+    return Task.CompletedTask;
+}
+
+static Task TestArtworkCoverReviewSession()
+{
+    var primary = new MovieMetadata
+    {
+        Id = "IPZZ-850",
+        CoverUrl = "https://images.example.test/libre-cover.jpg",
+        FallbackCoverUrl = "https://images.example.test/libre-fallback.jpg",
+        PosterUrl = "https://images.example.test/libre-poster.jpg",
+        ScreenshotUrls = ["https://images.example.test/libre-sample.jpg"],
+        SourceName = "libredmm",
+        SourceDisplayName = "LibreDMM"
+    };
+    var fallback = new MovieMetadata
+    {
+        Id = "IPZZ-850",
+        CoverUrl = "https://images.example.test/r18-cover.jpg",
+        PosterUrl = "https://images.example.test/r18-poster.jpg",
+        ScreenshotUrls = ["https://images.example.test/r18-sample.jpg"],
+        SourceName = "r18dev",
+        SourceDisplayName = "R18.dev"
+    };
+    var merged = MetadataMerger.Merge(primary, fallback);
+    var review = ArtworkCoverReviewSession.Create(merged, primary, fallback);
+
+    AssertEqual("2", review.Candidates.Count.ToString());
+    AssertEqual("libredmm", review.SelectedCandidate?.Source.Name);
+    AssertEqual("True", review.SelectSource("r18dev").ToString());
+    AssertEqual("r18dev", review.SelectedCandidate?.Source.Name);
+    AssertEqual("https://images.example.test/r18-cover.jpg", merged.CoverUrl);
+    AssertEqual("https://images.example.test/r18-poster.jpg", merged.PosterUrl);
+    AssertEqual("https://images.example.test/libre-sample.jpg", merged.ScreenshotUrls[0]);
+
+    fallback.CoverUrl = "https://images.example.test/changed-after-review.jpg";
+    AssertEqual("https://images.example.test/r18-cover.jpg", review.SelectedCandidate?.CoverUrl);
+    AssertEqual("False", review.SelectSource("missing").ToString());
     return Task.CompletedTask;
 }
 
@@ -637,5 +867,33 @@ internal sealed class FakeJsonHandler(
         {
             Content = new StringContent(response.Body)
         });
+    }
+}
+
+internal sealed class FakeMetadataProvider(
+    string name,
+    string displayName,
+    Func<string, CancellationToken, Task<MovieMetadata>> search) : IMetadataProvider
+{
+    public string Name { get; } = name;
+
+    public string DisplayName { get; } = displayName;
+
+    public int CallCount { get; private set; }
+
+    public static FakeMetadataProvider Success(string name, string displayName, MovieMetadata metadata) =>
+        new(name, displayName, (_, _) => Task.FromResult(metadata));
+
+    public static FakeMetadataProvider Failure(string name, string displayName, Exception exception) =>
+        new(name, displayName, (_, _) => Task.FromException<MovieMetadata>(exception));
+
+    public Task<MovieMetadata> SearchAsync(string rawId, CancellationToken cancellationToken = default)
+    {
+        CallCount++;
+        return search(rawId, cancellationToken);
+    }
+
+    public void Dispose()
+    {
     }
 }

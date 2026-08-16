@@ -20,9 +20,9 @@ The projects run sequentially because the smoke and UI projects share build outp
 
 | Layer | Project | Purpose |
 | --- | --- | --- |
-| Core smoke | `JavMetaLite.SmokeTests` | Parsers, metadata merge, NFO, image conversion, basic organization and logs |
+| Core smoke | `JavMetaLite.SmokeTests` | Parsers, metadata merge, v0.5 multi-source orchestration/provenance, unified poster/fanart source selection, NFO, image conversion, basic organization and logs |
 | v0.4 regression | `JavMetaLite.RegressionTests` | File layout matrix, overwrite policy, conflicts, rollback and input validation |
-| UI smoke | `JavMetaLite.UiSmokeTests` | WPF window construction, dark source selector, safe defaults and preview window |
+| UI smoke | `JavMetaLite.UiSmokeTests` | WPF window construction, dark source selector, v0.5 mixed-source badges, field and unified artwork candidate menus, top-right cover-source placement, text-free pre-search artwork status with stable spacing, per-field switching/manual return, safe defaults and preview window |
 
 The regression runner supports discovery and category filters:
 
@@ -38,6 +38,7 @@ Available categories are `layout`, `overwrite`, `conflict`, `rollback`, and `val
 - Every filesystem regression receives a unique directory below `%TEMP%`.
 - Test movies contain only synthetic bytes; real media files are never used.
 - HTTP image responses are local in-memory fixtures; the automated gate performs no website requests.
+- Multi-source orchestration uses fake providers to cover two-source success, partial and total failure, ID mismatch, per-source call counts, and diagnostics without live requests.
 - Each test verifies and removes temporary transaction artifacts.
 - A failed test returns a non-zero process exit code and prevents the gate from continuing.
 - A fixed defect should receive a regression case before the fix is considered complete.
@@ -53,3 +54,5 @@ The following remain manual because they depend on external state or human visua
 - Final inspection of a packaged single-file executable.
 
 These checks complement the automated gate; they are not replaced by it.
+
+The focused final integration checklist and passing result for v0.5.0 is [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md). It reuses the accepted v0.4 file-safety baseline and does not require repeating unchanged JAVLibrary, conflict, or rollback cases.

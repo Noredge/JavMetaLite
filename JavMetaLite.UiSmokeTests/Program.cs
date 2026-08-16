@@ -2,8 +2,10 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Reflection;
 using JavMetaLite.App;
 using JavMetaLite.Core.Models;
+using JavMetaLite.Core.Services;
 
 namespace JavMetaLite.UiSmokeTests;
 
@@ -36,6 +38,10 @@ internal static class Program
         window.UpdateLayout();
         var firstItem = sourceComboBox.Items[0] as ComboBoxItem
             ?? throw new InvalidOperationException("来源选择项未创建。 ");
+        if (firstItem.Tag?.ToString() != "auto" || firstItem.Content?.ToString() != "多来源搜索（推荐）")
+        {
+            throw new InvalidOperationException("v0.5 默认来源没有更新为多来源搜索。 ");
+        }
         if (firstItem.Foreground is not SolidColorBrush foreground || foreground.Color.R < 200 ||
             firstItem.Background is not SolidColorBrush background || background.Color.R > 40)
         {
@@ -52,6 +58,29 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.3 图片预览或 extrafanart 选项未创建。 ");
         }
+        if (window.FindName("FanartHintText") is not TextBlock fanartHintText ||
+            fanartHintText.Visibility != Visibility.Visible ||
+            fanartHintText.Text != string.Empty || fanartHintText.MinHeight < 14 ||
+            window.FindName("FanartDropHint") is not null)
+        {
+            throw new InvalidOperationException("完整封套尚未加载时应保留无文字的固定间距。 ");
+        }
+        var initialPosterPreviewBorder = window.FindName("PosterPreviewBorder") as Border
+            ?? throw new InvalidOperationException("封套预览区域未创建。 ");
+        var fanartPreviewBorder = window.FindName("FanartPreviewBorder") as Border
+            ?? throw new InvalidOperationException("Fanart 预览区域未创建。 ");
+        window.UpdateLayout();
+        var posterBottom = initialPosterPreviewBorder.TranslatePoint(new Point(0, initialPosterPreviewBorder.ActualHeight), window).Y;
+        var gapBeforeDimensions = fanartPreviewBorder.TranslatePoint(new Point(0, 0), window).Y - posterBottom;
+        fanartHintText.Text = "横板封套：2184×1468";
+        window.UpdateLayout();
+        posterBottom = initialPosterPreviewBorder.TranslatePoint(new Point(0, initialPosterPreviewBorder.ActualHeight), window).Y;
+        var gapAfterDimensions = fanartPreviewBorder.TranslatePoint(new Point(0, 0), window).Y - posterBottom;
+        fanartHintText.Text = string.Empty;
+        if (Math.Abs(gapBeforeDimensions - gapAfterDimensions) > 0.5)
+        {
+            throw new InvalidOperationException("搜索前后两个封套预览框的间距不一致。 ");
+        }
         if (window.FindName("OrganizeFolderCheckBox") is not CheckBox organizeCheckBox || organizeCheckBox.IsChecked == true ||
             window.FindName("RenameVideoCheckBox") is not CheckBox renameCheckBox || renameCheckBox.IsChecked == true)
         {
@@ -66,6 +95,135 @@ internal static class Program
         if (window.FindName("SaveButton") is not Button saveButton || saveButton.Content?.ToString() != "保存")
         {
             throw new InvalidOperationException("v0.4 保存入口未创建。 ");
+        }
+
+        var titleSourceText = window.FindName("TitleSourceText") as Button
+            ?? throw new InvalidOperationException("v0.5 标题来源标记未创建。 ");
+        var directorSourceText = window.FindName("DirectorSourceText") as Button
+            ?? throw new InvalidOperationException("v0.5 导演来源标记未创建。 ");
+        if (titleSourceText.Visibility != Visibility.Collapsed || directorSourceText.Visibility != Visibility.Collapsed)
+        {
+            throw new InvalidOperationException("没有资料时来源标记应保持隐藏。 ");
+        }
+
+        var primaryMetadata = new MovieMetadata
+        {
+            Id = "IPZZ-850",
+            Title = "日文标题",
+            CoverUrl = "https://images.example.test/libre-cover.jpg",
+            SourceName = "libredmm",
+            SourceDisplayName = "LibreDMM"
+        };
+        var fallbackMetadata = new MovieMetadata
+        {
+            Id = "IPZZ-850",
+            Title = "English title",
+            Director = "Director A",
+            CoverUrl = "https://images.example.test/r18-cover.jpg",
+            SourceName = "r18dev",
+            SourceDisplayName = "R18.dev"
+        };
+        var mergedMetadata = JavMetaLite.Core.Services.MetadataMerger.Merge(primaryMetadata, fallbackMetadata);
+        var applyMetadata = typeof(MainWindow).GetMethod("ApplyMetadata", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("v0.5 metadata 应用入口未找到。 ");
+        applyMetadata.Invoke(window, [mergedMetadata, new MovieMetadata[] { primaryMetadata, fallbackMetadata }]);
+        window.UpdateLayout();
+        if (titleSourceText.Content?.ToString() != "LibreDMM ▾" ||
+            directorSourceText.Content?.ToString() != "R18.dev" ||
+            titleSourceText.Visibility != Visibility.Visible || directorSourceText.Visibility != Visibility.Visible)
+        {
+            throw new InvalidOperationException("自动补全没有显示正确的字段来源。 ");
+        }
+        if (!titleSourceText.IsEnabled || directorSourceText.IsEnabled)
+        {
+            throw new InvalidOperationException("多来源字段应可选，单一来源字段应保持只读。 ");
+        }
+
+        var artworkSourceButton = window.FindName("ArtworkSourceButton") as Button
+            ?? throw new InvalidOperationException("统一封套来源标记未创建。 ");
+        if (artworkSourceButton.Visibility != Visibility.Visible ||
+            !artworkSourceButton.IsEnabled ||
+            artworkSourceButton.Content?.ToString() != "LibreDMM ▾")
+        {
+            throw new InvalidOperationException("多来源结果没有显示统一封套来源候选。 ");
+        }
+        var posterPreviewBorder = window.FindName("PosterPreviewBorder") as Border
+            ?? throw new InvalidOperationException("封套预览区域未创建。 ");
+        var artworkSourceHeader = window.FindName("ArtworkSourceHeader") as Grid
+            ?? throw new InvalidOperationException("统一封套来源标题栏未创建。 ");
+        if (!ReferenceEquals(artworkSourceButton.Parent, artworkSourceHeader) ||
+            Grid.GetRow(artworkSourceHeader) >= Grid.GetRow(posterPreviewBorder) ||
+            artworkSourceButton.HorizontalAlignment != HorizontalAlignment.Right)
+        {
+            throw new InvalidOperationException("统一封套来源没有固定在封套预览上方右侧。 ");
+        }
+        artworkSourceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var artworkMenu = artworkSourceButton.ContextMenu
+            ?? throw new InvalidOperationException("统一封套候选菜单未创建。 ");
+        artworkMenu.ApplyTemplate();
+        window.UpdateLayout();
+        var artworkCandidates = artworkMenu.Items.OfType<MenuItem>().ToArray();
+        if (artworkCandidates.Length != 2 ||
+            artworkCandidates.Any(item => item.Tag is not ArtworkCoverCandidate || item.Header is not StackPanel panel || panel.Children.Count != 2))
+        {
+            throw new InvalidOperationException("封套候选没有复用字段候选的双行下拉结构。 ");
+        }
+        artworkMenu.IsOpen = false;
+
+        titleSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var titleMenu = titleSourceText.ContextMenu
+            ?? throw new InvalidOperationException("标题候选菜单未创建。 ");
+        titleMenu.ApplyTemplate();
+        window.UpdateLayout();
+        var candidateMenuRoot = titleMenu.Template.FindName("CandidateMenuRoot", titleMenu) as Border;
+        if (!titleMenu.OverridesDefaultStyle || titleMenu.HasDropShadow ||
+            candidateMenuRoot?.Background is not SolidColorBrush menuBackground ||
+            menuBackground.Color != Color.FromRgb(16, 22, 30))
+        {
+            throw new InvalidOperationException("候选菜单没有完全替换系统白色菜单模板。 ");
+        }
+        var titleCandidates = titleMenu.Items.OfType<MenuItem>().ToArray();
+        if (titleCandidates.Length != 2 ||
+            titleCandidates.Any(item => item.Header is not StackPanel panel || panel.Children.Count != 2))
+        {
+            throw new InvalidOperationException("标题候选菜单没有同时显示来源与值预览。 ");
+        }
+
+        var r18Title = titleCandidates.FirstOrDefault(item =>
+            item.Tag is MetadataFieldCandidate candidate && candidate.Source.Name == "r18dev")
+            ?? throw new InvalidOperationException("标题候选菜单缺少 R18.dev。 ");
+        r18Title.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        if (mergedMetadata.Title != "English title" || titleSourceText.Content?.ToString() != "R18.dev ▾")
+        {
+            throw new InvalidOperationException("没有只切换标题字段的 R18.dev 候选。 ");
+        }
+
+        mergedMetadata.Director = "手动修正";
+        if (directorSourceText.Content?.ToString() != "手动编辑 ▾" || !directorSourceText.IsEnabled)
+        {
+            throw new InvalidOperationException("手动修改字段后来源标记没有更新。 ");
+        }
+
+        directorSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var directorMenu = directorSourceText.ContextMenu
+            ?? throw new InvalidOperationException("导演候选菜单未创建。 ");
+        var r18Director = directorMenu.Items.OfType<MenuItem>().FirstOrDefault(item =>
+            item.Tag is MetadataFieldCandidate candidate && candidate.Source.Name == "r18dev")
+            ?? throw new InvalidOperationException("手动修改后无法返回 R18.dev 候选。 ");
+        r18Director.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        if (mergedMetadata.Director != "Director A" || directorSourceText.Content?.ToString() != "R18.dev ▾")
+        {
+            throw new InvalidOperationException("没有恢复导演字段的 R18.dev 候选。 ");
+        }
+
+        directorSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var manualDirector = directorSourceText.ContextMenu?.Items.OfType<MenuItem>().FirstOrDefault(item =>
+            item.Tag is MetadataFieldCandidate candidate && candidate.Source.IsManual)
+            ?? throw new InvalidOperationException("切回来源后没有保留最近一次手动候选。 ");
+        manualDirector.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        if (mergedMetadata.Director != "手动修正" || directorSourceText.Content?.ToString() != "手动编辑 ▾")
+        {
+            throw new InvalidOperationException("无法恢复最近一次手动编辑值。 ");
         }
 
         var previewPlan = new SavePlan(
@@ -87,7 +245,7 @@ internal static class Program
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True libreDmm=True fanart=True previewWindow=True directSaveDefaultsOff=True organizeDefaultsOff=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True directSaveDefaultsOff=True organizeDefaultsOff=True");
         window.Close();
         application.Shutdown();
     }

@@ -15,6 +15,18 @@ namespace JavMetaLite.App;
 
 public partial class MainWindow : Window
 {
+    private sealed record MetadataSearchOutcome(
+        MovieMetadata Metadata,
+        IReadOnlyList<MovieMetadata> Sources,
+        IReadOnlyList<MetadataSourceSearchAttempt> Attempts)
+    {
+        public static MetadataSearchOutcome FromSingleAttempt(MetadataSourceSearchAttempt attempt) =>
+            new(attempt.Metadata!, [attempt.Metadata!], [attempt]);
+
+        public static MetadataSearchOutcome FromMultipleSources(MultiSourceSearchResult result) =>
+            new(result.Metadata, result.Sources, result.Attempts);
+    }
+
     private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".mp4", ".m4v", ".mkv", ".avi", ".wmv", ".mov", ".webm", ".ts", ".m2ts"
@@ -28,6 +40,8 @@ public partial class MainWindow : Window
     private readonly HttpClient _previewHttpClient = CreatePreviewClient();
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private MovieMetadata _metadata = new();
+    private MetadataReviewSession? _metadataReview;
+    private ArtworkCoverReviewSession? _artworkCoverReview;
     private string? _videoPath;
     private bool _busy;
 
@@ -36,8 +50,8 @@ public partial class MainWindow : Window
         _outputService = new OutputService();
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
-        DataContext = _metadata;
-        AppLog.Info("JavMetaLite v0.4.0 启动");
+        ApplyMetadata(_metadata, []);
+        AppLog.Info("JavMetaLite v0.5.0 启动");
     }
 
     private void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -86,26 +100,42 @@ public partial class MainWindow : Window
         }
 
         string? browserFallbackUrl = null;
-        await RunBusyAsync("正在获取影片资料…", async () =>
+        var busyMessage = source == "auto"
+            ? "正在同时获取 LibreDMM 与 R18.dev…"
+            : "正在获取影片资料…";
+        await RunBusyAsync(busyMessage, async () =>
         {
             try
             {
-                var result = await SearchFromSelectedSourceAsync(source, _metadata.Id);
-                ApplyMetadata(result);
+                var outcome = await SearchFromSelectedSourceAsync(source, _metadata.Id);
+                var result = outcome.Metadata;
+                ApplyMetadata(result, outcome.Sources);
+                var successfulSources = string.Join(
+                    "+",
+                    outcome.Sources.Select(GetSourceDisplayName).Distinct(StringComparer.OrdinalIgnoreCase));
+                var failedSources = string.Join(
+                    "+",
+                    outcome.Attempts.Where(attempt => !attempt.Success).Select(attempt => attempt.SourceDisplayName));
                 AppLog.Info(
-                    $"metadata 搜索成功 source={GetSourceDisplayName(result)} id={result.Id} " +
-                    $"contentId={result.ContentId} screenshots={result.ScreenshotUrls.Count}");
+                    $"metadata 搜索成功 sources={successfulSources} failedSources={failedSources} id={result.Id} " +
+                    $"contentId={result.ContentId} screenshots={result.ScreenshotUrls.Count} " +
+                    $"reviewSources={outcome.Sources.Count}");
                 var posterLoaded = await LoadPosterPreviewAsync(result);
                 var fanartLoaded = await LoadFanartPreviewAsync(result);
-                var sourceName = GetSourceDisplayName(result);
+                var sourceName = string.Join(
+                    " + ",
+                    outcome.Sources.Select(GetSourceDisplayName).Distinct(StringComparer.OrdinalIgnoreCase));
+                var degradedNote = string.IsNullOrWhiteSpace(failedSources)
+                    ? string.Empty
+                    : $"；{failedSources} 未返回结果";
                 var imageSummary = result.ScreenshotUrls.Count > 0
                     ? $"，找到 {result.ScreenshotUrls.Count} 张样张"
                     : "，没有独立样张";
                 SetStatus(
                     posterLoaded
-                        ? $"已从 {sourceName} 读取 {result.Id}{imageSummary}{(fanartLoaded ? string.Empty : "；完整封套 fanart 预览未加载")}"
-                        : $"已从 {sourceName} 读取 {result.Id}；封面预览未加载，不影响资料编辑",
-                    true);
+                        ? $"已从 {sourceName} 读取 {result.Id}{imageSummary}{(fanartLoaded ? string.Empty : "；完整封套 fanart 预览未加载")}{degradedNote}"
+                        : $"已从 {sourceName} 读取 {result.Id}；封面预览未加载，不影响资料编辑{degradedNote}",
+                    string.IsNullOrWhiteSpace(failedSources));
             }
             catch (JavLibraryChallengeException exception)
             {
@@ -120,58 +150,44 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<MovieMetadata> SearchFromSelectedSourceAsync(string source, string id)
+    private async Task<MetadataSearchOutcome> SearchFromSelectedSourceAsync(string source, string id)
     {
         AppLog.Info($"开始搜索 metadata source={source} id={id}");
         try
         {
             if (source == "libredmm")
             {
-                return await _libreDmmClient.SearchAsync(id, _lifetimeCancellation.Token);
+                return MetadataSearchOutcome.FromSingleAttempt(
+                    await MetadataSearchCoordinator.SearchSingleAsync(
+                        id,
+                        _libreDmmClient,
+                        _lifetimeCancellation.Token));
             }
 
             if (source == "r18dev")
             {
-                return await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token);
+                return MetadataSearchOutcome.FromSingleAttempt(
+                    await MetadataSearchCoordinator.SearchSingleAsync(
+                        id,
+                        _r18DevClient,
+                        _lifetimeCancellation.Token));
             }
 
             if (source == "javlibrary")
             {
-                return await _javLibraryClient.SearchAsync(id, _lifetimeCancellation.Token);
+                return MetadataSearchOutcome.FromSingleAttempt(
+                    await MetadataSearchCoordinator.SearchSingleAsync(
+                        id,
+                        _javLibraryClient,
+                        _lifetimeCancellation.Token));
             }
 
-            MovieMetadata? primary = null;
-            try
-            {
-                primary = await _libreDmmClient.SearchAsync(id, _lifetimeCancellation.Token);
-            }
-            catch (Exception exception) when (IsRecoverableMetadataError(exception))
-            {
-                AppLog.Warning($"自动搜索的 LibreDMM 阶段失败 id={id}", exception);
-            }
-
-            if (primary is null)
-            {
-                AppLog.Info($"LibreDMM 不可用，改用 R18.dev id={id}");
-                return await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token);
-            }
-
-            if (!MetadataMerger.NeedsFallback(primary))
-            {
-                return primary;
-            }
-
-            try
-            {
-                return MetadataMerger.Merge(
-                    primary,
-                    await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token));
-            }
-            catch (Exception exception) when (IsRecoverableMetadataError(exception))
-            {
-                AppLog.Warning($"R18.dev 补全阶段失败，保留 LibreDMM 结果 id={id}", exception);
-                return primary;
-            }
+            var multiSourceResult = await MetadataSearchCoordinator.SearchAllAsync(
+                id,
+                _libreDmmClient,
+                _r18DevClient,
+                _lifetimeCancellation.Token);
+            return MetadataSearchOutcome.FromMultipleSources(multiSourceResult);
         }
         catch (Exception exception)
         {
@@ -280,10 +296,9 @@ public partial class MainWindow : Window
         FileNameText.Text = Path.GetFileName(path);
         FilePathText.Text = path;
         var id = MovieIdParser.TryExtract(path);
-        _metadata = new MovieMetadata { Id = id ?? string.Empty };
-        DataContext = _metadata;
+        ApplyMetadata(new MovieMetadata { Id = id ?? string.Empty }, []);
         ClearPosterPreview();
-        ClearFanartPreview("等待搜索");
+        ClearFanartPreview();
         if (!string.IsNullOrWhiteSpace(id))
         {
             SetStatus($"已识别番号 {id}，可以搜索资料", true);
@@ -311,7 +326,7 @@ public partial class MainWindow : Window
                     browser.PageUrl ?? url,
                     _metadata.Id,
                     _lifetimeCancellation.Token);
-                ApplyMetadata(result);
+                ApplyMetadata(result, [result]);
                 var posterLoaded = await LoadPosterPreviewAsync(result);
                 await LoadFanartPreviewAsync(result);
                 SetStatus(
@@ -323,10 +338,272 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ApplyMetadata(MovieMetadata result)
+    private void ApplyMetadata(MovieMetadata result, IReadOnlyList<MovieMetadata> sourceResults)
     {
+        if (_metadataReview is not null)
+        {
+            _metadataReview.SelectionChanged -= MetadataReview_SelectionChanged;
+            _metadataReview.Dispose();
+        }
+
         _metadata = result;
         DataContext = _metadata;
+        _metadataReview = MetadataReviewSession.Create(result, sourceResults.ToArray());
+        _metadataReview.SelectionChanged += MetadataReview_SelectionChanged;
+        _artworkCoverReview = ArtworkCoverReviewSession.Create(result, sourceResults.ToArray());
+        RefreshSourceBadges();
+        RefreshArtworkSourceBadge();
+    }
+
+    private void MetadataReview_SelectionChanged(object? sender, MetadataSelectionChangedEventArgs eventArgs) =>
+        RefreshSourceBadge(eventArgs.Field);
+
+    private void RefreshSourceBadges()
+    {
+        foreach (var (field, _) in GetSourceBadgeControls())
+        {
+            RefreshSourceBadge(field);
+        }
+    }
+
+    private void RefreshSourceBadge(MetadataField field)
+    {
+        var badge = GetSourceBadgeControls()
+            .FirstOrDefault(item => item.Field == field)
+            .Badge;
+        if (badge is null)
+        {
+            return;
+        }
+
+        var candidate = _metadataReview?.GetSelectedCandidate(field);
+        var candidates = _metadataReview?.GetCandidates(field) ?? [];
+        badge.Content = candidate is null
+            ? string.Empty
+            : candidates.Count > 1
+                ? $"{candidate.Source.DisplayName} ▾"
+                : candidate.Source.DisplayName;
+        badge.Visibility = candidate is null ? Visibility.Collapsed : Visibility.Visible;
+        badge.IsEnabled = candidates.Count > 1;
+        badge.ToolTip = candidate is null
+            ? null
+            : candidates.Count > 1
+                ? $"点击选择“{GetFieldDisplayName(field)}”的资料来源（{candidates.Count} 个候选）"
+                : string.IsNullOrWhiteSpace(candidate.Source.Url)
+                    ? $"来源：{candidate.Source.DisplayName}"
+                    : $"来源：{candidate.Source.DisplayName}\n{candidate.Source.Url}";
+    }
+
+    private void SourceBadge_Click(object sender, RoutedEventArgs eventArgs)
+    {
+        if (sender is not Button badge ||
+            !Enum.TryParse<MetadataField>(badge.Tag?.ToString(), out var field) ||
+            _metadataReview is null)
+        {
+            return;
+        }
+
+        var candidates = _metadataReview.GetCandidates(field);
+        if (candidates.Count <= 1)
+        {
+            return;
+        }
+
+        var selected = _metadataReview.GetSelectedCandidate(field);
+        var menu = new ContextMenu
+        {
+            PlacementTarget = badge,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+            Style = (Style)FindResource("CandidateContextMenu")
+        };
+
+        foreach (var candidate in candidates)
+        {
+            var sourceText = new TextBlock
+            {
+                Text = $"{(candidate == selected ? "✓ " : string.Empty)}{candidate.Source.DisplayName}",
+                Foreground = new SolidColorBrush(Color.FromRgb(111, 168, 255)),
+                FontWeight = FontWeights.SemiBold
+            };
+            var valueText = new TextBlock
+            {
+                Text = BuildCandidatePreview(candidate.Value),
+                Foreground = new SolidColorBrush(Color.FromRgb(184, 197, 214)),
+                FontSize = 11,
+                Margin = new Thickness(0, 3, 0, 0),
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 490
+            };
+            var header = new StackPanel();
+            header.Children.Add(sourceText);
+            header.Children.Add(valueText);
+
+            var menuItem = new MenuItem
+            {
+                Header = header,
+                Tag = candidate,
+                Style = (Style)FindResource("CandidateMenuItem"),
+                ToolTip = string.IsNullOrWhiteSpace(candidate.Source.Url)
+                    ? candidate.Source.DisplayName
+                    : candidate.Source.Url
+            };
+            menuItem.Click += (_, _) => SelectSourceCandidate(candidate);
+            menu.Items.Add(menuItem);
+        }
+
+        badge.ContextMenu = menu;
+        menu.IsOpen = true;
+        eventArgs.Handled = true;
+    }
+
+    private void SelectSourceCandidate(MetadataFieldCandidate candidate)
+    {
+        if (_metadataReview?.SelectCandidate(candidate.Field, candidate.Source.Name) != true)
+        {
+            return;
+        }
+
+        var fieldName = GetFieldDisplayName(candidate.Field);
+        AppLog.Info($"字段来源切换 field={candidate.Field} source={candidate.Source.Name}");
+        SetStatus($"已将“{fieldName}”切换为 {candidate.Source.DisplayName}", true);
+    }
+
+    private void RefreshArtworkSourceBadge()
+    {
+        var candidate = _artworkCoverReview?.SelectedCandidate;
+        var candidates = _artworkCoverReview?.Candidates ?? [];
+        ArtworkSourceButton.Content = candidate is null
+            ? string.Empty
+            : candidates.Count > 1
+                ? $"{candidate.Source.DisplayName} ▾"
+                : candidate.Source.DisplayName;
+        ArtworkSourceButton.Visibility = candidate is null ? Visibility.Collapsed : Visibility.Visible;
+        ArtworkSourceButton.IsEnabled = !_busy && candidates.Count > 1;
+        ArtworkSourceButton.ToolTip = candidate is null
+            ? null
+            : candidates.Count > 1
+                ? $"点击选择封套来源（{candidates.Count} 个候选）；poster 与 fanart 始终共用"
+                : $"封套来源：{candidate.Source.DisplayName}；poster 与 fanart 共用";
+    }
+
+    private void ArtworkSourceButton_Click(object sender, RoutedEventArgs eventArgs)
+    {
+        if (_artworkCoverReview is null || _artworkCoverReview.Candidates.Count <= 1)
+        {
+            return;
+        }
+
+        var selected = _artworkCoverReview.SelectedCandidate;
+        var menu = new ContextMenu
+        {
+            PlacementTarget = ArtworkSourceButton,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+            Style = (Style)FindResource("CandidateContextMenu")
+        };
+
+        foreach (var candidate in _artworkCoverReview.Candidates)
+        {
+            var sourceText = new TextBlock
+            {
+                Text = $"{(candidate == selected ? "✓ " : string.Empty)}{candidate.Source.DisplayName}",
+                Foreground = new SolidColorBrush(Color.FromRgb(111, 168, 255)),
+                FontWeight = FontWeights.SemiBold
+            };
+            var valueText = new TextBlock
+            {
+                Text = candidate.Urls.Count > 1
+                    ? $"poster / fanart 共用 · {candidate.Urls.Count} 个封套地址"
+                    : "poster / fanart 共用此完整封套",
+                Foreground = new SolidColorBrush(Color.FromRgb(184, 197, 214)),
+                FontSize = 11,
+                Margin = new Thickness(0, 3, 0, 0)
+            };
+            var header = new StackPanel();
+            header.Children.Add(sourceText);
+            header.Children.Add(valueText);
+
+            var menuItem = new MenuItem
+            {
+                Header = header,
+                Tag = candidate,
+                Style = (Style)FindResource("CandidateMenuItem"),
+                ToolTip = string.Join(Environment.NewLine, candidate.Urls)
+            };
+            menuItem.Click += async (_, _) => await SelectArtworkSourceCandidateAsync(candidate);
+            menu.Items.Add(menuItem);
+        }
+
+        ArtworkSourceButton.ContextMenu = menu;
+        menu.IsOpen = true;
+        eventArgs.Handled = true;
+    }
+
+    private async Task SelectArtworkSourceCandidateAsync(ArtworkCoverCandidate candidate)
+    {
+        if (_artworkCoverReview?.SelectSource(candidate.Source.Name) != true)
+        {
+            return;
+        }
+
+        RefreshArtworkSourceBadge();
+        AppLog.Info($"统一封套来源切换 source={candidate.Source.Name} posterFanartLocked=true");
+        await RunBusyAsync($"正在加载 {candidate.Source.DisplayName} 封套…", async () =>
+        {
+            var posterLoaded = await LoadPosterPreviewAsync(_metadata);
+            var fanartLoaded = await LoadFanartPreviewAsync(_metadata);
+            var loaded = posterLoaded && fanartLoaded;
+            SetStatus(
+                loaded
+                    ? $"封套与 fanart 已同时切换为 {candidate.Source.DisplayName}"
+                    : $"{candidate.Source.DisplayName} 封套预览加载不完整，可改选其他来源",
+                loaded);
+        });
+    }
+
+    private static string BuildCandidatePreview(string value)
+    {
+        var normalized = string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (normalized.Length == 0)
+        {
+            return "（空白）";
+        }
+
+        const int maximumLength = 100;
+        return normalized.Length <= maximumLength
+            ? normalized
+            : $"{normalized[..maximumLength]}…";
+    }
+
+    private static string GetFieldDisplayName(MetadataField field) => field switch
+    {
+        MetadataField.Title => "标题",
+        MetadataField.OriginalTitle => "原始标题",
+        MetadataField.ReleaseDate => "发行日期",
+        MetadataField.RuntimeMinutes => "时长",
+        MetadataField.Maker => "片商",
+        MetadataField.Director => "导演",
+        MetadataField.Label => "标签 / 厂牌",
+        MetadataField.Series => "系列",
+        MetadataField.Actors => "演员",
+        MetadataField.Genres => "类型",
+        MetadataField.Plot => "简介",
+        MetadataField.Rating => "评分",
+        _ => field.ToString()
+    };
+
+    private IEnumerable<(MetadataField Field, Button Badge)> GetSourceBadgeControls()
+    {
+        yield return (MetadataField.Title, TitleSourceText);
+        yield return (MetadataField.OriginalTitle, OriginalTitleSourceText);
+        yield return (MetadataField.ReleaseDate, ReleaseDateSourceText);
+        yield return (MetadataField.RuntimeMinutes, RuntimeSourceText);
+        yield return (MetadataField.Maker, MakerSourceText);
+        yield return (MetadataField.Director, DirectorSourceText);
+        yield return (MetadataField.Label, LabelSourceText);
+        yield return (MetadataField.Series, SeriesSourceText);
+        yield return (MetadataField.Actors, ActorsSourceText);
+        yield return (MetadataField.Genres, GenresSourceText);
+        yield return (MetadataField.Plot, PlotSourceText);
     }
 
     private async Task<bool> LoadPosterPreviewAsync(MovieMetadata metadata)
@@ -377,8 +654,7 @@ public partial class MainWindow : Window
                 var imageBytes = await DownloadPreviewImageAsync(candidate);
                 var dimensions = PosterImageProcessor.GetDimensions(imageBytes);
                 FanartImage.Source = PosterBitmapFactory.CreateFrozen(PosterImageProcessor.CreateFanartJpeg(imageBytes));
-                FanartDropHint.Visibility = Visibility.Collapsed;
-                FanartHintText.Text = $"完整横版封套 · {dimensions.Width}×{dimensions.Height}";
+                FanartHintText.Text = $"横板封套：{dimensions.Width}×{dimensions.Height}";
                 return true;
             }
             catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
@@ -391,7 +667,7 @@ public partial class MainWindow : Window
             }
         }
 
-        ClearFanartPreview("完整封套预览加载失败");
+        ClearFanartPreview();
         return false;
     }
 
@@ -444,15 +720,11 @@ public partial class MainWindow : Window
         DropHint.Visibility = Visibility.Visible;
     }
 
-    private void ClearFanartPreview(string hint)
+    private void ClearFanartPreview()
     {
         FanartImage.Source = null;
-        FanartDropHint.Visibility = Visibility.Visible;
-        FanartHintText.Text = hint;
+        FanartHintText.Text = string.Empty;
     }
-
-    private static bool IsRecoverableMetadataError(Exception exception) =>
-        exception is MetadataNotFoundException or HttpRequestException or InvalidDataException or TaskCanceledException;
 
     private static string GetSourceDisplayName(MovieMetadata metadata) =>
         string.IsNullOrWhiteSpace(metadata.SourceDisplayName) ? metadata.SourceName : metadata.SourceDisplayName;
@@ -476,6 +748,7 @@ public partial class MainWindow : Window
         _busy = true;
         SearchButton.IsEnabled = false;
         SaveButton.IsEnabled = false;
+        ArtworkSourceButton.IsEnabled = false;
         Mouse.OverrideCursor = Cursors.Wait;
         SetStatus(message, null);
 
@@ -496,6 +769,7 @@ public partial class MainWindow : Window
             Mouse.OverrideCursor = null;
             SearchButton.IsEnabled = true;
             SaveButton.IsEnabled = true;
+            ArtworkSourceButton.IsEnabled = (_artworkCoverReview?.Candidates.Count ?? 0) > 1;
             _busy = false;
         }
     }
@@ -552,6 +826,11 @@ public partial class MainWindow : Window
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
         AppLog.Info("JavMetaLite 关闭");
+        if (_metadataReview is not null)
+        {
+            _metadataReview.SelectionChanged -= MetadataReview_SelectionChanged;
+            _metadataReview.Dispose();
+        }
         _lifetimeCancellation.Cancel();
         _lifetimeCancellation.Dispose();
         _javLibraryClient.Dispose();
