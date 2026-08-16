@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.0-dev3-r1 — Full dark candidate menu
+
+- Recorded dev3 manual results: D02, D03 and D04 passed; D01 failed because the system menu left a white gutter.
+- Replaced the complete WPF `ContextMenu` template with an application-owned dark container.
+- Removed the system drop shadow and checkmark gutter that could retain light Windows theme colors.
+- Added UI smoke coverage that verifies the custom dark root template is active.
+
 ## v0.5.0-dev3 — Per-field source selection
 
 - Recorded the user's successful manual acceptance of the dev2 source badges.

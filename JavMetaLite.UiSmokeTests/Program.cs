@@ -112,6 +112,15 @@ internal static class Program
         titleSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         var titleMenu = titleSourceText.ContextMenu
             ?? throw new InvalidOperationException("标题候选菜单未创建。 ");
+        titleMenu.ApplyTemplate();
+        window.UpdateLayout();
+        var candidateMenuRoot = titleMenu.Template.FindName("CandidateMenuRoot", titleMenu) as Border;
+        if (!titleMenu.OverridesDefaultStyle || titleMenu.HasDropShadow ||
+            candidateMenuRoot?.Background is not SolidColorBrush menuBackground ||
+            menuBackground.Color != Color.FromRgb(16, 22, 30))
+        {
+            throw new InvalidOperationException("候选菜单没有完全替换系统白色菜单模板。 ");
+        }
         var titleCandidates = titleMenu.Items.OfType<MenuItem>().ToArray();
         if (titleCandidates.Length != 2 ||
             titleCandidates.Any(item => item.Header is not StackPanel panel || panel.Children.Count != 2))
@@ -175,7 +184,7 @@ internal static class Program
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True libreDmm=True fanart=True previewWindow=True sourceBadges=True candidateMenus=True fieldSwitch=True manualReturn=True directSaveDefaultsOff=True organizeDefaultsOff=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True libreDmm=True fanart=True previewWindow=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True directSaveDefaultsOff=True organizeDefaultsOff=True");
         window.Close();
         application.Shutdown();
     }
