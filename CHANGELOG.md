@@ -6,6 +6,7 @@
 - Replaced the complete WPF `ContextMenu` template with an application-owned dark container.
 - Removed the system drop shadow and checkmark gutter that could retain light Windows theme colors.
 - Added UI smoke coverage that verifies the custom dark root template is active.
+- Passed the R01 manual retest; together with D02–D04, the complete dev3 field-candidate flow is accepted.
 
 ## v0.5.0-dev3 — Per-field source selection
 
