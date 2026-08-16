@@ -14,12 +14,6 @@ public partial class SavePreviewWindow : Window
         _plan = plan;
         SourcePathTextBox.Text = plan.SourceVideoPath;
         TargetPathTextBox.Text = plan.TargetVideoPath;
-        CoverSourceTextBox.Text = plan.SaveOptions.DownloadPoster || plan.SaveOptions.DownloadFanart
-            ? plan.ArtworkSelection?.CoverSummary ?? "使用当前 metadata 中的封套"
-            : "不输出 poster / fanart";
-        ScreenshotSourceTextBox.Text = plan.SaveOptions.DownloadExtrafanart
-            ? plan.ArtworkSelection?.ScreenshotSummary ?? "使用当前 metadata 中的剧照"
-            : "不输出 extrafanart";
         ChangesList.ItemsSource = plan.Changes.Select(CreateRow).ToArray();
         ConfigureWarnings();
     }

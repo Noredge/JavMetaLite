@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.0-dev5-r1 — Lightweight artwork flow
+
+- Retired the independent cover/screenshot source selectors introduced in dev5 after hands-on testing showed that they added unnecessary product weight.
+- Stopped combining LibreDMM and R18.dev screenshot collections into a new user-visible output mode.
+- Restored the simple rule that poster, fanart, and screenshots follow the current search result; users can select another main source and search again when its artwork is unsuitable.
+- Kept dev4 multi-source text-field candidates, manual text editing, existing Jellyfin filenames, save preview, overwrite protection, and rollback behavior unchanged.
+- Kept duplicate-image suppression as an internal safety detail when a single source returns repeated screenshot content.
+
 ## v0.5.0-dev5 — Artwork source candidates
 
 - Separated artwork selection from text-field provenance: changing a title or actor source no longer changes the chosen images.

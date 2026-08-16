@@ -95,7 +95,6 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("多来源字段补全", TestMetadataMerge),
     ("v0.5 多来源搜索编排", TestMetadataSearchCoordinator),
     ("v0.5 字段候选与来源追踪", TestMetadataReviewSession),
-    ("v0.5 图片来源候选与固定选择", TestArtworkReviewSession),
     ("R18.dev JSON 解析", TestR18Parser),
     ("R18.dev 实际 content_id 回退", TestR18ContentIdFallback),
     ("JAVLibrary HTML 解析", TestHtmlParser),
@@ -426,59 +425,6 @@ static Task TestMetadataReviewSession()
     return Task.CompletedTask;
 }
 
-static Task TestArtworkReviewSession()
-{
-    var primary = new MovieMetadata
-    {
-        Id = "IPZZ-850",
-        CoverUrl = "https://images.example.test/libre-cover.jpg",
-        ScreenshotUrls =
-        [
-            "https://images.example.test/shared.jpg",
-            "https://images.example.test/libre-only.jpg"
-        ],
-        SourceName = "libredmm",
-        SourceDisplayName = "LibreDMM"
-    };
-    var fallback = new MovieMetadata
-    {
-        Id = "IPZZ-850",
-        CoverUrl = "https://images.example.test/r18-cover.jpg",
-        ScreenshotUrls =
-        [
-            "https://images.example.test/shared.jpg",
-            "https://images.example.test/r18-only.jpg"
-        ],
-        SourceName = "r18dev",
-        SourceDisplayName = "R18.dev"
-    };
-    var merged = MetadataMerger.Merge(primary, fallback);
-    var review = ArtworkReviewSession.Create(merged, primary, fallback);
-
-    AssertEqual("2", review.CoverCandidates.Count.ToString());
-    AssertEqual("3", review.ScreenshotChoices.Count.ToString());
-    AssertEqual("libredmm", review.SelectedCoverCandidate?.Source.Name);
-    AssertEqual(ArtworkReviewSession.CombinedScreenshotsName, review.SelectedScreenshotChoice?.Name);
-    var initial = review.CreateSelection();
-    AssertEqual("3", initial.ScreenshotUrls.Count.ToString());
-    AssertEqual("LibreDMM", initial.CoverSourceDisplayName);
-
-    AssertEqual("True", review.SelectCoverSource("r18dev").ToString());
-    AssertEqual("True", review.SelectScreenshotSource("libredmm").ToString());
-    var selected = review.CreateSelection();
-    AssertEqual("R18.dev", selected.CoverSourceDisplayName);
-    AssertEqual("LibreDMM", selected.ScreenshotSourceDisplayName);
-    AssertEqual("1", selected.CoverUrls.Count.ToString());
-    AssertEqual("2", selected.ScreenshotUrls.Count.ToString());
-
-    fallback.CoverUrl = "https://images.example.test/changed-after-review.jpg";
-    fallback.ScreenshotUrls = [];
-    var snapshot = review.CreateSelection();
-    AssertEqual("https://images.example.test/r18-cover.jpg", snapshot.CoverUrls[0]);
-    AssertEqual("2", snapshot.ScreenshotUrls.Count.ToString());
-    return Task.CompletedTask;
-}
-
 static Task TestR18Parser()
 {
     const string json = """
@@ -644,15 +590,12 @@ static async Task TestArtworkOutput()
         var videoPath = Path.Combine(root, "IPZZ-850.mp4");
         await File.WriteAllBytesAsync(videoPath, []);
         var cover = CreateJpeg(800, 538, 0x2B, 0x65, 0xA8);
-        var alternateCover = CreateJpeg(1024, 682, 0x67, 0x42, 0x91);
         var sample1 = CreateJpeg(640, 360, 0xA8, 0x45, 0x45);
         var sample2 = CreateJpeg(800, 450, 0x45, 0xA8, 0x65);
         using var httpClient = new HttpClient(new FakeImageHandler(new Dictionary<string, byte[]>
         {
             ["/cover.jpg"] = cover,
-            ["/alternate-cover.jpg"] = alternateCover,
             ["/sample1.jpg"] = sample1,
-            ["/sample1-copy.jpg"] = sample1,
             ["/sample2.jpg"] = sample2
         }));
         using var service = new OutputService(httpClient);
@@ -688,34 +631,6 @@ static async Task TestArtworkOutput()
             metadata,
             new JavMetaLite.Core.Models.SaveOptions(true, true, true, true, false));
         AssertEqual("5", conflicts.Count.ToString());
-
-        var selectedDirectory = Path.Combine(root, "selected");
-        Directory.CreateDirectory(selectedDirectory);
-        var selectedVideoPath = Path.Combine(selectedDirectory, "IPZZ-850.mp4");
-        await File.WriteAllBytesAsync(selectedVideoPath, []);
-        var artworkSelection = new ArtworkSelection(
-            "r18dev",
-            "R18.dev",
-            ["https://images.example.test/alternate-cover.jpg"],
-            ArtworkReviewSession.CombinedScreenshotsName,
-            "合并去重（LibreDMM + R18.dev）",
-            [
-                "https://images.example.test/sample1.jpg",
-                "https://images.example.test/sample1-copy.jpg",
-                "https://images.example.test/sample2.jpg"
-            ]);
-        var selectedResult = await service.SaveAsync(
-            selectedVideoPath,
-            metadata,
-            new JavMetaLite.Core.Models.SaveOptions(false, true, true, true, false),
-            artworkSelection);
-        var selectedFanartSize = PosterImageProcessor.GetDimensions(
-            await File.ReadAllBytesAsync(selectedResult.FanartPath!));
-        AssertEqual("1024", selectedFanartSize.Width.ToString());
-        AssertEqual("682", selectedFanartSize.Height.ToString());
-        AssertEqual("2", selectedResult.ExtrafanartPaths.Count.ToString());
-        AssertEqual("R18.dev", selectedResult.CoverSourceDisplayName);
-        AssertEqual("合并去重（LibreDMM + R18.dev）", selectedResult.ScreenshotSourceDisplayName);
     }
     finally
     {

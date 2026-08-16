@@ -31,8 +31,7 @@ public sealed record SavePlan(
     OrganizationOptions OrganizationOptions,
     IReadOnlyList<PlannedFileChange> Changes,
     IReadOnlyList<string> OverwriteConflicts,
-    IReadOnlyList<string> BlockingConflicts,
-    ArtworkSelection? ArtworkSelection = null)
+    IReadOnlyList<string> BlockingConflicts)
 {
     public bool HasBlockingConflicts => BlockingConflicts.Count > 0;
 

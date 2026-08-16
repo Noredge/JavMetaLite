@@ -25,17 +25,7 @@ public sealed class OutputService : IDisposable
         SaveOptions options,
         CancellationToken cancellationToken = default)
     {
-        return await SaveAsync(videoPath, videoPath, metadata, options, null, cancellationToken);
-    }
-
-    public async Task<SaveResult> SaveAsync(
-        string videoPath,
-        MovieMetadata metadata,
-        SaveOptions options,
-        ArtworkSelection artworkSelection,
-        CancellationToken cancellationToken = default)
-    {
-        return await SaveAsync(videoPath, videoPath, metadata, options, artworkSelection, cancellationToken);
+        return await SaveAsync(videoPath, videoPath, metadata, options, cancellationToken);
     }
 
     public async Task<SaveResult> SaveAsync(
@@ -43,17 +33,6 @@ public sealed class OutputService : IDisposable
         string outputVideoPath,
         MovieMetadata metadata,
         SaveOptions options,
-        CancellationToken cancellationToken = default)
-    {
-        return await SaveAsync(sourceVideoPath, outputVideoPath, metadata, options, null, cancellationToken);
-    }
-
-    public async Task<SaveResult> SaveAsync(
-        string sourceVideoPath,
-        string outputVideoPath,
-        MovieMetadata metadata,
-        SaveOptions options,
-        ArtworkSelection? artworkSelection,
         CancellationToken cancellationToken = default)
     {
         if (!File.Exists(sourceVideoPath))
@@ -71,30 +50,17 @@ public sealed class OutputService : IDisposable
         var nfoPath = options.WriteNfo ? Path.Combine(directory, $"{baseName}.nfo") : null;
         var posterPath = options.DownloadPoster ? Path.Combine(directory, $"{baseName}-poster.jpg") : null;
         var fanartPath = options.DownloadFanart ? Path.Combine(directory, $"{baseName}-fanart.jpg") : null;
-        var selectedArtwork = artworkSelection ?? ArtworkSelection.FromMetadata(metadata);
 
         DownloadedImage? cover = null;
         if (options.DownloadPoster || options.DownloadFanart)
         {
-            AppLog.Info($"下载封套 id={metadata.Id} source={selectedArtwork.CoverSourceDisplayName}");
-            cover = await DownloadBestCoverAsync(
-                selectedArtwork.CoverUrls,
-                selectedArtwork.CoverSourceDisplayName,
-                cancellationToken);
-            AppLog.Info(
-                $"封套下载成功 id={metadata.Id} source={selectedArtwork.CoverSourceDisplayName} " +
-                $"url={cover.Url} dimensions={cover.Width}x{cover.Height}");
+            AppLog.Info($"下载封面 id={metadata.Id} source={metadata.SourceDisplayName}");
+            cover = await DownloadBestCoverAsync(metadata, cancellationToken);
         }
 
         var screenshots = options.DownloadExtrafanart
-            ? await DownloadScreenshotsAsync(selectedArtwork.ScreenshotUrls, cancellationToken)
+            ? await DownloadScreenshotsAsync(metadata.ScreenshotUrls, cancellationToken)
             : [];
-        if (options.DownloadExtrafanart)
-        {
-            AppLog.Info(
-                $"剧照下载完成 id={metadata.Id} source={selectedArtwork.ScreenshotSourceDisplayName} " +
-                $"candidates={Math.Min(50, selectedArtwork.ScreenshotUrls.Count)} unique={screenshots.Count}");
-        }
         var fanartImage = options.DownloadFanart ? cover : null;
 
         var extraImages = options.DownloadExtrafanart
@@ -155,21 +121,13 @@ public sealed class OutputService : IDisposable
         AppLog.Info(
             $"metadata 临时写入完成 base={baseName} nfo={nfoPath is not null} poster={posterPath is not null} " +
             $"fanart={fanartPath is not null} extrafanart={extraPaths.Length}");
-        return new SaveResult(
-            nfoPath,
-            posterPath,
-            fanartPath,
-            extraPaths,
-            options.DownloadFanart && cover is not null,
-            selectedArtwork.CoverSourceDisplayName,
-            selectedArtwork.ScreenshotSourceDisplayName);
+        return new SaveResult(nfoPath, posterPath, fanartPath, extraPaths, options.DownloadFanart && cover is not null);
     }
 
     public static IReadOnlyList<string> GetExpectedOutputFiles(
         string outputVideoPath,
         MovieMetadata metadata,
-        SaveOptions options,
-        ArtworkSelection? artworkSelection = null)
+        SaveOptions options)
     {
         var directory = Path.GetDirectoryName(outputVideoPath);
         if (string.IsNullOrWhiteSpace(directory))
@@ -193,9 +151,7 @@ public sealed class OutputService : IDisposable
         }
         if (options.DownloadExtrafanart)
         {
-            var count = Math.Min(
-                50,
-                (artworkSelection ?? ArtworkSelection.FromMetadata(metadata)).ScreenshotUrls.Count);
+            var count = Math.Min(50, metadata.ScreenshotUrls.Count);
             for (var index = 1; index <= count; index++)
             {
                 candidates.Add(Path.Combine(directory, "extrafanart", $"fanart{index}.jpg"));
@@ -208,28 +164,23 @@ public sealed class OutputService : IDisposable
     public static IReadOnlyList<string> FindExistingOutputFiles(
         string videoPath,
         MovieMetadata metadata,
-        SaveOptions options,
-        ArtworkSelection? artworkSelection = null)
+        SaveOptions options)
     {
-        return GetExpectedOutputFiles(videoPath, metadata, options, artworkSelection)
+        return GetExpectedOutputFiles(videoPath, metadata, options)
             .Where(File.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 
-    private async Task<DownloadedImage> DownloadBestCoverAsync(
-        IReadOnlyList<string> urls,
-        string sourceDisplayName,
-        CancellationToken cancellationToken)
+    private async Task<DownloadedImage> DownloadBestCoverAsync(MovieMetadata metadata, CancellationToken cancellationToken)
     {
-        var candidates = urls
+        var candidates = new[] { metadata.CoverUrl, metadata.FallbackCoverUrl, metadata.PosterUrl }
             .Where(value => Uri.TryCreate(value, UriKind.Absolute, out _))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         if (candidates.Length == 0)
         {
-            throw new InvalidOperationException(
-                $"{sourceDisplayName} 没有有效的封套链接。你可以改选其他图片来源，或取消海报与 fanart 输出。 ");
+            throw new InvalidOperationException("没有有效的封面链接。你可以取消“下载高清海报”，或手动填写封面链接。 ");
         }
 
         Exception? lastError = null;
@@ -246,9 +197,7 @@ public sealed class OutputService : IDisposable
             }
         }
 
-        throw new InvalidDataException(
-            $"{sourceDisplayName} 的所有封套地址都下载失败。请改选其他图片来源后重试。",
-            lastError);
+        throw new InvalidDataException("所有封面地址都下载失败，可能需要浏览器验证。", lastError);
     }
 
     private async Task<List<DownloadedImage>> DownloadScreenshotsAsync(
