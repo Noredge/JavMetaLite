@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.0-dev5-r4 — Simplified cover status
+
+- Removed the “waiting for cover” and “search to show cover” placeholder messages from the artwork area.
+- Show only the complete cover dimensions after the fanart preview loads successfully.
+- Kept the unified poster/fanart source selector and all save behavior unchanged.
+
 ## v0.5.0-dev5-r3 — Cover header alignment
 
 - Moved the shared poster/fanart source badge to the upper-right of the cover header, matching the label-and-source layout used by metadata fields.

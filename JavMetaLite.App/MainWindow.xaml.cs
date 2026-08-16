@@ -51,7 +51,7 @@ public partial class MainWindow : Window
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
         ApplyMetadata(_metadata, []);
-        AppLog.Info("JavMetaLite v0.5.0-dev5-r3 启动");
+        AppLog.Info("JavMetaLite v0.5.0-dev5-r4 启动");
     }
 
     private void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -298,7 +298,7 @@ public partial class MainWindow : Window
         var id = MovieIdParser.TryExtract(path);
         ApplyMetadata(new MovieMetadata { Id = id ?? string.Empty }, []);
         ClearPosterPreview();
-        ClearFanartPreview("等待搜索");
+        ClearFanartPreview();
         if (!string.IsNullOrWhiteSpace(id))
         {
             SetStatus($"已识别番号 {id}，可以搜索资料", true);
@@ -654,8 +654,8 @@ public partial class MainWindow : Window
                 var imageBytes = await DownloadPreviewImageAsync(candidate);
                 var dimensions = PosterImageProcessor.GetDimensions(imageBytes);
                 FanartImage.Source = PosterBitmapFactory.CreateFrozen(PosterImageProcessor.CreateFanartJpeg(imageBytes));
-                FanartDropHint.Visibility = Visibility.Collapsed;
-                FanartHintText.Text = $"完整横版封套 · {dimensions.Width}×{dimensions.Height}";
+                FanartHintText.Text = $"{dimensions.Width}×{dimensions.Height}";
+                FanartHintText.Visibility = Visibility.Visible;
                 return true;
             }
             catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
@@ -668,7 +668,7 @@ public partial class MainWindow : Window
             }
         }
 
-        ClearFanartPreview("完整封套预览加载失败");
+        ClearFanartPreview();
         return false;
     }
 
@@ -721,11 +721,11 @@ public partial class MainWindow : Window
         DropHint.Visibility = Visibility.Visible;
     }
 
-    private void ClearFanartPreview(string hint)
+    private void ClearFanartPreview()
     {
         FanartImage.Source = null;
-        FanartDropHint.Visibility = Visibility.Visible;
-        FanartHintText.Text = hint;
+        FanartHintText.Text = string.Empty;
+        FanartHintText.Visibility = Visibility.Collapsed;
     }
 
     private static string GetSourceDisplayName(MovieMetadata metadata) =>

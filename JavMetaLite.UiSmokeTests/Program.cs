@@ -58,6 +58,11 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.3 图片预览或 extrafanart 选项未创建。 ");
         }
+        if (window.FindName("FanartHintText") is not TextBlock { Visibility: Visibility.Collapsed, Text: "" } ||
+            window.FindName("FanartDropHint") is not null)
+        {
+            throw new InvalidOperationException("完整封套尚未加载时不应显示等待提示。 ");
+        }
         if (window.FindName("OrganizeFolderCheckBox") is not CheckBox organizeCheckBox || organizeCheckBox.IsChecked == true ||
             window.FindName("RenameVideoCheckBox") is not CheckBox renameCheckBox || renameCheckBox.IsChecked == true)
         {

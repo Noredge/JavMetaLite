@@ -22,7 +22,7 @@ The projects run sequentially because the smoke and UI projects share build outp
 | --- | --- | --- |
 | Core smoke | `JavMetaLite.SmokeTests` | Parsers, metadata merge, v0.5 multi-source orchestration/provenance, unified poster/fanart source selection, NFO, image conversion, basic organization and logs |
 | v0.4 regression | `JavMetaLite.RegressionTests` | File layout matrix, overwrite policy, conflicts, rollback and input validation |
-| UI smoke | `JavMetaLite.UiSmokeTests` | WPF window construction, dark source selector, v0.5 mixed-source badges, field and unified artwork candidate menus, top-right cover-source placement, per-field switching/manual return, safe defaults and preview window |
+| UI smoke | `JavMetaLite.UiSmokeTests` | WPF window construction, dark source selector, v0.5 mixed-source badges, field and unified artwork candidate menus, top-right cover-source placement, hidden pre-search artwork hints, per-field switching/manual return, safe defaults and preview window |
 
 The regression runner supports discovery and category filters:
 

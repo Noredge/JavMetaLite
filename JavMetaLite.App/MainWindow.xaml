@@ -314,11 +314,10 @@
                             </StackPanel>
                         </Grid>
                     </Border>
-                    <TextBlock x:Name="FanartHintText" Grid.Row="2" Text="等待完整封套" Foreground="{StaticResource MutedBrush}" FontSize="11" HorizontalAlignment="Right" Margin="0,8,0,7" />
+                    <TextBlock x:Name="FanartHintText" Grid.Row="2" Text="" Visibility="Collapsed" Foreground="{StaticResource MutedBrush}" FontSize="11" HorizontalAlignment="Right" Margin="0,8,0,7" />
                     <Border Grid.Row="3" MinHeight="105" Background="#0B1016" BorderBrush="#2A3544" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
                         <Grid>
                             <Image x:Name="FanartImage" Stretch="Uniform" Margin="5" />
-                            <TextBlock x:Name="FanartDropHint" Text="搜索后显示完整横版封套" Foreground="#607086" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                     </Border>
                     <TextBlock x:Name="FileNameText" Grid.Row="4" Text="尚未选择影片" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,14,0,0" />
@@ -505,7 +504,7 @@
                 <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#72E3A6" VerticalAlignment="Center" Margin="0,0,9,0" />
                 <TextBlock x:Name="StatusText" Grid.Column="1" Text="准备就绪，请选择或拖入一个影片" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
                 <Button Grid.Column="2" Content="打开日志" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
-                <TextBlock Grid.Column="3" Text="v0.5.0-dev5-r3 · 封套来源顶部布局" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="v0.5.0-dev5-r4 · 精简封套状态" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>
