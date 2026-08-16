@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.6.0-dev1 — Local NFO read-only foundation
+
+- Added case-insensitive detection of same-name NFO, poster, and fanart sidecars beside the selected movie.
+- Added a bounded, DTD-disabled NFO reader that rejects malformed XML, external entities, oversized files, and roots other than `<movie>`.
+- Parsed the current editable movie fields, multiple directors/genres/actors, actor thumbnail URLs, and `Label:` / `Series:` tags into a local metadata source snapshot.
+- Preserved an independent clone of the complete original XML document, including unknown elements, attributes, comments, and whitespace, for the later round-trip save stage.
+- Kept dev1 isolated from the main window and all write paths: selecting and saving behavior remains identical to v0.5.0.
+- Added offline tests proving successful and partial reads, sidecar matching, zero file mutations, unknown XML preservation, and security rejection behavior.
+
 ## v0.5.0 — Stable
 
 - Promoted RC1 without functional changes after all six focused integration checks passed.

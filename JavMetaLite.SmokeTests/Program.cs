@@ -103,6 +103,8 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("NFO 生成", TestNfoWriter),
     ("完整封套 fanart 与 Sample Images 输出", TestArtworkOutput),
     ("v0.4 文件整理计划与安全执行", TestFileOrganization),
+    ("v0.6 本地 sidecar 定位", TestLocalSidecarLocator),
+    ("v0.6 安全 NFO 只读解析", TestNfoReader),
     ("v0.4 本地运行日志", TestAppLog)
 };
 
@@ -784,6 +786,183 @@ static async Task TestFileOrganization()
     }
 }
 
+static async Task TestLocalSidecarLocator()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.SidecarTests.{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    try
+    {
+        var videoPath = Path.Combine(root, "SNOS-255.mp4");
+        var nfoPath = Path.Combine(root, "SNOS-255.NFO");
+        var posterPath = Path.Combine(root, "SNOS-255-POSTER.png");
+        var fanartPath = Path.Combine(root, "SNOS-255-fanart.jpg");
+        await File.WriteAllBytesAsync(videoPath, [0x01, 0x02, 0x03]);
+        await File.WriteAllTextAsync(nfoPath, "<movie />");
+        await File.WriteAllBytesAsync(posterPath, [0x04]);
+        await File.WriteAllBytesAsync(fanartPath, [0x05]);
+        await File.WriteAllTextAsync(Path.Combine(root, "unrelated.nfo"), "<movie />");
+
+        var before = Directory.EnumerateFiles(root)
+            .ToDictionary(path => path, File.ReadAllBytes, StringComparer.OrdinalIgnoreCase);
+        var sidecars = LocalSidecarLocator.Locate(videoPath);
+        var after = Directory.EnumerateFiles(root)
+            .ToDictionary(path => path, File.ReadAllBytes, StringComparer.OrdinalIgnoreCase);
+
+        AssertEqual(Path.GetFullPath(videoPath), sidecars.VideoPath);
+        AssertEqual(Path.GetFullPath(nfoPath), sidecars.NfoPath);
+        AssertEqual(Path.GetFullPath(posterPath), sidecars.PosterPath);
+        AssertEqual(Path.GetFullPath(fanartPath), sidecars.FanartPath);
+        AssertEqual("True", sidecars.HasNfo.ToString());
+        AssertEqual("True", sidecars.HasArtwork.ToString());
+        AssertEqual(before.Count.ToString(), after.Count.ToString());
+        foreach (var (path, bytes) in before)
+        {
+            AssertEqual(Convert.ToHexString(bytes), Convert.ToHexString(after[path]));
+        }
+
+        File.Delete(nfoPath);
+        File.Delete(posterPath);
+        File.Delete(fanartPath);
+        var videoOnly = LocalSidecarLocator.Locate(videoPath);
+        AssertEqual(null, videoOnly.NfoPath);
+        AssertEqual(null, videoOnly.PosterPath);
+        AssertEqual(null, videoOnly.FanartPath);
+        AssertEqual("False", videoOnly.HasNfo.ToString());
+        AssertEqual("False", videoOnly.HasArtwork.ToString());
+
+        await AssertThrowsAsync<FileNotFoundException>(() =>
+            Task.FromResult(LocalSidecarLocator.Locate(Path.Combine(root, "missing.mp4"))));
+    }
+    finally
+    {
+        Directory.Delete(root, true);
+    }
+}
+
+static async Task TestNfoReader()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.NfoReaderTests.{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    try
+    {
+        var videoPath = Path.Combine(root, "SNOS-255.mp4");
+        var nfoPath = Path.Combine(root, "SNOS-255.nfo");
+        var posterPath = Path.Combine(root, "SNOS-255-poster.jpg");
+        var fanartPath = Path.Combine(root, "SNOS-255-fanart.jpg");
+        await File.WriteAllBytesAsync(videoPath, [0x10, 0x20, 0x30]);
+        await File.WriteAllBytesAsync(posterPath, [0x40]);
+        await File.WriteAllBytesAsync(fanartPath, [0x50]);
+        const string validNfo = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <!--keep-comment-->
+            <movie custom="keep">
+              <title>示例标题</title>
+              <originaltitle>Original title</originaltitle>
+              <id>SNOS-255</id>
+              <uniqueid type="jav" default="true">snos00255</uniqueid>
+              <premiered>2026-06-23</premiered>
+              <releasedate>2026-06-22</releasedate>
+              <runtime>120</runtime>
+              <studio>S1</studio>
+              <director>导演甲</director>
+              <director>导演乙</director>
+              <plot>完整简介</plot>
+              <rating>4.5</rating>
+              <genre>剧情</genre>
+              <genre>4K</genre>
+              <genre>剧情</genre>
+              <actor><name>演员甲</name><thumb>https://example.test/a.jpg</thumb></actor>
+              <actor><name>演员乙</name></actor>
+              <actor><name>演员甲</name></actor>
+              <tag>Label: S1 NO.1 STYLE</tag>
+              <tag>Series: Example Series</tag>
+              <tag>Custom tag</tag>
+              <website>https://example.test/SNOS-255</website>
+              <unknown answer="42"><child>nested</child></unknown>
+            </movie>
+            """;
+        await File.WriteAllTextAsync(nfoPath, validNfo);
+
+        var before = Directory.EnumerateFiles(root)
+            .ToDictionary(path => path, File.ReadAllBytes, StringComparer.OrdinalIgnoreCase);
+        var bundle = await NfoReader.ReadAsync(LocalSidecarLocator.Locate(videoPath));
+        var after = Directory.EnumerateFiles(root)
+            .ToDictionary(path => path, File.ReadAllBytes, StringComparer.OrdinalIgnoreCase);
+
+        AssertEqual("SNOS-255", bundle.Metadata.Id);
+        AssertEqual("snos00255", bundle.Metadata.ContentId);
+        AssertEqual("示例标题", bundle.Metadata.Title);
+        AssertEqual("Original title", bundle.Metadata.OriginalTitle);
+        AssertEqual("2026-06-23", bundle.Metadata.ReleaseDate);
+        AssertEqual("120", bundle.Metadata.RuntimeMinutes);
+        AssertEqual("S1", bundle.Metadata.Maker);
+        AssertEqual("导演甲, 导演乙", bundle.Metadata.Director);
+        AssertEqual("完整简介", bundle.Metadata.Plot);
+        AssertEqual("4.5", bundle.Metadata.Rating);
+        AssertEqual("剧情, 4K", bundle.Metadata.GenresText);
+        AssertEqual("演员甲, 演员乙", bundle.Metadata.ActorsText);
+        AssertEqual("2", bundle.Metadata.Actors.Count.ToString());
+        AssertEqual("https://example.test/a.jpg", bundle.Metadata.Actors[0].ImageUrl);
+        AssertEqual("S1 NO.1 STYLE", bundle.Metadata.Label);
+        AssertEqual("Example Series", bundle.Metadata.Series);
+        AssertEqual("https://example.test/SNOS-255", bundle.Metadata.SourceUrl);
+        AssertEqual("local-nfo", bundle.Metadata.SourceName);
+        AssertEqual("本地 NFO", bundle.Metadata.SourceDisplayName);
+        AssertEqual("示例标题", bundle.SourceSnapshot.GetValue(MetadataField.Title));
+        AssertEqual("https://example.test/a.jpg", bundle.SourceSnapshot.Actors[0].ImageUrl);
+        AssertEqual("0", bundle.Diagnostics.Count.ToString());
+        AssertEqual(Path.GetFullPath(posterPath), bundle.Sidecars.PosterPath);
+        AssertEqual(Path.GetFullPath(fanartPath), bundle.Sidecars.FanartPath);
+
+        var firstClone = bundle.CloneOriginalDocument();
+        AssertEqual("keep", firstClone.Root?.Attribute("custom")?.Value);
+        AssertEqual("42", firstClone.Root?.Element("unknown")?.Attribute("answer")?.Value);
+        AssertEqual("nested", firstClone.Root?.Element("unknown")?.Element("child")?.Value);
+        AssertEqual("True", firstClone.DescendantNodes().OfType<XComment>().Any().ToString());
+        firstClone.Root?.Element("unknown")?.Remove();
+        var secondClone = bundle.CloneOriginalDocument();
+        AssertEqual("42", secondClone.Root?.Element("unknown")?.Attribute("answer")?.Value);
+
+        AssertEqual(before.Count.ToString(), after.Count.ToString());
+        foreach (var (path, bytes) in before)
+        {
+            AssertEqual(Convert.ToHexString(bytes), Convert.ToHexString(after[path]));
+        }
+
+        await File.WriteAllTextAsync(nfoPath, "<movie><title>Only title</title><custom /></movie>");
+        var incomplete = await NfoReader.ReadAsync(LocalSidecarLocator.Locate(videoPath));
+        AssertEqual("Only title", incomplete.Metadata.Title);
+        AssertEqual("1", incomplete.Diagnostics.Count.ToString());
+
+        await File.WriteAllTextAsync(nfoPath, "<tvshow><title>Wrong root</title></tvshow>");
+        await AssertThrowsAsync<InvalidDataException>(() =>
+            NfoReader.ReadAsync(LocalSidecarLocator.Locate(videoPath)));
+
+        await File.WriteAllTextAsync(nfoPath, "<movie><title>Broken</movie>");
+        await AssertThrowsAsync<InvalidDataException>(() =>
+            NfoReader.ReadAsync(LocalSidecarLocator.Locate(videoPath)));
+
+        var secretPath = Path.Combine(root, "secret.txt");
+        await File.WriteAllTextAsync(secretPath, "MUST-NOT-BE-READ");
+        var maliciousNfo = $"""
+            <!DOCTYPE movie [<!ENTITY xxe SYSTEM "{new Uri(secretPath).AbsoluteUri}">]>
+            <movie><title>&xxe;</title></movie>
+            """;
+        await File.WriteAllTextAsync(nfoPath, maliciousNfo);
+        var securityFailure = await AssertThrowsAsync<InvalidDataException>(() =>
+            NfoReader.ReadAsync(LocalSidecarLocator.Locate(videoPath)));
+        AssertEqual("False", securityFailure.Message.Contains("MUST-NOT-BE-READ", StringComparison.Ordinal).ToString());
+
+        await File.WriteAllBytesAsync(nfoPath, new byte[NfoReader.MaximumNfoBytes + 1]);
+        await AssertThrowsAsync<InvalidDataException>(() =>
+            NfoReader.ReadAsync(LocalSidecarLocator.Locate(videoPath)));
+    }
+    finally
+    {
+        Directory.Delete(root, true);
+    }
+}
+
 static Task TestAppLog()
 {
     var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.LogTests.{Guid.NewGuid():N}");
@@ -832,6 +1011,21 @@ static void AssertEqual(string? expected, string? actual)
     {
         throw new InvalidOperationException($"Expected '{expected ?? "<null>"}', got '{actual ?? "<null>"}'.");
     }
+}
+
+static async Task<TException> AssertThrowsAsync<TException>(Func<Task> action)
+    where TException : Exception
+{
+    try
+    {
+        await action();
+    }
+    catch (TException exception)
+    {
+        return exception;
+    }
+
+    throw new InvalidOperationException($"Expected {typeof(TException).Name} to be thrown.");
 }
 
 static bool ContainsJapanese(string? value) =>

@@ -51,7 +51,7 @@ public partial class MainWindow : Window
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
         ApplyMetadata(_metadata, []);
-        AppLog.Info("JavMetaLite v0.5.0 启动");
+        AppLog.Info("JavMetaLite v0.6.0-dev1 启动");
     }
 
     private void ChooseFile_Click(object sender, RoutedEventArgs e)
