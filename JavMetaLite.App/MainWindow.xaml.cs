@@ -17,10 +17,14 @@ public partial class MainWindow : Window
 {
     private sealed record MetadataSearchOutcome(
         MovieMetadata Metadata,
-        IReadOnlyList<MovieMetadata> Sources)
+        IReadOnlyList<MovieMetadata> Sources,
+        IReadOnlyList<MetadataSourceSearchAttempt> Attempts)
     {
-        public static MetadataSearchOutcome FromSingleSource(MovieMetadata metadata) =>
-            new(metadata, [metadata]);
+        public static MetadataSearchOutcome FromSingleAttempt(MetadataSourceSearchAttempt attempt) =>
+            new(attempt.Metadata!, [attempt.Metadata!], [attempt]);
+
+        public static MetadataSearchOutcome FromMultipleSources(MultiSourceSearchResult result) =>
+            new(result.Metadata, result.Sources, result.Attempts);
     }
 
     private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -46,7 +50,7 @@ public partial class MainWindow : Window
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
         ApplyMetadata(_metadata, []);
-        AppLog.Info("JavMetaLite v0.5.0-dev3-r1 启动");
+        AppLog.Info("JavMetaLite v0.5.0-dev4 启动");
     }
 
     private void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -95,28 +99,42 @@ public partial class MainWindow : Window
         }
 
         string? browserFallbackUrl = null;
-        await RunBusyAsync("正在获取影片资料…", async () =>
+        var busyMessage = source == "auto"
+            ? "正在同时获取 LibreDMM 与 R18.dev…"
+            : "正在获取影片资料…";
+        await RunBusyAsync(busyMessage, async () =>
         {
             try
             {
                 var outcome = await SearchFromSelectedSourceAsync(source, _metadata.Id);
                 var result = outcome.Metadata;
                 ApplyMetadata(result, outcome.Sources);
+                var successfulSources = string.Join(
+                    "+",
+                    outcome.Sources.Select(GetSourceDisplayName).Distinct(StringComparer.OrdinalIgnoreCase));
+                var failedSources = string.Join(
+                    "+",
+                    outcome.Attempts.Where(attempt => !attempt.Success).Select(attempt => attempt.SourceDisplayName));
                 AppLog.Info(
-                    $"metadata 搜索成功 source={GetSourceDisplayName(result)} id={result.Id} " +
+                    $"metadata 搜索成功 sources={successfulSources} failedSources={failedSources} id={result.Id} " +
                     $"contentId={result.ContentId} screenshots={result.ScreenshotUrls.Count} " +
                     $"reviewSources={outcome.Sources.Count}");
                 var posterLoaded = await LoadPosterPreviewAsync(result);
                 var fanartLoaded = await LoadFanartPreviewAsync(result);
-                var sourceName = GetSourceDisplayName(result);
+                var sourceName = string.Join(
+                    " + ",
+                    outcome.Sources.Select(GetSourceDisplayName).Distinct(StringComparer.OrdinalIgnoreCase));
+                var degradedNote = string.IsNullOrWhiteSpace(failedSources)
+                    ? string.Empty
+                    : $"；{failedSources} 未返回结果";
                 var imageSummary = result.ScreenshotUrls.Count > 0
                     ? $"，找到 {result.ScreenshotUrls.Count} 张样张"
                     : "，没有独立样张";
                 SetStatus(
                     posterLoaded
-                        ? $"已从 {sourceName} 读取 {result.Id}{imageSummary}{(fanartLoaded ? string.Empty : "；完整封套 fanart 预览未加载")}"
-                        : $"已从 {sourceName} 读取 {result.Id}；封面预览未加载，不影响资料编辑",
-                    true);
+                        ? $"已从 {sourceName} 读取 {result.Id}{imageSummary}{(fanartLoaded ? string.Empty : "；完整封套 fanart 预览未加载")}{degradedNote}"
+                        : $"已从 {sourceName} 读取 {result.Id}；封面预览未加载，不影响资料编辑{degradedNote}",
+                    string.IsNullOrWhiteSpace(failedSources));
             }
             catch (JavLibraryChallengeException exception)
             {
@@ -138,56 +156,37 @@ public partial class MainWindow : Window
         {
             if (source == "libredmm")
             {
-                return MetadataSearchOutcome.FromSingleSource(
-                    await _libreDmmClient.SearchAsync(id, _lifetimeCancellation.Token));
+                return MetadataSearchOutcome.FromSingleAttempt(
+                    await MetadataSearchCoordinator.SearchSingleAsync(
+                        id,
+                        _libreDmmClient,
+                        _lifetimeCancellation.Token));
             }
 
             if (source == "r18dev")
             {
-                return MetadataSearchOutcome.FromSingleSource(
-                    await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token));
+                return MetadataSearchOutcome.FromSingleAttempt(
+                    await MetadataSearchCoordinator.SearchSingleAsync(
+                        id,
+                        _r18DevClient,
+                        _lifetimeCancellation.Token));
             }
 
             if (source == "javlibrary")
             {
-                return MetadataSearchOutcome.FromSingleSource(
-                    await _javLibraryClient.SearchAsync(id, _lifetimeCancellation.Token));
+                return MetadataSearchOutcome.FromSingleAttempt(
+                    await MetadataSearchCoordinator.SearchSingleAsync(
+                        id,
+                        _javLibraryClient,
+                        _lifetimeCancellation.Token));
             }
 
-            MovieMetadata? primary = null;
-            try
-            {
-                primary = await _libreDmmClient.SearchAsync(id, _lifetimeCancellation.Token);
-            }
-            catch (Exception exception) when (IsRecoverableMetadataError(exception))
-            {
-                AppLog.Warning($"自动搜索的 LibreDMM 阶段失败 id={id}", exception);
-            }
-
-            if (primary is null)
-            {
-                AppLog.Info($"LibreDMM 不可用，改用 R18.dev id={id}");
-                return MetadataSearchOutcome.FromSingleSource(
-                    await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token));
-            }
-
-            if (!MetadataMerger.NeedsFallback(primary))
-            {
-                return MetadataSearchOutcome.FromSingleSource(primary);
-            }
-
-            try
-            {
-                var fallback = await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token);
-                return new MetadataSearchOutcome(
-                    MetadataMerger.Merge(primary, fallback),
-                    [primary, fallback]);
-            }
-            catch (Exception exception) when (IsRecoverableMetadataError(exception))
-            {
-                AppLog.Warning($"R18.dev 补全阶段失败，保留 LibreDMM 结果 id={id}", exception);
-                return MetadataSearchOutcome.FromSingleSource(primary);
-            }
+            var multiSourceResult = await MetadataSearchCoordinator.SearchAllAsync(
+                id,
+                _libreDmmClient,
+                _r18DevClient,
+                _lifetimeCancellation.Token);
+            return MetadataSearchOutcome.FromMultipleSources(multiSourceResult);
         }
         catch (Exception exception)
         {
@@ -633,9 +632,6 @@ public partial class MainWindow : Window
         FanartDropHint.Visibility = Visibility.Visible;
         FanartHintText.Text = hint;
     }
-
-    private static bool IsRecoverableMetadataError(Exception exception) =>
-        exception is MetadataNotFoundException or HttpRequestException or InvalidDataException or TaskCanceledException;
 
     private static string GetSourceDisplayName(MovieMetadata metadata) =>
         string.IsNullOrWhiteSpace(metadata.SourceDisplayName) ? metadata.SourceName : metadata.SourceDisplayName;

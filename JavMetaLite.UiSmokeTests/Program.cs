@@ -37,6 +37,10 @@ internal static class Program
         window.UpdateLayout();
         var firstItem = sourceComboBox.Items[0] as ComboBoxItem
             ?? throw new InvalidOperationException("来源选择项未创建。 ");
+        if (firstItem.Tag?.ToString() != "auto" || firstItem.Content?.ToString() != "多来源搜索（推荐）")
+        {
+            throw new InvalidOperationException("v0.5 默认来源没有更新为多来源搜索。 ");
+        }
         if (firstItem.Foreground is not SolidColorBrush foreground || foreground.Color.R < 200 ||
             firstItem.Background is not SolidColorBrush background || background.Color.R > 40)
         {
@@ -184,7 +188,7 @@ internal static class Program
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True libreDmm=True fanart=True previewWindow=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True directSaveDefaultsOff=True organizeDefaultsOff=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True directSaveDefaultsOff=True organizeDefaultsOff=True");
         window.Close();
         application.Shutdown();
     }

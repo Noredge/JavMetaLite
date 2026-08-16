@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.5.0-dev4 — Multi-source search loop
+
+- Renamed the recommended mode from “automatic completion” to “multi-source search”.
+- Made the recommended mode query LibreDMM and R18.dev independently exactly once per search, even when LibreDMM already has complete metadata.
+- Preserved LibreDMM as the default Japanese primary source and used R18.dev only to fill blank selected values.
+- Kept both complete source snapshots so every overlapping text field can expose real candidates.
+- Allowed either source to fail without discarding a successful result from the other source; blocked the result only when both fail or their movie IDs conflict.
+- Added per-source success/failure, elapsed time, candidate field count, and screenshot count to local logs.
+- Kept explicit LibreDMM, R18.dev, and JAVLibrary selections as single-source searches.
+- Added offline coverage for dual success, either-side failure, total failure, mismatched IDs, one-call-per-source behavior, and diagnostics.
+
 ## v0.5.0-dev3-r1 — Full dark candidate menu
 
 - Recorded dev3 manual results: D02, D03 and D04 passed; D01 failed because the system menu left a white gutter.

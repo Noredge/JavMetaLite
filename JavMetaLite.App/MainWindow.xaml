@@ -338,7 +338,7 @@
                                 <ColumnDefinition Width="10" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="10" />
-                                <ColumnDefinition Width="155" />
+                                <ColumnDefinition Width="170" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="番号" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
@@ -346,7 +346,7 @@
                             <Button x:Name="SearchButton" Grid.Column="3" Style="{StaticResource PrimaryButton}" Content="搜索资料" Click="Search_Click" />
                             <Button Grid.Column="5" Content="网页导入" Click="Browser_Click" ToolTip="从 JAVLibrary 详情页读取" />
                             <ComboBox x:Name="SourceComboBox" Grid.Column="7" SelectedIndex="0" Style="{StaticResource DarkComboBox}">
-                                <ComboBoxItem Content="自动补全（推荐）" Tag="auto" IsSelected="True" />
+                                <ComboBoxItem Content="多来源搜索（推荐）" Tag="auto" IsSelected="True" />
                                 <ComboBoxItem Content="LibreDMM" Tag="libredmm" />
                                 <ComboBoxItem Content="R18.dev" Tag="r18dev" />
                                 <ComboBoxItem Content="JAVLibrary" Tag="javlibrary" />
@@ -499,7 +499,7 @@
                 <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#72E3A6" VerticalAlignment="Center" Margin="0,0,9,0" />
                 <TextBlock x:Name="StatusText" Grid.Column="1" Text="准备就绪，请选择或拖入一个影片" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
                 <Button Grid.Column="2" Content="打开日志" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
-                <TextBlock Grid.Column="3" Text="v0.5.0-dev3-r1 · 字段来源选择" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="v0.5.0-dev4 · 多来源搜索" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>
