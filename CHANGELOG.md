@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.0-rc1 — Release candidate
+
+- Promoted the fully tested dev5-r5 build without adding new functionality.
+- Freezes the lightweight single-movie scope: independent LibreDMM/R18.dev search, per-field review, manual-value restoration, and one shared poster/fanart source selector.
+- Keeps screenshots tied to the selected search result instead of adding cross-source image merging or separate screenshot controls.
+- Retains the v0.4 preview, overwrite, organization, rollback, logging, and Jellyfin-compatible output behavior.
+- Adds a focused RC acceptance checklist covering final integration without repeating the complete v0.4 acceptance suite.
+
 ## v0.5.0-dev5-r5 — Stable artwork spacing
 
 - Reserved a fixed, text-free status row between poster and fanart before search.
