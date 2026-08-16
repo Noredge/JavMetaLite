@@ -464,6 +464,13 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel VerticalAlignment="Center">
+                                <WrapPanel x:Name="ArtworkSourcePanel" Margin="0,0,0,10" Visibility="Collapsed">
+                                    <TextBlock Text="图片来源" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="CoverSourceLabel" Text="封套" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,0,7,0" VerticalAlignment="Center" />
+                                    <ComboBox x:Name="CoverSourceComboBox" Width="150" Style="{StaticResource DarkComboBox}" SelectionChanged="CoverSourceComboBox_SelectionChanged" />
+                                    <TextBlock x:Name="SampleSourceLabel" Text="剧照" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="16,0,7,0" VerticalAlignment="Center" />
+                                    <ComboBox x:Name="SampleSourceComboBox" Width="205" Style="{StaticResource DarkComboBox}" SelectionChanged="SampleSourceComboBox_SelectionChanged" />
+                                </WrapPanel>
                                 <WrapPanel>
                                     <TextBlock Text="输出" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
                                     <CheckBox x:Name="WriteNfoCheckBox" Content="生成 NFO" IsChecked="True" />
@@ -499,7 +506,7 @@
                 <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#72E3A6" VerticalAlignment="Center" Margin="0,0,9,0" />
                 <TextBlock x:Name="StatusText" Grid.Column="1" Text="准备就绪，请选择或拖入一个影片" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
                 <Button Grid.Column="2" Content="打开日志" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
-                <TextBlock Grid.Column="3" Text="v0.5.0-dev4 · 多来源搜索" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="v0.5.0-dev5 · 图片来源候选" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>

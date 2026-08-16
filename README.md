@@ -4,7 +4,7 @@
 
 ## v0.5.0 开发中
 
-当前 `feature/v0.5.0` 已建立字段候选与来源追踪闭环：“多来源搜索（推荐）”会分别查询 LibreDMM 与 R18.dev，即使 LibreDMM 资料完整也会保留两个来源的完整字段快照。默认结果仍由 LibreDMM 提供日文资料、R18.dev 只补空字段；当同一字段有多个候选时，可以点击来源标记预览各来源的值并只切换该字段。任意一个来源失败时会保留另一方的结果，只有双方都失败或番号不一致才会阻止搜索。
+当前 `feature/v0.5.0` 已建立字段与图片候选闭环：“多来源搜索（推荐）”会分别查询 LibreDMM 与 R18.dev，即使 LibreDMM 资料完整也会保留两个来源的完整快照。文本字段可以逐项选择来源；图片则独立提供“封套”和“剧照”选择，不会跟随标题等字段切换。poster 与 fanart 固定使用同一个完整封套来源，剧照默认合并两个网站的候选并在保存时按图片内容去重，也可以只保留其中一个来源。保存预览会明确列出最终图片来源。
 
 ## v0.4.0 稳定版
 
@@ -59,7 +59,7 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
 
 完整自动化测试分层、回归范围和手动检查边界见 [`TESTING.md`](TESTING.md)。
 
-v0.4.0 的真实来源、文件安全与 Jellyfin 完整人工验收见 [`MANUAL-ACCEPTANCE-v0.4.0-rc1.md`](MANUAL-ACCEPTANCE-v0.4.0-rc1.md)，START-237 修复的最终通过记录见 [`MANUAL-RETEST-v0.4.0-rc2.md`](MANUAL-RETEST-v0.4.0-rc2.md)。v0.5.0-dev3 的字段候选人工检查见 [`MANUAL-CHECK-v0.5.0-dev3.md`](MANUAL-CHECK-v0.5.0-dev3.md)，dev4 的多来源闭环检查见 [`MANUAL-CHECK-v0.5.0-dev4.md`](MANUAL-CHECK-v0.5.0-dev4.md)。
+v0.4.0 的真实来源、文件安全与 Jellyfin 完整人工验收见 [`MANUAL-ACCEPTANCE-v0.4.0-rc1.md`](MANUAL-ACCEPTANCE-v0.4.0-rc1.md)，START-237 修复的最终通过记录见 [`MANUAL-RETEST-v0.4.0-rc2.md`](MANUAL-RETEST-v0.4.0-rc2.md)。v0.5.0-dev3 的字段候选人工检查见 [`MANUAL-CHECK-v0.5.0-dev3.md`](MANUAL-CHECK-v0.5.0-dev3.md)，dev4 的多来源闭环检查见 [`MANUAL-CHECK-v0.5.0-dev4.md`](MANUAL-CHECK-v0.5.0-dev4.md)，dev5 的图片候选检查见 [`MANUAL-CHECK-v0.5.0-dev5.md`](MANUAL-CHECK-v0.5.0-dev5.md)。
 
 发布 Windows x64 单文件版本：
 

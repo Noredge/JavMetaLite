@@ -15,7 +15,8 @@ public sealed class FileOrganizationService
         string videoPath,
         MovieMetadata metadata,
         SaveOptions saveOptions,
-        OrganizationOptions organizationOptions)
+        OrganizationOptions organizationOptions,
+        ArtworkSelection? artworkSelection = null)
     {
         var sourceVideoPath = Path.GetFullPath(videoPath);
         if (!File.Exists(sourceVideoPath))
@@ -88,7 +89,11 @@ public sealed class FileOrganizationService
             }
         }
 
-        foreach (var outputPath in OutputService.GetExpectedOutputFiles(targetVideoPath, metadata, saveOptions))
+        foreach (var outputPath in OutputService.GetExpectedOutputFiles(
+                     targetVideoPath,
+                     metadata,
+                     saveOptions,
+                     artworkSelection))
         {
             var exists = File.Exists(outputPath);
             changes.Add(new PlannedFileChange(
@@ -112,7 +117,8 @@ public sealed class FileOrganizationService
             organizationOptions,
             changes,
             overwriteConflicts.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-            blockingConflicts.ToArray());
+            blockingConflicts.ToArray(),
+            artworkSelection);
     }
 
     public async Task<OrganizedSaveResult> ExecuteAsync(
@@ -138,7 +144,8 @@ public sealed class FileOrganizationService
         var currentConflicts = OutputService.GetExpectedOutputFiles(
                 plan.TargetVideoPath,
                 metadata,
-                plan.SaveOptions)
+                plan.SaveOptions,
+                plan.ArtworkSelection)
             .Where(File.Exists)
             .ToArray();
         if (currentConflicts.Length > 0 && !allowOverwrite)
@@ -171,6 +178,7 @@ public sealed class FileOrganizationService
                 stagingVideoPath,
                 metadata,
                 plan.SaveOptions with { OverwriteExisting = true },
+                plan.ArtworkSelection,
                 cancellationToken);
 
             var stagedPaths = new[] { stagedResult.NfoPath, stagedResult.PosterPath, stagedResult.FanartPath }
@@ -233,7 +241,9 @@ public sealed class FileOrganizationService
                 stagedResult.ExtrafanartPaths
                     .Select(path => ResolveFinalPath(path, stagingRoot, plan.TargetDirectory)!)
                     .ToArray(),
-                stagedResult.FanartUsedFullCover);
+                stagedResult.FanartUsedFullCover,
+                stagedResult.CoverSourceDisplayName,
+                stagedResult.ScreenshotSourceDisplayName);
 
             AppLog.Info(
                 $"保存计划完成 video={plan.TargetVideoPath} outputs={committedOutputs.Count} moved={videoMoved}");

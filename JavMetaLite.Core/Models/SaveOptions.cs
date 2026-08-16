@@ -15,4 +15,6 @@ public sealed record SaveResult(
     string? PosterPath,
     string? FanartPath,
     IReadOnlyList<string> ExtrafanartPaths,
-    bool FanartUsedFullCover);
+    bool FanartUsedFullCover,
+    string CoverSourceDisplayName = "",
+    string ScreenshotSourceDisplayName = "");

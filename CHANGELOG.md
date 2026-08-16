@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.5.0-dev5 — Artwork source candidates
+
+- Separated artwork selection from text-field provenance: changing a title or actor source no longer changes the chosen images.
+- Added independent `封套` and `剧照` selectors after a search.
+- Kept poster and fanart on one explicit cover source because both are derived from the same complete cover.
+- Made the default screenshot choice combine LibreDMM and R18.dev candidates while preserving per-source alternatives.
+- Displayed the selected cover's actual dimensions after its first preview download and cached that preview for later switches.
+- Fixed the selected artwork into the save plan so preview and execution use the same URLs even if editable metadata changes later.
+- Added cover and screenshot source summaries to the save preview and completion status.
+- Continued to deduplicate downloaded screenshots by image-content SHA-256 and report candidate/unique counts in local logs.
+- Added offline coverage for candidate construction, independent switching, immutable selection, selected-cover output, content deduplication, UI controls, and save-preview source summaries.
+
 ## v0.5.0-dev4 — Multi-source search loop
 
 - Renamed the recommended mode from “automatic completion” to “multi-source search”.

@@ -39,10 +39,14 @@ public partial class MainWindow : Window
     private readonly FileOrganizationService _fileOrganizationService;
     private readonly HttpClient _previewHttpClient = CreatePreviewClient();
     private readonly CancellationTokenSource _lifetimeCancellation = new();
+    private readonly Dictionary<string, PreviewImage> _previewImageCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (int Width, int Height)> _coverDimensions = new(StringComparer.OrdinalIgnoreCase);
     private MovieMetadata _metadata = new();
     private MetadataReviewSession? _metadataReview;
+    private ArtworkReviewSession? _artworkReview;
     private string? _videoPath;
     private bool _busy;
+    private bool _updatingArtworkControls;
 
     public MainWindow()
     {
@@ -50,7 +54,7 @@ public partial class MainWindow : Window
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
         ApplyMetadata(_metadata, []);
-        AppLog.Info("JavMetaLite v0.5.0-dev4 启动");
+        AppLog.Info("JavMetaLite v0.5.0-dev5 启动");
     }
 
     private void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -119,8 +123,7 @@ public partial class MainWindow : Window
                     $"metadata 搜索成功 sources={successfulSources} failedSources={failedSources} id={result.Id} " +
                     $"contentId={result.ContentId} screenshots={result.ScreenshotUrls.Count} " +
                     $"reviewSources={outcome.Sources.Count}");
-                var posterLoaded = await LoadPosterPreviewAsync(result);
-                var fanartLoaded = await LoadFanartPreviewAsync(result);
+                var coverLoaded = await LoadSelectedCoverPreviewAsync();
                 var sourceName = string.Join(
                     " + ",
                     outcome.Sources.Select(GetSourceDisplayName).Distinct(StringComparer.OrdinalIgnoreCase));
@@ -131,8 +134,8 @@ public partial class MainWindow : Window
                     ? $"，找到 {result.ScreenshotUrls.Count} 张样张"
                     : "，没有独立样张";
                 SetStatus(
-                    posterLoaded
-                        ? $"已从 {sourceName} 读取 {result.Id}{imageSummary}{(fanartLoaded ? string.Empty : "；完整封套 fanart 预览未加载")}{degradedNote}"
+                    coverLoaded
+                        ? $"已从 {sourceName} 读取 {result.Id}{imageSummary}{degradedNote}"
                         : $"已从 {sourceName} 读取 {result.Id}；封面预览未加载，不影响资料编辑{degradedNote}",
                     string.IsNullOrWhiteSpace(failedSources));
             }
@@ -218,11 +221,17 @@ public partial class MainWindow : Window
         var organizationOptions = new OrganizationOptions(
             OrganizeFolderCheckBox.IsChecked == true,
             RenameVideoCheckBox.IsChecked == true);
+        var artworkSelection = _artworkReview?.CreateSelection() ?? ArtworkSelection.FromMetadata(_metadata);
 
         SavePlan plan;
         try
         {
-            plan = FileOrganizationService.BuildPlan(_videoPath, _metadata, options, organizationOptions);
+            plan = FileOrganizationService.BuildPlan(
+                _videoPath,
+                _metadata,
+                options,
+                organizationOptions,
+                artworkSelection);
         }
         catch (Exception exception)
         {
@@ -276,9 +285,14 @@ public partial class MainWindow : Window
             }
             var fanartNote = result.Outputs.FanartPath is null
                 ? string.Empty
-                : result.Outputs.FanartUsedFullCover ? "；fanart 来自完整封套" : string.Empty;
+                : result.Outputs.FanartUsedFullCover
+                    ? $"；封套：{result.Outputs.CoverSourceDisplayName}"
+                    : string.Empty;
+            var screenshotNote = result.Outputs.ExtrafanartPaths.Count > 0
+                ? $"；剧照：{result.Outputs.ScreenshotSourceDisplayName}"
+                : string.Empty;
             var moveNote = result.VideoMoved ? $"；影片已整理为 {Path.GetFileName(result.VideoPath)}" : string.Empty;
-            SetStatus($"保存完成：{string.Join("、", outputs)}{fanartNote}{moveNote}", true);
+            SetStatus($"保存完成：{string.Join("、", outputs)}{fanartNote}{screenshotNote}{moveNote}", true);
         });
     }
 
@@ -326,10 +340,9 @@ public partial class MainWindow : Window
                     _metadata.Id,
                     _lifetimeCancellation.Token);
                 ApplyMetadata(result, [result]);
-                var posterLoaded = await LoadPosterPreviewAsync(result);
-                await LoadFanartPreviewAsync(result);
+                var coverLoaded = await LoadSelectedCoverPreviewAsync();
                 SetStatus(
-                    posterLoaded
+                    coverLoaded
                         ? $"已从浏览器读取 {result.Id}"
                         : $"已从浏览器读取 {result.Id}；封面预览未加载，不影响保存",
                     true);
@@ -349,7 +362,11 @@ public partial class MainWindow : Window
         DataContext = _metadata;
         _metadataReview = MetadataReviewSession.Create(result, sourceResults.ToArray());
         _metadataReview.SelectionChanged += MetadataReview_SelectionChanged;
+        _artworkReview = ArtworkReviewSession.Create(result, sourceResults.ToArray());
+        _previewImageCache.Clear();
+        _coverDimensions.Clear();
         RefreshSourceBadges();
+        RefreshArtworkSourceControls();
     }
 
     private void MetadataReview_SelectionChanged(object? sender, MetadataSelectionChangedEventArgs eventArgs) =>
@@ -511,26 +528,144 @@ public partial class MainWindow : Window
         yield return (MetadataField.Plot, PlotSourceText);
     }
 
-    private async Task<bool> LoadPosterPreviewAsync(MovieMetadata metadata)
+    private void RefreshArtworkSourceControls()
     {
-        var candidates = new[] { metadata.CoverUrl, metadata.FallbackCoverUrl, metadata.PosterUrl }
-            .Where(value => Uri.TryCreate(value, UriKind.Absolute, out _))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        if (candidates.Length == 0)
+        _updatingArtworkControls = true;
+        try
+        {
+            CoverSourceComboBox.Items.Clear();
+            SampleSourceComboBox.Items.Clear();
+
+            if (_artworkReview is null)
+            {
+                ArtworkSourcePanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            foreach (var candidate in _artworkReview.CoverCandidates)
+            {
+                var dimensions = _coverDimensions.TryGetValue(candidate.Source.Name, out var size)
+                    ? $"{size.Width}×{size.Height}"
+                    : "待检测";
+                CoverSourceComboBox.Items.Add(new ComboBoxItem
+                {
+                    Content = $"{candidate.Source.DisplayName} · {dimensions}",
+                    Tag = candidate.Source.Name,
+                    ToolTip = string.Join(Environment.NewLine, candidate.CoverUrls)
+                });
+            }
+
+            foreach (var choice in _artworkReview.ScreenshotChoices)
+            {
+                SampleSourceComboBox.Items.Add(new ComboBoxItem
+                {
+                    Content = choice.IsCombined
+                        ? $"合并去重 · {choice.Urls.Count} 张候选"
+                        : $"{choice.DisplayName} · {choice.Urls.Count} 张",
+                    Tag = choice.Name,
+                    ToolTip = choice.DisplayName
+                });
+            }
+
+            CoverSourceComboBox.SelectedIndex = FindComboBoxItem(
+                CoverSourceComboBox,
+                _artworkReview.SelectedCoverCandidate?.Source.Name ?? string.Empty);
+            SampleSourceComboBox.SelectedIndex = FindComboBoxItem(
+                SampleSourceComboBox,
+                _artworkReview.SelectedScreenshotChoice?.Name ?? string.Empty);
+            CoverSourceComboBox.IsEnabled = !_busy && CoverSourceComboBox.Items.Count > 1;
+            SampleSourceComboBox.IsEnabled = !_busy && SampleSourceComboBox.Items.Count > 1;
+            CoverSourceLabel.Visibility = CoverSourceComboBox.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            CoverSourceComboBox.Visibility = CoverSourceComboBox.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            SampleSourceLabel.Visibility = SampleSourceComboBox.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            SampleSourceComboBox.Visibility = SampleSourceComboBox.Items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            ArtworkSourcePanel.Visibility = CoverSourceComboBox.Items.Count + SampleSourceComboBox.Items.Count > 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+        finally
+        {
+            _updatingArtworkControls = false;
+        }
+    }
+
+    private static int FindComboBoxItem(ComboBox comboBox, string selectedName)
+    {
+        for (var index = 0; index < comboBox.Items.Count; index++)
+        {
+            if (comboBox.Items[index] is ComboBoxItem item &&
+                string.Equals(item.Tag?.ToString(), selectedName, StringComparison.OrdinalIgnoreCase))
+            {
+                return index;
+            }
+        }
+
+        return comboBox.Items.Count == 0 ? -1 : 0;
+    }
+
+    private async void CoverSourceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_updatingArtworkControls || _artworkReview is null ||
+            CoverSourceComboBox.SelectedItem is not ComboBoxItem item ||
+            item.Tag is not string sourceName ||
+            !_artworkReview.SelectCoverSource(sourceName))
+        {
+            return;
+        }
+
+        var selected = _artworkReview.CreateSelection();
+        AppLog.Info($"封套来源切换 source={selected.CoverSourceName}");
+        await RunBusyAsync($"正在加载 {selected.CoverSourceDisplayName} 封套…", async () =>
+        {
+            var loaded = await LoadSelectedCoverPreviewAsync();
+            SetStatus(
+                loaded
+                    ? $"封套来源已切换为 {selected.CoverSourceDisplayName}"
+                    : $"{selected.CoverSourceDisplayName} 封套加载失败，请选择其他来源",
+                loaded);
+        });
+    }
+
+    private void SampleSourceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_updatingArtworkControls || _artworkReview is null ||
+            SampleSourceComboBox.SelectedItem is not ComboBoxItem item ||
+            item.Tag is not string choiceName ||
+            !_artworkReview.SelectScreenshotSource(choiceName))
+        {
+            return;
+        }
+
+        var selected = _artworkReview.CreateSelection();
+        AppLog.Info(
+            $"剧照来源切换 source={selected.ScreenshotSourceName} candidates={selected.ScreenshotUrls.Count} hashDedupe=true");
+        SetStatus($"剧照来源已切换为 {selected.ScreenshotSourceDisplayName}；保存时按图片内容去重", true);
+    }
+
+    private async Task<bool> LoadSelectedCoverPreviewAsync()
+    {
+        var selection = _artworkReview?.CreateSelection() ?? ArtworkSelection.FromMetadata(_metadata);
+        if (selection.CoverUrls.Count == 0)
         {
             ClearPosterPreview();
+            ClearFanartPreview("当前来源没有封套");
             return false;
         }
 
-        foreach (var candidate in candidates)
+        foreach (var candidate in selection.CoverUrls)
         {
             try
             {
-                var imageBytes = await DownloadPreviewImageAsync(candidate);
-                var posterBytes = PosterImageProcessor.CreatePosterJpeg(imageBytes);
-                PosterImage.Source = PosterBitmapFactory.CreateFrozen(posterBytes);
+                var image = await DownloadPreviewImageAsync(candidate);
+                PosterImage.Source = PosterBitmapFactory.CreateFrozen(PosterImageProcessor.CreatePosterJpeg(image.Bytes));
+                FanartImage.Source = PosterBitmapFactory.CreateFrozen(PosterImageProcessor.CreateFanartJpeg(image.Bytes));
                 DropHint.Visibility = Visibility.Collapsed;
+                FanartDropHint.Visibility = Visibility.Collapsed;
+                FanartHintText.Text = $"{selection.CoverSourceDisplayName} · 完整封套 · {image.Width}×{image.Height}";
+                _coverDimensions[selection.CoverSourceName] = (image.Width, image.Height);
+                RefreshArtworkSourceControls();
+                AppLog.Info(
+                    $"封套预览加载成功 source={selection.CoverSourceName} url={image.Url} dimensions={image.Width}x{image.Height}");
                 return true;
             }
             catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
@@ -539,49 +674,25 @@ public partial class MainWindow : Window
             }
             catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidDataException or NotSupportedException or FormatException)
             {
-                AppLog.Warning($"poster 预览候选失败：{candidate}", exception);
+                AppLog.Warning($"封套预览候选失败 source={selection.CoverSourceName} url={candidate}", exception);
             }
         }
 
         ClearPosterPreview();
+        ClearFanartPreview($"{selection.CoverSourceDisplayName} 封套预览失败");
         return false;
     }
 
-    private async Task<bool> LoadFanartPreviewAsync(MovieMetadata metadata)
-    {
-        var candidates = new[] { metadata.CoverUrl, metadata.FallbackCoverUrl, metadata.PosterUrl }
-            .Where(value => Uri.TryCreate(value, UriKind.Absolute, out _))
-            .Distinct(StringComparer.OrdinalIgnoreCase);
-        foreach (var candidate in candidates)
-        {
-            try
-            {
-                var imageBytes = await DownloadPreviewImageAsync(candidate);
-                var dimensions = PosterImageProcessor.GetDimensions(imageBytes);
-                FanartImage.Source = PosterBitmapFactory.CreateFrozen(PosterImageProcessor.CreateFanartJpeg(imageBytes));
-                FanartDropHint.Visibility = Visibility.Collapsed;
-                FanartHintText.Text = $"完整横版封套 · {dimensions.Width}×{dimensions.Height}";
-                return true;
-            }
-            catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidDataException or NotSupportedException or FormatException)
-            {
-                AppLog.Warning($"fanart 预览候选失败：{candidate}", exception);
-            }
-        }
-
-        ClearFanartPreview("完整封套预览加载失败");
-        return false;
-    }
-
-    private async Task<byte[]> DownloadPreviewImageAsync(string url)
+    private async Task<PreviewImage> DownloadPreviewImageAsync(string url)
     {
         Exception? lastError = null;
         foreach (var candidate in DmmImageUrlHelper.GetDownloadCandidates(url).Distinct(StringComparer.OrdinalIgnoreCase))
         {
+            if (_previewImageCache.TryGetValue(candidate, out var cached))
+            {
+                return cached;
+            }
+
             try
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, candidate);
@@ -603,8 +714,10 @@ public partial class MainWindow : Window
                     throw new InvalidDataException("图片内容太小。 ");
                 }
 
-                _ = PosterImageProcessor.GetDimensions(bytes);
-                return bytes;
+                var dimensions = PosterImageProcessor.GetDimensions(bytes);
+                var image = new PreviewImage(candidate, bytes, dimensions.Width, dimensions.Height);
+                _previewImageCache[candidate] = image;
+                return image;
             }
             catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
             {
@@ -619,6 +732,8 @@ public partial class MainWindow : Window
 
         throw new InvalidDataException("图片预览下载失败。", lastError);
     }
+
+    private sealed record PreviewImage(string Url, byte[] Bytes, int Width, int Height);
 
     private void ClearPosterPreview()
     {
@@ -655,6 +770,8 @@ public partial class MainWindow : Window
         _busy = true;
         SearchButton.IsEnabled = false;
         SaveButton.IsEnabled = false;
+        CoverSourceComboBox.IsEnabled = false;
+        SampleSourceComboBox.IsEnabled = false;
         Mouse.OverrideCursor = Cursors.Wait;
         SetStatus(message, null);
 
@@ -675,6 +792,8 @@ public partial class MainWindow : Window
             Mouse.OverrideCursor = null;
             SearchButton.IsEnabled = true;
             SaveButton.IsEnabled = true;
+            CoverSourceComboBox.IsEnabled = CoverSourceComboBox.Items.Count > 1;
+            SampleSourceComboBox.IsEnabled = SampleSourceComboBox.Items.Count > 1;
             _busy = false;
         }
     }

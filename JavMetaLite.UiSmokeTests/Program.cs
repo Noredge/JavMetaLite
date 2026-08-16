@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Reflection;
 using JavMetaLite.App;
 using JavMetaLite.Core.Models;
+using JavMetaLite.Core.Services;
 
 namespace JavMetaLite.UiSmokeTests;
 
@@ -86,6 +87,12 @@ internal static class Program
         {
             Id = "IPZZ-850",
             Title = "日文标题",
+            CoverUrl = "https://images.example.test/libre-cover.jpg",
+            ScreenshotUrls =
+            [
+                "https://images.example.test/shared.jpg",
+                "https://images.example.test/libre-only.jpg"
+            ],
             SourceName = "libredmm",
             SourceDisplayName = "LibreDMM"
         };
@@ -94,6 +101,12 @@ internal static class Program
             Id = "IPZZ-850",
             Title = "English title",
             Director = "Director A",
+            CoverUrl = "https://images.example.test/r18-cover.jpg",
+            ScreenshotUrls =
+            [
+                "https://images.example.test/shared.jpg",
+                "https://images.example.test/r18-only.jpg"
+            ],
             SourceName = "r18dev",
             SourceDisplayName = "R18.dev"
         };
@@ -111,6 +124,29 @@ internal static class Program
         if (!titleSourceText.IsEnabled || directorSourceText.IsEnabled)
         {
             throw new InvalidOperationException("多来源字段应可选，单一来源字段应保持只读。 ");
+        }
+
+        var artworkPanel = window.FindName("ArtworkSourcePanel") as WrapPanel
+            ?? throw new InvalidOperationException("v0.5 图片来源选择区未创建。 ");
+        var coverComboBox = window.FindName("CoverSourceComboBox") as ComboBox
+            ?? throw new InvalidOperationException("封套来源选择框未创建。 ");
+        var sampleComboBox = window.FindName("SampleSourceComboBox") as ComboBox
+            ?? throw new InvalidOperationException("剧照来源选择框未创建。 ");
+        if (artworkPanel.Visibility != Visibility.Visible ||
+            coverComboBox.Items.Count != 2 || sampleComboBox.Items.Count != 3 ||
+            (coverComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() != "libredmm" ||
+            (sampleComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() != ArtworkReviewSession.CombinedScreenshotsName)
+        {
+            throw new InvalidOperationException("图片候选没有显示两个封套来源与默认合并剧照。 ");
+        }
+        sampleComboBox.SelectedIndex = 1;
+        window.UpdateLayout();
+        var artworkReviewField = typeof(MainWindow).GetField("_artworkReview", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("图片审阅会话未找到。 ");
+        if (artworkReviewField.GetValue(window) is not ArtworkReviewSession artworkReview ||
+            artworkReview.CreateSelection().ScreenshotSourceName != "libredmm")
+        {
+            throw new InvalidOperationException("无法独立切换剧照来源。 ");
         }
 
         titleSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -174,11 +210,18 @@ internal static class Program
             "C:\\Media\\IPX-123\\IPX-123.mp4",
             "C:\\Media\\IPX-123",
             "IPX-123",
-            new JavMetaLite.Core.Models.SaveOptions(true, false, false, false, false),
+            new JavMetaLite.Core.Models.SaveOptions(true, true, true, true, false),
             new OrganizationOptions(true, true),
             [new PlannedFileChange(PlannedChangeKind.CreateFile, "生成 metadata", "C:\\Media\\IPX-123\\IPX-123.nfo")],
             [],
-            []);
+            [],
+            new ArtworkSelection(
+                "r18dev",
+                "R18.dev",
+                ["https://images.example.test/r18-cover.jpg"],
+                ArtworkReviewSession.CombinedScreenshotsName,
+                "合并去重（LibreDMM + R18.dev）",
+                ["https://images.example.test/sample1.jpg", "https://images.example.test/sample2.jpg"]));
         var previewWindow = new SavePreviewWindow(previewPlan) { Owner = window };
         previewWindow.Show();
         previewWindow.UpdateLayout();
@@ -186,9 +229,16 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.4 保存预览窗口未成功创建。 ");
         }
+        if (previewWindow.FindName("CoverSourceTextBox") is not TextBox coverSourceTextBox ||
+            !coverSourceTextBox.Text.StartsWith("R18.dev", StringComparison.Ordinal) ||
+            previewWindow.FindName("ScreenshotSourceTextBox") is not TextBox screenshotSourceTextBox ||
+            !screenshotSourceTextBox.Text.Contains("合并去重", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("保存预览没有固定展示封套与剧照来源。 ");
+        }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True directSaveDefaultsOff=True organizeDefaultsOff=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True artworkCandidates=True independentSampleSelection=True previewArtworkSources=True directSaveDefaultsOff=True organizeDefaultsOff=True");
         window.Close();
         application.Shutdown();
     }
