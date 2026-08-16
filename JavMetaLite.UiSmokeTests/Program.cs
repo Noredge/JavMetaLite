@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Reflection;
 using JavMetaLite.App;
 using JavMetaLite.Core.Models;
 
@@ -68,6 +69,47 @@ internal static class Program
             throw new InvalidOperationException("v0.4 保存入口未创建。 ");
         }
 
+        var titleSourceText = window.FindName("TitleSourceText") as TextBlock
+            ?? throw new InvalidOperationException("v0.5 标题来源标记未创建。 ");
+        var directorSourceText = window.FindName("DirectorSourceText") as TextBlock
+            ?? throw new InvalidOperationException("v0.5 导演来源标记未创建。 ");
+        if (titleSourceText.Visibility != Visibility.Collapsed || directorSourceText.Visibility != Visibility.Collapsed)
+        {
+            throw new InvalidOperationException("没有资料时来源标记应保持隐藏。 ");
+        }
+
+        var primaryMetadata = new MovieMetadata
+        {
+            Id = "IPZZ-850",
+            Title = "日文标题",
+            SourceName = "libredmm",
+            SourceDisplayName = "LibreDMM"
+        };
+        var fallbackMetadata = new MovieMetadata
+        {
+            Id = "IPZZ-850",
+            Title = "English title",
+            Director = "Director A",
+            SourceName = "r18dev",
+            SourceDisplayName = "R18.dev"
+        };
+        var mergedMetadata = JavMetaLite.Core.Services.MetadataMerger.Merge(primaryMetadata, fallbackMetadata);
+        var applyMetadata = typeof(MainWindow).GetMethod("ApplyMetadata", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("v0.5 metadata 应用入口未找到。 ");
+        applyMetadata.Invoke(window, [mergedMetadata, new MovieMetadata[] { primaryMetadata, fallbackMetadata }]);
+        window.UpdateLayout();
+        if (titleSourceText.Text != "LibreDMM" || directorSourceText.Text != "R18.dev" ||
+            titleSourceText.Visibility != Visibility.Visible || directorSourceText.Visibility != Visibility.Visible)
+        {
+            throw new InvalidOperationException("自动补全没有显示正确的字段来源。 ");
+        }
+
+        mergedMetadata.Director = "手动修正";
+        if (directorSourceText.Text != "手动编辑")
+        {
+            throw new InvalidOperationException("手动修改字段后来源标记没有更新。 ");
+        }
+
         var previewPlan = new SavePlan(
             "C:\\Media\\source.mp4",
             "C:\\Media\\IPX-123\\IPX-123.mp4",
@@ -87,7 +129,7 @@ internal static class Program
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True libreDmm=True fanart=True previewWindow=True directSaveDefaultsOff=True organizeDefaultsOff=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True libreDmm=True fanart=True previewWindow=True sourceBadges=True manualBadge=True directSaveDefaultsOff=True organizeDefaultsOff=True");
         window.Close();
         application.Shutdown();
     }

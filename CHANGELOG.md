@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.0-dev2 — Field source badges
+
+- Connected real single-source and automatic-completion searches to `MetadataReviewSession`.
+- Preserved the individual LibreDMM and R18.dev results behind the merged editable metadata.
+- Added unobtrusive source badges beside every visible metadata field.
+- Updated a field badge to “手动编辑” immediately after the user changes its value.
+- Added UI smoke coverage for mixed-source badges and manual-edit tracking.
+
 ## v0.5.0-dev1 — Metadata provenance foundation
 
 - Added immutable per-source metadata snapshots for review without changing the selected editable result.

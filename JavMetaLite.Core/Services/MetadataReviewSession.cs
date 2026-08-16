@@ -55,6 +55,8 @@ public sealed class MetadataReviewSession : IDisposable
 
     public IReadOnlyList<MetadataSourceSnapshot> Sources { get; }
 
+    public event EventHandler<MetadataSelectionChangedEventArgs>? SelectionChanged;
+
     public static MetadataReviewSession Create(
         MovieMetadata metadata,
         params MovieMetadata[] sourceResults)
@@ -152,6 +154,7 @@ public sealed class MetadataReviewSession : IDisposable
         }
 
         _selectedCandidates[candidate.Field] = candidate;
+        SelectionChanged?.Invoke(this, new MetadataSelectionChangedEventArgs(candidate.Field, candidate));
     }
 
     private void Metadata_PropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
@@ -179,6 +182,7 @@ public sealed class MetadataReviewSession : IDisposable
         }
 
         _selectedCandidates[field] = candidate;
+        SelectionChanged?.Invoke(this, new MetadataSelectionChangedEventArgs(field, candidate));
     }
 
     private List<MetadataFieldCandidate> GetOrCreateCandidates(MetadataField field)

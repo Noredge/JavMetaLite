@@ -27,6 +27,15 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Padding" Value="0,0,0,6" />
         </Style>
+        <Style x:Key="SourceBadgeText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#6FA8FF" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Setter Property="Margin" Value="10,0,0,6" />
+        </Style>
         <Style TargetType="TextBox">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             <Setter Property="Background" Value="#10161E" />
@@ -280,52 +289,85 @@
                             </Grid.RowDefinitions>
 
                             <StackPanel Grid.Row="0" Grid.ColumnSpan="3">
-                                <Label Content="标题" />
+                                <Grid>
+                                    <Label Content="标题" />
+                                    <TextBlock x:Name="TitleSourceText" Style="{StaticResource SourceBadgeText}" />
+                                </Grid>
                                 <TextBox Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,13,0,0">
-                                <Label Content="原始标题" />
+                                <Grid>
+                                    <Label Content="原始标题" />
+                                    <TextBlock x:Name="OriginalTitleSourceText" Style="{StaticResource SourceBadgeText}" />
+                                </Grid>
                                 <TextBox Text="{Binding OriginalTitle, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
                             <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,13,0,0">
-                                <Label Content="发行日期" />
+                                <Grid>
+                                    <Label Content="发行日期" />
+                                    <TextBlock x:Name="ReleaseDateSourceText" Style="{StaticResource SourceBadgeText}" />
+                                </Grid>
                                 <TextBox Text="{Binding ReleaseDate, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,13,0,0">
-                                <Label Content="时长（分钟）" />
+                                <Grid>
+                                    <Label Content="时长（分钟）" />
+                                    <TextBlock x:Name="RuntimeSourceText" Style="{StaticResource SourceBadgeText}" />
+                                </Grid>
                                 <TextBox Text="{Binding RuntimeMinutes, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
                             <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,13,0,0">
-                                <Label Content="片商" />
+                                <Grid>
+                                    <Label Content="片商" />
+                                    <TextBlock x:Name="MakerSourceText" Style="{StaticResource SourceBadgeText}" />
+                                </Grid>
                                 <TextBox Text="{Binding Maker, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Grid.Row="3" Grid.Column="2" Margin="0,13,0,0">
-                                <Label Content="导演" />
+                                <Grid>
+                                    <Label Content="导演" />
+                                    <TextBlock x:Name="DirectorSourceText" Style="{StaticResource SourceBadgeText}" />
+                                </Grid>
                                 <TextBox Text="{Binding Director, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
                             <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,13,0,0">
-                                <Label Content="标签 / 厂牌" />
+                                <Grid>
+                                    <Label Content="标签 / 厂牌" />
+                                    <TextBlock x:Name="LabelSourceText" Style="{StaticResource SourceBadgeText}" />
+                                </Grid>
                                 <TextBox Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Grid.Row="4" Grid.Column="2" Margin="0,13,0,0">
-                                <Label Content="系列" />
+                                <Grid>
+                                    <Label Content="系列" />
+                                    <TextBlock x:Name="SeriesSourceText" Style="{StaticResource SourceBadgeText}" />
+                                </Grid>
                                 <TextBox Text="{Binding Series, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
                             <StackPanel Grid.Row="5" Grid.Column="0" Margin="0,13,0,0">
-                                <Label Content="演员（逗号分隔）" />
+                                <Grid>
+                                    <Label Content="演员（逗号分隔）" />
+                                    <TextBlock x:Name="ActorsSourceText" Style="{StaticResource SourceBadgeText}" />
+                                </Grid>
                                 <TextBox Text="{Binding ActorsText, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" MinHeight="42" />
                             </StackPanel>
                             <StackPanel Grid.Row="5" Grid.Column="2" Margin="0,13,0,0">
-                                <Label Content="类型（逗号分隔）" />
+                                <Grid>
+                                    <Label Content="类型（逗号分隔）" />
+                                    <TextBlock x:Name="GenresSourceText" Style="{StaticResource SourceBadgeText}" />
+                                </Grid>
                                 <TextBox Text="{Binding GenresText, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" MinHeight="42" />
                             </StackPanel>
 
                             <StackPanel Grid.Row="6" Grid.ColumnSpan="3" Margin="0,13,0,6">
-                                <Label Content="简介" />
+                                <Grid>
+                                    <Label Content="简介" />
+                                    <TextBlock x:Name="PlotSourceText" Style="{StaticResource SourceBadgeText}" />
+                                </Grid>
                                 <TextBox Text="{Binding Plot, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="92" VerticalScrollBarVisibility="Auto" />
                             </StackPanel>
                         </Grid>
@@ -373,7 +415,7 @@
                 <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#72E3A6" VerticalAlignment="Center" Margin="0,0,9,0" />
                 <TextBlock x:Name="StatusText" Grid.Column="1" Text="准备就绪，请选择或拖入一个影片" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
                 <Button Grid.Column="2" Content="打开日志" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
-                <TextBlock Grid.Column="3" Text="v0.5.0-dev1 · 来源模型基座" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="v0.5.0-dev2 · 字段来源标记" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>

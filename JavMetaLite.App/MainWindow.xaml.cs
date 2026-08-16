@@ -15,6 +15,14 @@ namespace JavMetaLite.App;
 
 public partial class MainWindow : Window
 {
+    private sealed record MetadataSearchOutcome(
+        MovieMetadata Metadata,
+        IReadOnlyList<MovieMetadata> Sources)
+    {
+        public static MetadataSearchOutcome FromSingleSource(MovieMetadata metadata) =>
+            new(metadata, [metadata]);
+    }
+
     private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".mp4", ".m4v", ".mkv", ".avi", ".wmv", ".mov", ".webm", ".ts", ".m2ts"
@@ -28,6 +36,7 @@ public partial class MainWindow : Window
     private readonly HttpClient _previewHttpClient = CreatePreviewClient();
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private MovieMetadata _metadata = new();
+    private MetadataReviewSession? _metadataReview;
     private string? _videoPath;
     private bool _busy;
 
@@ -36,8 +45,8 @@ public partial class MainWindow : Window
         _outputService = new OutputService();
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
-        DataContext = _metadata;
-        AppLog.Info("JavMetaLite v0.5.0-dev1 启动");
+        ApplyMetadata(_metadata, []);
+        AppLog.Info("JavMetaLite v0.5.0-dev2 启动");
     }
 
     private void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -90,11 +99,13 @@ public partial class MainWindow : Window
         {
             try
             {
-                var result = await SearchFromSelectedSourceAsync(source, _metadata.Id);
-                ApplyMetadata(result);
+                var outcome = await SearchFromSelectedSourceAsync(source, _metadata.Id);
+                var result = outcome.Metadata;
+                ApplyMetadata(result, outcome.Sources);
                 AppLog.Info(
                     $"metadata 搜索成功 source={GetSourceDisplayName(result)} id={result.Id} " +
-                    $"contentId={result.ContentId} screenshots={result.ScreenshotUrls.Count}");
+                    $"contentId={result.ContentId} screenshots={result.ScreenshotUrls.Count} " +
+                    $"reviewSources={outcome.Sources.Count}");
                 var posterLoaded = await LoadPosterPreviewAsync(result);
                 var fanartLoaded = await LoadFanartPreviewAsync(result);
                 var sourceName = GetSourceDisplayName(result);
@@ -120,24 +131,27 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<MovieMetadata> SearchFromSelectedSourceAsync(string source, string id)
+    private async Task<MetadataSearchOutcome> SearchFromSelectedSourceAsync(string source, string id)
     {
         AppLog.Info($"开始搜索 metadata source={source} id={id}");
         try
         {
             if (source == "libredmm")
             {
-                return await _libreDmmClient.SearchAsync(id, _lifetimeCancellation.Token);
+                return MetadataSearchOutcome.FromSingleSource(
+                    await _libreDmmClient.SearchAsync(id, _lifetimeCancellation.Token));
             }
 
             if (source == "r18dev")
             {
-                return await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token);
+                return MetadataSearchOutcome.FromSingleSource(
+                    await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token));
             }
 
             if (source == "javlibrary")
             {
-                return await _javLibraryClient.SearchAsync(id, _lifetimeCancellation.Token);
+                return MetadataSearchOutcome.FromSingleSource(
+                    await _javLibraryClient.SearchAsync(id, _lifetimeCancellation.Token));
             }
 
             MovieMetadata? primary = null;
@@ -153,24 +167,26 @@ public partial class MainWindow : Window
             if (primary is null)
             {
                 AppLog.Info($"LibreDMM 不可用，改用 R18.dev id={id}");
-                return await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token);
+                return MetadataSearchOutcome.FromSingleSource(
+                    await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token));
             }
 
             if (!MetadataMerger.NeedsFallback(primary))
             {
-                return primary;
+                return MetadataSearchOutcome.FromSingleSource(primary);
             }
 
             try
             {
-                return MetadataMerger.Merge(
-                    primary,
-                    await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token));
+                var fallback = await _r18DevClient.SearchAsync(id, _lifetimeCancellation.Token);
+                return new MetadataSearchOutcome(
+                    MetadataMerger.Merge(primary, fallback),
+                    [primary, fallback]);
             }
             catch (Exception exception) when (IsRecoverableMetadataError(exception))
             {
                 AppLog.Warning($"R18.dev 补全阶段失败，保留 LibreDMM 结果 id={id}", exception);
-                return primary;
+                return MetadataSearchOutcome.FromSingleSource(primary);
             }
         }
         catch (Exception exception)
@@ -280,8 +296,7 @@ public partial class MainWindow : Window
         FileNameText.Text = Path.GetFileName(path);
         FilePathText.Text = path;
         var id = MovieIdParser.TryExtract(path);
-        _metadata = new MovieMetadata { Id = id ?? string.Empty };
-        DataContext = _metadata;
+        ApplyMetadata(new MovieMetadata { Id = id ?? string.Empty }, []);
         ClearPosterPreview();
         ClearFanartPreview("等待搜索");
         if (!string.IsNullOrWhiteSpace(id))
@@ -311,7 +326,7 @@ public partial class MainWindow : Window
                     browser.PageUrl ?? url,
                     _metadata.Id,
                     _lifetimeCancellation.Token);
-                ApplyMetadata(result);
+                ApplyMetadata(result, [result]);
                 var posterLoaded = await LoadPosterPreviewAsync(result);
                 await LoadFanartPreviewAsync(result);
                 SetStatus(
@@ -323,10 +338,65 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ApplyMetadata(MovieMetadata result)
+    private void ApplyMetadata(MovieMetadata result, IReadOnlyList<MovieMetadata> sourceResults)
     {
+        if (_metadataReview is not null)
+        {
+            _metadataReview.SelectionChanged -= MetadataReview_SelectionChanged;
+            _metadataReview.Dispose();
+        }
+
         _metadata = result;
         DataContext = _metadata;
+        _metadataReview = MetadataReviewSession.Create(result, sourceResults.ToArray());
+        _metadataReview.SelectionChanged += MetadataReview_SelectionChanged;
+        RefreshSourceBadges();
+    }
+
+    private void MetadataReview_SelectionChanged(object? sender, MetadataSelectionChangedEventArgs eventArgs) =>
+        RefreshSourceBadge(eventArgs.Field);
+
+    private void RefreshSourceBadges()
+    {
+        foreach (var (field, _) in GetSourceBadgeControls())
+        {
+            RefreshSourceBadge(field);
+        }
+    }
+
+    private void RefreshSourceBadge(MetadataField field)
+    {
+        var badge = GetSourceBadgeControls()
+            .FirstOrDefault(item => item.Field == field)
+            .Badge;
+        if (badge is null)
+        {
+            return;
+        }
+
+        var candidate = _metadataReview?.GetSelectedCandidate(field);
+        badge.Text = candidate?.Source.DisplayName ?? string.Empty;
+        badge.Visibility = candidate is null ? Visibility.Collapsed : Visibility.Visible;
+        badge.ToolTip = candidate is null
+            ? null
+            : string.IsNullOrWhiteSpace(candidate.Source.Url)
+                ? candidate.Source.DisplayName
+                : $"来源：{candidate.Source.DisplayName}\n{candidate.Source.Url}";
+    }
+
+    private IEnumerable<(MetadataField Field, TextBlock Badge)> GetSourceBadgeControls()
+    {
+        yield return (MetadataField.Title, TitleSourceText);
+        yield return (MetadataField.OriginalTitle, OriginalTitleSourceText);
+        yield return (MetadataField.ReleaseDate, ReleaseDateSourceText);
+        yield return (MetadataField.RuntimeMinutes, RuntimeSourceText);
+        yield return (MetadataField.Maker, MakerSourceText);
+        yield return (MetadataField.Director, DirectorSourceText);
+        yield return (MetadataField.Label, LabelSourceText);
+        yield return (MetadataField.Series, SeriesSourceText);
+        yield return (MetadataField.Actors, ActorsSourceText);
+        yield return (MetadataField.Genres, GenresSourceText);
+        yield return (MetadataField.Plot, PlotSourceText);
     }
 
     private async Task<bool> LoadPosterPreviewAsync(MovieMetadata metadata)
@@ -552,6 +622,11 @@ public partial class MainWindow : Window
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
         AppLog.Info("JavMetaLite 关闭");
+        if (_metadataReview is not null)
+        {
+            _metadataReview.SelectionChanged -= MetadataReview_SelectionChanged;
+            _metadataReview.Dispose();
+        }
         _lifetimeCancellation.Cancel();
         _lifetimeCancellation.Dispose();
         _javLibraryClient.Dispose();
