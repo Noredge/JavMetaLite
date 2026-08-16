@@ -46,7 +46,7 @@ public partial class MainWindow : Window
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
         ApplyMetadata(_metadata, []);
-        AppLog.Info("JavMetaLite v0.5.0-dev2 启动");
+        AppLog.Info("JavMetaLite v0.5.0-dev3 启动");
     }
 
     private void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -375,16 +375,129 @@ public partial class MainWindow : Window
         }
 
         var candidate = _metadataReview?.GetSelectedCandidate(field);
-        badge.Text = candidate?.Source.DisplayName ?? string.Empty;
+        var candidates = _metadataReview?.GetCandidates(field) ?? [];
+        badge.Content = candidate is null
+            ? string.Empty
+            : candidates.Count > 1
+                ? $"{candidate.Source.DisplayName} ▾"
+                : candidate.Source.DisplayName;
         badge.Visibility = candidate is null ? Visibility.Collapsed : Visibility.Visible;
+        badge.IsEnabled = candidates.Count > 1;
         badge.ToolTip = candidate is null
             ? null
-            : string.IsNullOrWhiteSpace(candidate.Source.Url)
-                ? candidate.Source.DisplayName
-                : $"来源：{candidate.Source.DisplayName}\n{candidate.Source.Url}";
+            : candidates.Count > 1
+                ? $"点击选择“{GetFieldDisplayName(field)}”的资料来源（{candidates.Count} 个候选）"
+                : string.IsNullOrWhiteSpace(candidate.Source.Url)
+                    ? $"来源：{candidate.Source.DisplayName}"
+                    : $"来源：{candidate.Source.DisplayName}\n{candidate.Source.Url}";
     }
 
-    private IEnumerable<(MetadataField Field, TextBlock Badge)> GetSourceBadgeControls()
+    private void SourceBadge_Click(object sender, RoutedEventArgs eventArgs)
+    {
+        if (sender is not Button badge ||
+            !Enum.TryParse<MetadataField>(badge.Tag?.ToString(), out var field) ||
+            _metadataReview is null)
+        {
+            return;
+        }
+
+        var candidates = _metadataReview.GetCandidates(field);
+        if (candidates.Count <= 1)
+        {
+            return;
+        }
+
+        var selected = _metadataReview.GetSelectedCandidate(field);
+        var menu = new ContextMenu
+        {
+            PlacementTarget = badge,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+            Style = (Style)FindResource("CandidateContextMenu")
+        };
+
+        foreach (var candidate in candidates)
+        {
+            var sourceText = new TextBlock
+            {
+                Text = $"{(candidate == selected ? "✓ " : string.Empty)}{candidate.Source.DisplayName}",
+                Foreground = new SolidColorBrush(Color.FromRgb(111, 168, 255)),
+                FontWeight = FontWeights.SemiBold
+            };
+            var valueText = new TextBlock
+            {
+                Text = BuildCandidatePreview(candidate.Value),
+                Foreground = new SolidColorBrush(Color.FromRgb(184, 197, 214)),
+                FontSize = 11,
+                Margin = new Thickness(0, 3, 0, 0),
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 490
+            };
+            var header = new StackPanel();
+            header.Children.Add(sourceText);
+            header.Children.Add(valueText);
+
+            var menuItem = new MenuItem
+            {
+                Header = header,
+                Tag = candidate,
+                Style = (Style)FindResource("CandidateMenuItem"),
+                ToolTip = string.IsNullOrWhiteSpace(candidate.Source.Url)
+                    ? candidate.Source.DisplayName
+                    : candidate.Source.Url
+            };
+            menuItem.Click += (_, _) => SelectSourceCandidate(candidate);
+            menu.Items.Add(menuItem);
+        }
+
+        badge.ContextMenu = menu;
+        menu.IsOpen = true;
+        eventArgs.Handled = true;
+    }
+
+    private void SelectSourceCandidate(MetadataFieldCandidate candidate)
+    {
+        if (_metadataReview?.SelectCandidate(candidate.Field, candidate.Source.Name) != true)
+        {
+            return;
+        }
+
+        var fieldName = GetFieldDisplayName(candidate.Field);
+        AppLog.Info($"字段来源切换 field={candidate.Field} source={candidate.Source.Name}");
+        SetStatus($"已将“{fieldName}”切换为 {candidate.Source.DisplayName}", true);
+    }
+
+    private static string BuildCandidatePreview(string value)
+    {
+        var normalized = string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (normalized.Length == 0)
+        {
+            return "（空白）";
+        }
+
+        const int maximumLength = 100;
+        return normalized.Length <= maximumLength
+            ? normalized
+            : $"{normalized[..maximumLength]}…";
+    }
+
+    private static string GetFieldDisplayName(MetadataField field) => field switch
+    {
+        MetadataField.Title => "标题",
+        MetadataField.OriginalTitle => "原始标题",
+        MetadataField.ReleaseDate => "发行日期",
+        MetadataField.RuntimeMinutes => "时长",
+        MetadataField.Maker => "片商",
+        MetadataField.Director => "导演",
+        MetadataField.Label => "标签 / 厂牌",
+        MetadataField.Series => "系列",
+        MetadataField.Actors => "演员",
+        MetadataField.Genres => "类型",
+        MetadataField.Plot => "简介",
+        MetadataField.Rating => "评分",
+        _ => field.ToString()
+    };
+
+    private IEnumerable<(MetadataField Field, Button Badge)> GetSourceBadgeControls()
     {
         yield return (MetadataField.Title, TitleSourceText);
         yield return (MetadataField.OriginalTitle, OriginalTitleSourceText);

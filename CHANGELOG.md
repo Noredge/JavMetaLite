@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.5.0-dev3 — Per-field source selection
+
+- Recorded the user's successful manual acceptance of the dev2 source badges.
+- Made a field's source badge clickable whenever that field has multiple candidates.
+- Added a compact dark candidate menu that shows both the source name and a preview of its value.
+- Allowed switching one field at a time between LibreDMM, R18.dev, and the latest manual edit.
+- Kept single-candidate badges read-only so they remain informative without suggesting an unavailable action.
+- Added UI smoke coverage for candidate menus, per-field switching, and returning from a manual edit to a scraper value.
+
 ## v0.5.0-dev2 — Field source badges
 
 - Connected real single-source and automatic-completion searches to `MetadataReviewSession`.

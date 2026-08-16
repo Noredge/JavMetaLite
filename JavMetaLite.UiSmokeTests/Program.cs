@@ -69,9 +69,9 @@ internal static class Program
             throw new InvalidOperationException("v0.4 保存入口未创建。 ");
         }
 
-        var titleSourceText = window.FindName("TitleSourceText") as TextBlock
+        var titleSourceText = window.FindName("TitleSourceText") as Button
             ?? throw new InvalidOperationException("v0.5 标题来源标记未创建。 ");
-        var directorSourceText = window.FindName("DirectorSourceText") as TextBlock
+        var directorSourceText = window.FindName("DirectorSourceText") as Button
             ?? throw new InvalidOperationException("v0.5 导演来源标记未创建。 ");
         if (titleSourceText.Visibility != Visibility.Collapsed || directorSourceText.Visibility != Visibility.Collapsed)
         {
@@ -98,16 +98,62 @@ internal static class Program
             ?? throw new InvalidOperationException("v0.5 metadata 应用入口未找到。 ");
         applyMetadata.Invoke(window, [mergedMetadata, new MovieMetadata[] { primaryMetadata, fallbackMetadata }]);
         window.UpdateLayout();
-        if (titleSourceText.Text != "LibreDMM" || directorSourceText.Text != "R18.dev" ||
+        if (titleSourceText.Content?.ToString() != "LibreDMM ▾" ||
+            directorSourceText.Content?.ToString() != "R18.dev" ||
             titleSourceText.Visibility != Visibility.Visible || directorSourceText.Visibility != Visibility.Visible)
         {
             throw new InvalidOperationException("自动补全没有显示正确的字段来源。 ");
         }
+        if (!titleSourceText.IsEnabled || directorSourceText.IsEnabled)
+        {
+            throw new InvalidOperationException("多来源字段应可选，单一来源字段应保持只读。 ");
+        }
+
+        titleSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var titleMenu = titleSourceText.ContextMenu
+            ?? throw new InvalidOperationException("标题候选菜单未创建。 ");
+        var titleCandidates = titleMenu.Items.OfType<MenuItem>().ToArray();
+        if (titleCandidates.Length != 2 ||
+            titleCandidates.Any(item => item.Header is not StackPanel panel || panel.Children.Count != 2))
+        {
+            throw new InvalidOperationException("标题候选菜单没有同时显示来源与值预览。 ");
+        }
+
+        var r18Title = titleCandidates.FirstOrDefault(item =>
+            item.Tag is MetadataFieldCandidate candidate && candidate.Source.Name == "r18dev")
+            ?? throw new InvalidOperationException("标题候选菜单缺少 R18.dev。 ");
+        r18Title.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        if (mergedMetadata.Title != "English title" || titleSourceText.Content?.ToString() != "R18.dev ▾")
+        {
+            throw new InvalidOperationException("没有只切换标题字段的 R18.dev 候选。 ");
+        }
 
         mergedMetadata.Director = "手动修正";
-        if (directorSourceText.Text != "手动编辑")
+        if (directorSourceText.Content?.ToString() != "手动编辑 ▾" || !directorSourceText.IsEnabled)
         {
             throw new InvalidOperationException("手动修改字段后来源标记没有更新。 ");
+        }
+
+        directorSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var directorMenu = directorSourceText.ContextMenu
+            ?? throw new InvalidOperationException("导演候选菜单未创建。 ");
+        var r18Director = directorMenu.Items.OfType<MenuItem>().FirstOrDefault(item =>
+            item.Tag is MetadataFieldCandidate candidate && candidate.Source.Name == "r18dev")
+            ?? throw new InvalidOperationException("手动修改后无法返回 R18.dev 候选。 ");
+        r18Director.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        if (mergedMetadata.Director != "Director A" || directorSourceText.Content?.ToString() != "R18.dev ▾")
+        {
+            throw new InvalidOperationException("没有恢复导演字段的 R18.dev 候选。 ");
+        }
+
+        directorSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var manualDirector = directorSourceText.ContextMenu?.Items.OfType<MenuItem>().FirstOrDefault(item =>
+            item.Tag is MetadataFieldCandidate candidate && candidate.Source.IsManual)
+            ?? throw new InvalidOperationException("切回来源后没有保留最近一次手动候选。 ");
+        manualDirector.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        if (mergedMetadata.Director != "手动修正" || directorSourceText.Content?.ToString() != "手动编辑 ▾")
+        {
+            throw new InvalidOperationException("无法恢复最近一次手动编辑值。 ");
         }
 
         var previewPlan = new SavePlan(
@@ -129,7 +175,7 @@ internal static class Program
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True libreDmm=True fanart=True previewWindow=True sourceBadges=True manualBadge=True directSaveDefaultsOff=True organizeDefaultsOff=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True libreDmm=True fanart=True previewWindow=True sourceBadges=True candidateMenus=True fieldSwitch=True manualReturn=True directSaveDefaultsOff=True organizeDefaultsOff=True");
         window.Close();
         application.Shutdown();
     }
