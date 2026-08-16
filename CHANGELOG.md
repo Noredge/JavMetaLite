@@ -10,6 +10,7 @@
 - Added per-source success/failure, elapsed time, candidate field count, and screenshot count to local logs.
 - Kept explicit LibreDMM, R18.dev, and JAVLibrary selections as single-source searches.
 - Added offline coverage for dual success, either-side failure, total failure, mismatched IDs, one-call-per-source behavior, and diagnostics.
+- Passed all five manual checks for real multi-source search, field selection, single-source behavior, diagnostics, and save-preview compatibility.
 
 ## v0.5.0-dev3-r1 — Full dark candidate menu
 
