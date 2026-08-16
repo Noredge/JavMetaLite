@@ -7,6 +7,8 @@
 - Continued to the next artwork candidate when a preview response is not a decodable image instead of showing a premature preview failure.
 - Added successful-source and failed-preview-candidate details to the local diagnostic log.
 - Added a regression test for the compact-record to actual-content-ID fallback.
+- Passed the complete RC2 manual retest: R18.dev, LibreDMM switching, diagnostics, and movie SHA-256 preservation.
+- Documented the upstream START-237 director value without applying a title-specific correction.
 
 ## v0.4.0-rc1 — Release candidate
 
