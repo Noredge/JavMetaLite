@@ -93,6 +93,7 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("番号识别", TestMovieIdParser),
     ("LibreDMM JSON 解析与清理", TestLibreDmmParser),
     ("多来源字段补全", TestMetadataMerge),
+    ("v0.5 字段候选与来源追踪", TestMetadataReviewSession),
     ("R18.dev JSON 解析", TestR18Parser),
     ("R18.dev 实际 content_id 回退", TestR18ContentIdFallback),
     ("JAVLibrary HTML 解析", TestHtmlParser),
@@ -231,6 +232,70 @@ static Task TestMetadataMerge()
     AssertEqual("系列补充", merged.Series);
     AssertEqual("1", merged.ScreenshotUrls.Count.ToString());
     AssertEqual("LibreDMM + R18.dev", merged.SourceDisplayName);
+    return Task.CompletedTask;
+}
+
+static Task TestMetadataReviewSession()
+{
+    var primary = new MovieMetadata
+    {
+        Id = "IPZZ-850",
+        Title = "日文标题",
+        ReleaseDate = "2026-06-09",
+        ActorsText = "演员甲",
+        Actors = [new ActorMetadata("演员甲", "https://example.test/actor-ja.jpg")],
+        Plot = "日文简介",
+        SourceName = "libredmm",
+        SourceDisplayName = "LibreDMM",
+        SourceUrl = "https://www.libredmm.com/movies/IPZZ-850"
+    };
+    var fallback = new MovieMetadata
+    {
+        Id = "IPZZ-850",
+        Title = "English title",
+        ReleaseDate = "2026-06-09",
+        Director = "Upstream director value",
+        ActorsText = "Actor A",
+        Actors = [new ActorMetadata("Actor A", "https://example.test/actor-en.jpg")],
+        SourceName = "r18dev",
+        SourceDisplayName = "R18.dev",
+        SourceUrl = "https://r18.dev/test"
+    };
+    var merged = MetadataMerger.Merge(primary, fallback);
+
+    using var review = MetadataReviewSession.Create(merged, primary, fallback);
+    AssertEqual("2", review.Sources.Count.ToString());
+    AssertEqual("2", review.GetCandidates(MetadataField.Title).Count.ToString());
+    AssertEqual("2", review.GetCandidates(MetadataField.ReleaseDate).Count.ToString());
+    AssertEqual("libredmm", review.GetSelectedCandidate(MetadataField.Title)?.Source.Name);
+    AssertEqual("r18dev", review.GetSelectedCandidate(MetadataField.Director)?.Source.Name);
+
+    AssertEqual("True", review.SelectCandidate(MetadataField.Title, "r18dev").ToString());
+    AssertEqual("English title", merged.Title);
+    AssertEqual("r18dev", review.GetSelectedCandidate(MetadataField.Title)?.Source.Name);
+    AssertEqual(
+        "0",
+        review.GetCandidates(MetadataField.Title).Count(candidate => candidate.Source.IsManual).ToString());
+
+    merged.Director = "手动修正导演";
+    AssertEqual("manual", review.GetSelectedCandidate(MetadataField.Director)?.Source.Name);
+    AssertEqual("手动修正导演", review.GetSelectedCandidate(MetadataField.Director)?.Value);
+    review.SetManualValue(MetadataField.Director, "第二次修正");
+    AssertEqual(
+        "1",
+        review.GetCandidates(MetadataField.Director).Count(candidate => candidate.Source.IsManual).ToString());
+    AssertEqual("第二次修正", merged.Director);
+
+    AssertEqual("True", review.SelectCandidate(MetadataField.Actors, "r18dev").ToString());
+    AssertEqual("Actor A", merged.ActorsText);
+    AssertEqual("1", merged.Actors.Count.ToString());
+    AssertEqual("https://example.test/actor-en.jpg", merged.Actors[0].ImageUrl);
+
+    primary.Title = "来源对象后来被修改";
+    AssertEqual("日文标题", review.GetCandidates(MetadataField.Title)[0].Value);
+    review.SetManualValue(MetadataField.Plot, string.Empty);
+    AssertEqual("manual", review.GetSelectedCandidate(MetadataField.Plot)?.Source.Name);
+    AssertEqual(string.Empty, merged.Plot);
     return Task.CompletedTask;
 }
 

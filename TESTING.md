@@ -20,7 +20,7 @@ The projects run sequentially because the smoke and UI projects share build outp
 
 | Layer | Project | Purpose |
 | --- | --- | --- |
-| Core smoke | `JavMetaLite.SmokeTests` | Parsers, metadata merge, NFO, image conversion, basic organization and logs |
+| Core smoke | `JavMetaLite.SmokeTests` | Parsers, metadata merge, v0.5 field provenance, NFO, image conversion, basic organization and logs |
 | v0.4 regression | `JavMetaLite.RegressionTests` | File layout matrix, overwrite policy, conflicts, rollback and input validation |
 | UI smoke | `JavMetaLite.UiSmokeTests` | WPF window construction, dark source selector, safe defaults and preview window |
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.0-dev1 — Metadata provenance foundation
+
+- Added immutable per-source metadata snapshots for review without changing the selected editable result.
+- Added field candidates for titles, dates, runtime, maker, director, label, series, actors, genres, plot, and rating.
+- Added selected-source tracking, source switching, and automatic manual-edit candidates.
+- Preserved actor image data when switching the actor field between sources.
+- Kept all v0.4 NFO, artwork, preview, organization, and rollback behavior unchanged.
+
 ## v0.4.0 — Stable
 
 - Promoted RC2 without functional changes after the complete automated gate and manual acceptance passed.
