@@ -2,13 +2,13 @@
 
 一个只处理单个影片的轻量 Windows metadata 工具。它不会扫描整个媒体库；文件整理和直接保存都默认关闭，用户可以先预览所有变更，也可以明确选择跳过预览并直接覆盖 metadata。
 
+## v0.6.0 稳定版
+
+`v0.6.0` 已通过完整自动化门禁、dev4 B01–B07 和 RC1 R01–R06 最终 Jellyfin 往返验收。它完成单片本地 metadata 再编辑闭环：载入既有 NFO 与 poster/fanart、保留本地默认值、加入在线候选、逐字段或手动修改、预览实际变更，并安全更新或迁移 Jellyfin sidecar。保存只更新已支持的 NFO 字段，未知 XML、未替换图片和影片字节继续受保护；解析失败、外部修改和目标冲突会阻止覆盖。Jellyfin 重扫与 JavMetaLite 二次载入均已验证，影片 SHA-256 保持一致。
+
 ## v0.5.0 稳定版
 
 `v0.5.0` 已通过完整自动化门槛与 RC1 六项人工集成验收。“多来源搜索（推荐）”会分别取得 LibreDMM 与 R18.dev 的完整资料，并允许逐字段选择与恢复手动值。左侧封套区域右上方只提供一个紧凑的“封套 / Fanart”来源下拉，poster 与 fanart 始终共用所选来源；完整封套加载后显示“横板封套：尺寸”，不显示等待提示，搜索前后两个预览框保持相同间距。不提供独立剧照来源，也不跨网站合并剧照，继续保持轻量单片编辑器定位。
-
-## v0.6.0 RC
-
-`v0.6.0-rc1` 已通过完整自动化门禁与 R01–R06 最终 Jellyfin 往返验收。它在 dev4 基座上完成单片本地 metadata 再编辑闭环：载入既有 NFO 与图片、保留本地默认值、加入在线候选、逐字段或手动修改、预览实际变更，并安全更新或迁移 Jellyfin sidecar。保存结果可被 Jellyfin 正确重扫，也能再次由 JavMetaLite 作为本地资料载入；未知 XML 与影片字节保持正确，无变化的第二次保存不会重写 sidecar。当前候选版本已经满足稳定版晋升条件。详细范围见 [`ROADMAP-v0.6.0.md`](ROADMAP-v0.6.0.md)。
 
 ## v0.4.0 稳定版
 
@@ -63,7 +63,7 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
 
 完整自动化测试分层、回归范围和手动检查边界见 [`TESTING.md`](TESTING.md)。
 
-v0.6.0 RC1 的最终集成验收见 [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md)，dev4 的通过记录见 [`MANUAL-CHECK-v0.6.0-dev4.md`](MANUAL-CHECK-v0.6.0-dev4.md)。v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。v0.4.0 的真实来源、文件安全与 Jellyfin 完整人工验收见 [`MANUAL-ACCEPTANCE-v0.4.0-rc1.md`](MANUAL-ACCEPTANCE-v0.4.0-rc1.md)，START-237 修复的最终通过记录见 [`MANUAL-RETEST-v0.4.0-rc2.md`](MANUAL-RETEST-v0.4.0-rc2.md)。
+v0.6.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md)，dev4 的通过记录见 [`MANUAL-CHECK-v0.6.0-dev4.md`](MANUAL-CHECK-v0.6.0-dev4.md)。v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。v0.4.0 的真实来源、文件安全与 Jellyfin 完整人工验收见 [`MANUAL-ACCEPTANCE-v0.4.0-rc1.md`](MANUAL-ACCEPTANCE-v0.4.0-rc1.md)，START-237 修复的最终通过记录见 [`MANUAL-RETEST-v0.4.0-rc2.md`](MANUAL-RETEST-v0.4.0-rc2.md)。
 
 发布 Windows x64 单文件版本：
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.6.0 — Stable
+
+- Promotes RC1 without functional changes after the complete automated gate, dev4 B01–B07 checks, and RC1 R01–R06 Jellyfin integration acceptance passed.
+- Adds safe re-editing of existing local Jellyfin metadata with local values retained as the initial review choice and online sources available per field.
+- Selectively updates supported NFO fields while preserving unknown XML elements, attributes, comments, provider data, and unchanged sidecar bytes.
+- Loads an existing poster/fanart pair as one artwork source and supports explicit replacement from LibreDMM, R18.dev, JAVLibrary, or a manually selected complete cover.
+- Extends change previews, organization, conflict detection, and transactional rollback across the movie, NFO, poster, and fanart workflow.
+- Final acceptance confirmed Jellyfin rescan and second-load consistency, no-op zero writes, preserved unknown XML, and unchanged movie SHA-256.
+
 ## v0.6.0-rc1 — Release candidate
 
 - Promotes the fully accepted dev4 build without functional changes and freezes the v0.6 feature set.
