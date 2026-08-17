@@ -6,9 +6,9 @@
 
 `v0.5.0` 已通过完整自动化门槛与 RC1 六项人工集成验收。“多来源搜索（推荐）”会分别取得 LibreDMM 与 R18.dev 的完整资料，并允许逐字段选择与恢复手动值。左侧封套区域右上方只提供一个紧凑的“封套 / Fanart”来源下拉，poster 与 fanart 始终共用所选来源；完整封套加载后显示“横板封套：尺寸”，不显示等待提示，搜索前后两个预览框保持相同间距。不提供独立剧照来源，也不跨网站合并剧照，继续保持轻量单片编辑器定位。
 
-## v0.6.0-dev2 进行中
+## v0.6.0-dev3 进行中
 
-dev2 已把安全只读能力接入主界面：选择影片时会检测并载入同名 NFO，把已有字段标记为“本地 NFO”；之后搜索 LibreDMM、R18.dev 或 JAVLibrary，只会增加现有字段菜单中的候选，本地非空值仍保持默认，本地空白字段可以由在线资料补齐。选择新影片或重新搜索会重建当前候选，避免旧值残留。为防止尚未实现的往返写入丢失未知 XML，检测到已有本地 NFO 时保存按钮会保持禁用；安全更新将在 dev4 开放。下一步 dev3 将接入本地图片与手动完整封套。详细范围、安全原则和阶段计划见 [`ROADMAP-v0.6.0.md`](ROADMAP-v0.6.0.md)。
+dev3 在已通过 L01–L05 人工验收的本地 NFO 基座上接入图片：选择影片时会检测并原样预览同名 `-poster` 与 `-fanart`，把它们作为一个“本地图片”候选，并在缺少其中一张时保持明确缺失。在线搜索只会增加 LibreDMM/R18.dev 封套候选，不会自动抢走本地默认选择；来源菜单同时提供“选择本地完整封套…”，由一张本地图片统一生成 poster 与 fanart。损坏图片会被单独忽略并写日志，不阻断 NFO 编辑。已有 NFO 的保存仍保持禁用，安全往返更新将在 dev4 开放。详细范围、安全原则和阶段计划见 [`ROADMAP-v0.6.0.md`](ROADMAP-v0.6.0.md)。
 
 ## v0.4.0 稳定版
 
@@ -63,7 +63,7 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
 
 完整自动化测试分层、回归范围和手动检查边界见 [`TESTING.md`](TESTING.md)。
 
-v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。v0.4.0 的真实来源、文件安全与 Jellyfin 完整人工验收见 [`MANUAL-ACCEPTANCE-v0.4.0-rc1.md`](MANUAL-ACCEPTANCE-v0.4.0-rc1.md)，START-237 修复的最终通过记录见 [`MANUAL-RETEST-v0.4.0-rc2.md`](MANUAL-RETEST-v0.4.0-rc2.md)。v0.5.0 的分阶段记录保留在 `MANUAL-CHECK-v0.5.0-*` 文档中。
+v0.6.0-dev3 的增量人工检查见 [`MANUAL-CHECK-v0.6.0-dev3.md`](MANUAL-CHECK-v0.6.0-dev3.md)，dev2 的通过记录见 [`MANUAL-CHECK-v0.6.0-dev2.md`](MANUAL-CHECK-v0.6.0-dev2.md)。v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。v0.4.0 的真实来源、文件安全与 Jellyfin 完整人工验收见 [`MANUAL-ACCEPTANCE-v0.4.0-rc1.md`](MANUAL-ACCEPTANCE-v0.4.0-rc1.md)，START-237 修复的最终通过记录见 [`MANUAL-RETEST-v0.4.0-rc2.md`](MANUAL-RETEST-v0.4.0-rc2.md)。
 
 发布 Windows x64 单文件版本：
 

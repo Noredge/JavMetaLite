@@ -96,14 +96,17 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("v0.5 多来源搜索编排", TestMetadataSearchCoordinator),
     ("v0.5 字段候选与来源追踪", TestMetadataReviewSession),
     ("v0.5 poster 与 fanart 统一封套来源", TestArtworkCoverReviewSession),
+    ("v0.6 本地与手动封套统一候选", TestLocalArtworkCoverReviewSession),
     ("R18.dev JSON 解析", TestR18Parser),
     ("R18.dev 实际 content_id 回退", TestR18ContentIdFallback),
     ("JAVLibrary HTML 解析", TestHtmlParser),
     ("高清海报自动裁切", TestPosterCropping),
     ("NFO 生成", TestNfoWriter),
     ("完整封套 fanart 与 Sample Images 输出", TestArtworkOutput),
+    ("v0.6 本地完整封套输出", TestLocalCompleteCoverOutput),
     ("v0.4 文件整理计划与安全执行", TestFileOrganization),
     ("v0.6 本地 sidecar 定位", TestLocalSidecarLocator),
+    ("v0.6 本地图片发现与损坏隔离", TestLocalArtworkDiscovery),
     ("v0.6 安全 NFO 只读解析", TestNfoReader),
     ("v0.6 本地与在线候选组合", TestLocalMetadataReviewComposition),
     ("v0.4 本地运行日志", TestAppLog)
@@ -467,6 +470,55 @@ static Task TestArtworkCoverReviewSession()
     return Task.CompletedTask;
 }
 
+static Task TestLocalArtworkCoverReviewSession()
+{
+    var metadata = new MovieMetadata
+    {
+        Id = "SNOS-255",
+        CoverUrl = "https://images.example.test/online-cover.jpg",
+        SourceName = "libredmm",
+        SourceDisplayName = "LibreDMM"
+    };
+    var online = new MovieMetadata
+    {
+        Id = metadata.Id,
+        CoverUrl = metadata.CoverUrl,
+        SourceName = metadata.SourceName,
+        SourceDisplayName = metadata.SourceDisplayName
+    };
+    var localPair = ArtworkCoverCandidate.CreateSidecarPair(
+        new MetadataCandidateSource("local-images", "本地图片", "C:\\Movies\\SNOS-255"),
+        "C:\\Movies\\SNOS-255\\SNOS-255-poster.jpg",
+        null);
+    var manual = ArtworkCoverCandidate.CreateCompleteCover(
+        new MetadataCandidateSource("manual-cover", "手动封套", "C:\\Pictures\\cover.jpg"),
+        "C:\\Pictures\\cover.jpg");
+    var review = ArtworkCoverReviewSession.CreateWithAdditionalCandidates(
+        metadata,
+        [localPair, manual],
+        "local-images",
+        online);
+
+    AssertEqual("3", review.Candidates.Count.ToString());
+    AssertEqual("local-images", review.SelectedCandidate?.Source.Name);
+    AssertEqual("True", review.SelectedCandidate?.HasPoster.ToString());
+    AssertEqual("False", review.SelectedCandidate?.HasFanart.ToString());
+    AssertEqual(string.Empty, metadata.CoverUrl);
+    AssertEqual(string.Empty, metadata.PosterUrl);
+
+    AssertEqual("True", review.SelectSource("manual-cover").ToString());
+    AssertEqual(Path.GetFullPath("C:\\Pictures\\cover.jpg"), metadata.CoverUrl);
+    AssertEqual("True", review.SelectedCandidate?.HasPoster.ToString());
+    AssertEqual("True", review.SelectedCandidate?.HasFanart.ToString());
+
+    AssertEqual("True", review.SelectSource("libredmm").ToString());
+    AssertEqual("https://images.example.test/online-cover.jpg", metadata.CoverUrl);
+    AssertEqual("True", review.SelectSource("local-images").ToString());
+    AssertEqual(string.Empty, metadata.CoverUrl);
+    AssertEqual("False", review.SelectSource("missing").ToString());
+    return Task.CompletedTask;
+}
+
 static Task TestR18Parser()
 {
     const string json = """
@@ -680,6 +732,52 @@ static async Task TestArtworkOutput()
     }
 }
 
+static async Task TestLocalCompleteCoverOutput()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.LocalCoverOutputTests.{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    try
+    {
+        var videoPath = Path.Combine(root, "SNOS-255.mp4");
+        var coverPath = Path.Combine(root, "manual-full-cover.jpg");
+        var videoBytes = new byte[] { 0x53, 0x4E, 0x4F, 0x53, 0x02, 0x55 };
+        var coverBytes = CreateJpeg(800, 538, 0x4B, 0x72, 0xA5);
+        await File.WriteAllBytesAsync(videoPath, videoBytes);
+        await File.WriteAllBytesAsync(coverPath, coverBytes);
+        var metadata = new MovieMetadata
+        {
+            Id = "SNOS-255",
+            Title = "本地封套输出测试",
+            CoverUrl = coverPath,
+            SourceName = "manual-cover",
+            SourceDisplayName = "手动封套"
+        };
+
+        using var service = new OutputService();
+        var result = await service.SaveAsync(
+            videoPath,
+            metadata,
+            new JavMetaLite.Core.Models.SaveOptions(true, true, true, false, false));
+
+        AssertEqual("True", File.Exists(result.NfoPath).ToString());
+        AssertEqual("True", File.Exists(result.PosterPath).ToString());
+        AssertEqual("True", File.Exists(result.FanartPath).ToString());
+        AssertEqual("True", result.FanartUsedFullCover.ToString());
+        var posterSize = PosterImageProcessor.GetDimensions(await File.ReadAllBytesAsync(result.PosterPath!));
+        var fanartSize = PosterImageProcessor.GetDimensions(await File.ReadAllBytesAsync(result.FanartPath!));
+        AssertEqual("400", posterSize.Width.ToString());
+        AssertEqual("538", posterSize.Height.ToString());
+        AssertEqual("800", fanartSize.Width.ToString());
+        AssertEqual("538", fanartSize.Height.ToString());
+        AssertEqual(Convert.ToHexString(videoBytes), Convert.ToHexString(await File.ReadAllBytesAsync(videoPath)));
+        AssertEqual(Convert.ToHexString(coverBytes), Convert.ToHexString(await File.ReadAllBytesAsync(coverPath)));
+    }
+    finally
+    {
+        Directory.Delete(root, true);
+    }
+}
+
 static async Task TestFileOrganization()
 {
     var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.OrganizationTests.{Guid.NewGuid():N}");
@@ -833,6 +931,52 @@ static async Task TestLocalSidecarLocator()
 
         await AssertThrowsAsync<FileNotFoundException>(() =>
             Task.FromResult(LocalSidecarLocator.Locate(Path.Combine(root, "missing.mp4"))));
+    }
+    finally
+    {
+        Directory.Delete(root, true);
+    }
+}
+
+static async Task TestLocalArtworkDiscovery()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.LocalArtworkTests.{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    try
+    {
+        var videoPath = Path.Combine(root, "START-237.mp4");
+        var posterPath = Path.Combine(root, "START-237-poster.jpg");
+        var fanartPath = Path.Combine(root, "START-237-fanart.png");
+        var videoBytes = new byte[] { 0x53, 0x54, 0x41, 0x52, 0x54, 0x02, 0x37 };
+        await File.WriteAllBytesAsync(videoPath, videoBytes);
+        await File.WriteAllBytesAsync(posterPath, CreateJpeg(420, 600, 0xA4, 0x5B, 0x39));
+        await File.WriteAllBytesAsync(fanartPath, CreateJpeg(800, 538, 0x39, 0x5B, 0xA4));
+
+        var complete = await LocalArtworkDiscovery.DiscoverAsync(
+            new LocalSidecarPaths(videoPath, null, posterPath, fanartPath));
+        AssertEqual("0", complete.Diagnostics.Count.ToString());
+        AssertEqual("local-images", complete.Candidate?.Source.Name);
+        AssertEqual("True", complete.Candidate?.IsSidecarPair.ToString());
+        AssertEqual("True", complete.Candidate?.HasPoster.ToString());
+        AssertEqual("True", complete.Candidate?.HasFanart.ToString());
+        AssertEqual(Path.GetFullPath(posterPath), complete.Candidate?.LocalPosterPath);
+        AssertEqual(Path.GetFullPath(fanartPath), complete.Candidate?.LocalFanartPath);
+
+        await File.WriteAllBytesAsync(posterPath, [0x00, 0x01, 0x02]);
+        var partial = await LocalArtworkDiscovery.DiscoverAsync(
+            new LocalSidecarPaths(videoPath, null, posterPath, fanartPath));
+        AssertEqual("1", partial.Diagnostics.Count.ToString());
+        AssertEqual("True", partial.Diagnostics[0].Contains("poster", StringComparison.Ordinal).ToString());
+        AssertEqual("False", partial.Candidate?.HasPoster.ToString());
+        AssertEqual("True", partial.Candidate?.HasFanart.ToString());
+        AssertEqual(string.Empty, partial.Candidate?.LocalPosterPath);
+
+        await File.WriteAllBytesAsync(fanartPath, [0x03, 0x04, 0x05]);
+        var invalid = await LocalArtworkDiscovery.DiscoverAsync(
+            new LocalSidecarPaths(videoPath, null, posterPath, fanartPath));
+        AssertEqual("True", (invalid.Candidate is null).ToString());
+        AssertEqual("2", invalid.Diagnostics.Count.ToString());
+        AssertEqual(Convert.ToHexString(videoBytes), Convert.ToHexString(await File.ReadAllBytesAsync(videoPath)));
     }
     finally
     {

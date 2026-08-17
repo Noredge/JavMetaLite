@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.6.0-dev3 — Local artwork and manual complete covers
+
+- Detects and previews same-name local poster and fanart files when a movie is selected, with `本地图片` as the default unified artwork source.
+- Keeps local poster and fanart as one review candidate while preserving each file independently; a missing counterpart remains visibly absent and is never fabricated from the other image.
+- Keeps local artwork selected after online metadata searches while adding LibreDMM and R18.dev covers to the same compact source menu.
+- Adds `选择本地完整封套…` through the Windows image picker; the selected JPG, JPEG, PNG, or WEBP drives both poster and fanart previews and can be used by the existing output pipeline.
+- Reads manual covers directly from disk, validates their image content and size, and leaves the source cover and movie bytes unchanged.
+- Ignores invalid local sidecars independently, reports them in the status/log, and continues loading available NFO metadata or the valid counterpart.
+- Prevents an existing poster/fanart sidecar pair from being reused as a complete-cover output source, avoiding silent cross-role conversion.
+- Added offline Core and WPF coverage for local discovery, partial/invalid pairs, unified selection, manual cover output dimensions, UI previews, online composition, logging, and movie-byte preservation.
+
 ## v0.6.0-dev2 — Local NFO review in the main window
 
 - Automatically detects and safely loads a same-name NFO when a movie is selected.
