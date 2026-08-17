@@ -85,10 +85,16 @@ internal static class Program
         {
             throw new InvalidOperationException("搜索前后两个封套预览框的间距不一致。 ");
         }
-        if (window.FindName("OrganizeFolderCheckBox") is not CheckBox organizeCheckBox || organizeCheckBox.IsChecked == true ||
+        if (window.FindName("TargetModeComboBox") is not ComboBox targetModeComboBox ||
+            targetModeComboBox.SelectedItem is not ComboBoxItem { Tag: "VideoDirectory" } ||
+            window.FindName("CustomTargetPanel") is not Grid { Visibility: Visibility.Collapsed } ||
+            window.FindName("CustomRootTextBox") is not TextBox ||
+            window.FindName("ChooseTargetFolderButton") is not Button ||
+            window.FindName("TargetPathHintText") is not TextBlock { Text: "选择影片后显示最终路径" } ||
+            window.FindName("OrganizeFolderCheckBox") is not null ||
             window.FindName("RenameVideoCheckBox") is not CheckBox renameCheckBox || renameCheckBox.IsChecked == true)
         {
-            throw new InvalidOperationException("v0.4 整理选项未创建或没有保持安全的默认关闭状态。 ");
+            throw new InvalidOperationException("dev2 目标位置控件未创建或没有保持安全默认值。 ");
         }
         if (window.FindName("DirectSaveOverwriteCheckBox") is not CheckBox directSaveCheckBox ||
             directSaveCheckBox.IsChecked == true ||
@@ -391,6 +397,59 @@ internal static class Program
             throw new InvalidOperationException("选择新影片后残留了上一个影片的本地或在线候选。 ");
         }
 
+        var customTargetPanel = (Grid)window.FindName("CustomTargetPanel");
+        var customRootTextBox = (TextBox)window.FindName("CustomRootTextBox");
+        var targetPathHintText = (TextBlock)window.FindName("TargetPathHintText");
+        var customRoot = Path.Combine(localTestRoot, "library");
+        Directory.CreateDirectory(customRoot);
+        targetModeComboBox.SelectedIndex = 2;
+        renameCheckBox.IsChecked = true;
+        customRootTextBox.Text = customRoot;
+        window.UpdateLayout();
+        var expectedCustomVideo = Path.Combine(customRoot, "IPX-124", "IPX-124.mp4");
+        if (customTargetPanel.Visibility != Visibility.Visible ||
+            !targetPathHintText.Text.Contains(expectedCustomVideo, StringComparison.OrdinalIgnoreCase) ||
+            !saveButton.IsEnabled)
+        {
+            throw new InvalidOperationException("dev2 同卷自定义根目录没有生成可保存的实时目标路径。 ");
+        }
+
+        customRootTextBox.Text = Path.Combine(customRoot, "ipx-124") + Path.DirectorySeparatorChar;
+        window.UpdateLayout();
+        if (targetPathHintText.Text.Contains(
+                Path.Combine("ipx-124", "IPX-124", "IPX-124.mp4"),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("dev2 已选择番号目录时仍重复生成了番号子目录。 ");
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            var sourceRoot = Path.GetPathRoot(cleanVideoPath) ?? "C:\\";
+            var otherDrive = sourceRoot.StartsWith("Z:", StringComparison.OrdinalIgnoreCase) ? "C:" : "Z:";
+            customRootTextBox.Text = $@"{otherDrive}\JavMetaLite-dev2-test";
+            window.UpdateLayout();
+            if (saveButton.IsEnabled ||
+                !targetPathHintText.Text.Contains("跨盘符", StringComparison.Ordinal) ||
+                saveButton.ToolTip?.ToString()?.Contains("跨盘符", StringComparison.Ordinal) != true)
+            {
+                throw new InvalidOperationException("dev2 跨盘符目标没有被明确阻止。 ");
+            }
+        }
+
+        targetModeComboBox.SelectedIndex = 1;
+        renameCheckBox.IsChecked = false;
+        window.UpdateLayout();
+        var expectedSourceNumberVideo = Path.Combine(localTestRoot, "IPX-124", "IPX-124.mp4");
+        if (customTargetPanel.Visibility != Visibility.Collapsed ||
+            !targetPathHintText.Text.Contains(expectedSourceNumberVideo, StringComparison.OrdinalIgnoreCase) ||
+            !saveButton.IsEnabled)
+        {
+            throw new InvalidOperationException("dev2 来源位置番号文件夹模式没有正确恢复。 ");
+        }
+        targetModeComboBox.SelectedIndex = 0;
+        window.UpdateLayout();
+
         var invalidVideoPath = Path.Combine(localTestRoot, "IPX-125.mp4");
         var invalidNfoPath = Path.Combine(localTestRoot, "IPX-125.nfo");
         var invalidPosterPath = Path.Combine(localTestRoot, "IPX-125-poster.jpg");
@@ -435,6 +494,11 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.4 保存预览窗口未成功创建。 ");
         }
+        if (previewWindow.FindName("TargetPathTextBox") is not TextBox targetPathTextBox ||
+            targetPathTextBox.Text != previewPlan.TargetVideoPath)
+        {
+            throw new InvalidOperationException("dev2 保存预览没有显示最终影片绝对路径。 ");
+        }
         var previewChanges = previewWindow.FindName("ChangesList") as ListView
             ?? throw new InvalidOperationException("保存预览变更列表未创建。 ");
         var previewActions = previewChanges.Items.Cast<object>()
@@ -446,7 +510,7 @@ internal static class Program
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True organizeDefaultsOff=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True targetModes=True customTargetPreview=True crossDriveBlocked=True");
         window.Close();
         application.Shutdown();
     }

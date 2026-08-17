@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.0-dev2 — Custom target location UI
+
+- Replaced the legacy organization checkbox with three explicit target modes: keep beside the movie, use a number folder at the source, or use a number folder below a custom root.
+- Added a native Windows folder picker plus an editable absolute-path field; the last valid custom root and selected mode remain available while the app stays open.
+- Added a live final-movie path below the controls and kept movie renaming independent from target selection.
+- Renamed the save-preview summary to `最终影片`; the preview continues to list the absolute destination of every planned movie and metadata change.
+- Enables same-volume custom-root execution through the existing transactional save path and retains movie SHA-256.
+- Blocks different-drive and UNC targets in both UI and Core until dev3 adds verified copy/delete semantics.
+- Added invalid directory-segment checks plus automated same-volume execution, UI mode switching, duplicate-folder prevention, final-path preview, and cross-drive blocking coverage.
+
 ## v0.7.0-dev1 — Custom target path foundation
 
 - Added explicit `VideoDirectory`, `SourceNumberFolder`, and `CustomRootNumberFolder` destination modes while preserving the existing two-boolean API and v0.6 UI behavior.

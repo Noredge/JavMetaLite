@@ -49,16 +49,21 @@ public partial class MainWindow : Window
     private IReadOnlyList<MovieMetadata> _currentSourceResults = [];
     private string? _preferredArtworkSourceName;
     private string? _videoPath;
+    private string? _lastValidCustomRootDirectory;
+    private string? _targetConfigurationError;
     private bool _localNfoSaveBlocked;
     private bool _busy;
+    private bool _uiInitialized;
 
     public MainWindow()
     {
         _outputService = new OutputService();
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
+        _uiInitialized = true;
         ApplyMetadata(_metadata, []);
-        AppLog.Info("JavMetaLite v0.7.0-dev1 启动");
+        RefreshTargetLocationUi();
+        AppLog.Info("JavMetaLite v0.7.0-dev2 启动");
     }
 
     private async void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -231,9 +236,7 @@ public partial class MainWindow : Window
             DownloadExtrafanartCheckBox.IsChecked == true,
             DirectSaveOverwriteCheckBox.IsChecked == true);
 
-        var organizationOptions = new OrganizationOptions(
-            OrganizeFolderCheckBox.IsChecked == true,
-            RenameVideoCheckBox.IsChecked == true);
+        var organizationOptions = GetOrganizationOptions();
 
         SavePlan plan;
         try
@@ -310,6 +313,151 @@ public partial class MainWindow : Window
 
     private Task SelectVideoAsync(string path) =>
         RunBusyAsync("正在检查影片旁的本地 metadata…", () => SelectVideoCoreAsync(path));
+
+    private void TargetMode_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_uiInitialized)
+        {
+            RefreshTargetLocationUi();
+        }
+    }
+
+    private void TargetOption_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_uiInitialized)
+        {
+            RefreshTargetLocationPreview();
+        }
+    }
+
+    private void CustomRootText_Changed(object sender, TextChangedEventArgs e)
+    {
+        if (_uiInitialized)
+        {
+            RefreshTargetLocationPreview();
+        }
+    }
+
+    private void ChooseTargetFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "选择媒体库根目录",
+            Multiselect = false
+        };
+        var currentRoot = CustomRootTextBox.Text.Trim();
+        var sourceDirectory = _videoPath is null ? null : Path.GetDirectoryName(_videoPath);
+        var initialDirectory = Directory.Exists(currentRoot)
+            ? currentRoot
+            : Directory.Exists(_lastValidCustomRootDirectory)
+                ? _lastValidCustomRootDirectory
+                : sourceDirectory;
+        if (!string.IsNullOrWhiteSpace(initialDirectory))
+        {
+            dialog.InitialDirectory = initialDirectory;
+        }
+
+        if (dialog.ShowDialog(this) == true)
+        {
+            _lastValidCustomRootDirectory = dialog.FolderName;
+            CustomRootTextBox.Text = dialog.FolderName;
+            CustomRootTextBox.CaretIndex = CustomRootTextBox.Text.Length;
+            AppLog.Info($"选择自定义目标根目录 path={dialog.FolderName}");
+        }
+    }
+
+    private OrganizationOptions GetOrganizationOptions() =>
+        new(
+            GetSelectedTargetMode(),
+            RenameVideoCheckBox.IsChecked == true,
+            GetSelectedTargetMode() is OrganizationTargetMode.CustomRootNumberFolder
+                ? CustomRootTextBox.Text
+                : null);
+
+    private OrganizationTargetMode GetSelectedTargetMode()
+    {
+        var tag = (TargetModeComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString();
+        return Enum.TryParse<OrganizationTargetMode>(tag, out var mode)
+            ? mode
+            : OrganizationTargetMode.VideoDirectory;
+    }
+
+    private void RefreshTargetLocationUi()
+    {
+        var customMode = GetSelectedTargetMode() is OrganizationTargetMode.CustomRootNumberFolder;
+        CustomTargetPanel.Visibility = customMode ? Visibility.Visible : Visibility.Collapsed;
+        if (customMode && string.IsNullOrWhiteSpace(CustomRootTextBox.Text) &&
+            !string.IsNullOrWhiteSpace(_lastValidCustomRootDirectory))
+        {
+            CustomRootTextBox.Text = _lastValidCustomRootDirectory;
+        }
+        RefreshTargetLocationPreview();
+    }
+
+    private void RefreshTargetLocationPreview()
+    {
+        _targetConfigurationError = null;
+        if (_videoPath is null)
+        {
+            TargetPathHintText.Text = GetSelectedTargetMode() is OrganizationTargetMode.CustomRootNumberFolder &&
+                                      string.IsNullOrWhiteSpace(CustomRootTextBox.Text)
+                ? "请选择自定义目标根目录；选择影片后将显示最终路径"
+                : "选择影片后显示最终路径";
+            TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(147, 164, 184));
+            RefreshSaveAvailability();
+            return;
+        }
+
+        try
+        {
+            var pathPlan = OrganizationPathPlanner.Resolve(
+                _videoPath,
+                _metadata.Id,
+                GetOrganizationOptions());
+            if (pathPlan.UsesCustomRoot)
+            {
+                _lastValidCustomRootDirectory = pathPlan.TargetRootDirectory;
+            }
+
+            var executionBlockReason = OrganizationPathPlanner.GetExecutionBlockReason(pathPlan);
+            TargetPathHintText.Text = $"最终影片：{pathPlan.TargetVideoPath}";
+            if (executionBlockReason is null)
+            {
+                TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(114, 227, 166));
+            }
+            else
+            {
+                _targetConfigurationError = executionBlockReason;
+                TargetPathHintText.Text += $"{Environment.NewLine}{executionBlockReason}";
+                TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(255, 183, 77));
+            }
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            _targetConfigurationError = exception.Message;
+            TargetPathHintText.Text = exception.Message;
+            TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(255, 157, 166));
+        }
+
+        RefreshSaveAvailability();
+    }
+
+    private void RefreshSaveAvailability()
+    {
+        if (!_uiInitialized)
+        {
+            return;
+        }
+
+        SaveButton.IsEnabled = !_busy && !_localNfoSaveBlocked && _targetConfigurationError is null;
+        SaveButton.ToolTip = _localNfoSaveBlocked
+            ? "本地 NFO 无法安全读取；修复或移走后重新选择影片"
+            : _targetConfigurationError is not null
+                ? _targetConfigurationError
+                : _localMetadataBundle is not null
+                    ? "保存时只更新受管理字段，并保留未知 XML"
+                    : null;
+    }
 
     private async Task SelectVideoCoreAsync(string path)
     {
@@ -494,6 +642,7 @@ public partial class MainWindow : Window
 
     private void ApplyMetadata(MovieMetadata result, IReadOnlyList<MovieMetadata> sourceResults)
     {
+        _metadata.PropertyChanged -= Metadata_PropertyChanged;
         if (_metadataReview is not null)
         {
             _metadataReview.SelectionChanged -= MetadataReview_SelectionChanged;
@@ -501,12 +650,22 @@ public partial class MainWindow : Window
         }
 
         _metadata = result;
+        _metadata.PropertyChanged += Metadata_PropertyChanged;
         DataContext = _metadata;
         _currentSourceResults = sourceResults.ToArray();
         _metadataReview = MetadataReviewSession.Create(result, _currentSourceResults.ToArray());
         _metadataReview.SelectionChanged += MetadataReview_SelectionChanged;
         RebuildArtworkReview();
         RefreshSourceBadges();
+        RefreshTargetLocationPreview();
+    }
+
+    private void Metadata_PropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
+    {
+        if (eventArgs.PropertyName == nameof(MovieMetadata.Id))
+        {
+            RefreshTargetLocationPreview();
+        }
     }
 
     private void RebuildArtworkReview()
@@ -1120,13 +1279,8 @@ public partial class MainWindow : Window
         {
             Mouse.OverrideCursor = null;
             SearchButton.IsEnabled = true;
-            SaveButton.IsEnabled = !_localNfoSaveBlocked;
-            SaveButton.ToolTip = _localNfoSaveBlocked
-                ? "本地 NFO 无法安全读取；修复或移走后重新选择影片"
-                : _localMetadataBundle is not null
-                    ? "保存时只更新受管理字段，并保留未知 XML"
-                    : null;
             _busy = false;
+            RefreshSaveAvailability();
             RefreshArtworkSourceBadge();
         }
     }
@@ -1188,6 +1342,7 @@ public partial class MainWindow : Window
             _metadataReview.SelectionChanged -= MetadataReview_SelectionChanged;
             _metadataReview.Dispose();
         }
+        _metadata.PropertyChanged -= Metadata_PropertyChanged;
         _lifetimeCancellation.Cancel();
         _lifetimeCancellation.Dispose();
         _javLibraryClient.Dispose();

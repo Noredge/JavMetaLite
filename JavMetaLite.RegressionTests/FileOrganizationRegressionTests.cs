@@ -17,6 +17,7 @@ internal static class FileOrganizationRegressionTests
         new("layout", "当前文件夹已经是番号时不重复嵌套", TestExistingNumberFolder),
         new("layout", "Unicode 文件名与支持的扩展名保持有效", TestUnicodeAndExtensions),
         new("target", "三种目标模式与独立影片重命名得到稳定路径", TestCustomTargetPlanning),
+        new("target", "同卷自定义根目录安全执行并保持影片字节", TestSameVolumeCustomTargetExecution),
         new("target", "自定义根目录校验、冲突、跨盘符与 UNC 规划", TestCustomTargetValidation),
         new("overwrite", "预览模式拒绝覆盖，直接模式允许覆盖", TestOverwritePolicy),
         new("roundtrip", "生成变更预览后取消保持全部文件零写入", TestPreviewCancellationIsPure),
@@ -229,6 +230,18 @@ internal static class FileOrganizationRegressionTests
                     false,
                     workspace.PathOf("library"))),
             "An invalid movie number was accepted for a custom target.");
+        if (OperatingSystem.IsWindows())
+        {
+            AssertEx.Throws<InvalidOperationException>(
+                () => OrganizationPathPlanner.Resolve(
+                    sourcePath,
+                    "IPX-888",
+                    new OrganizationOptions(
+                        OrganizationTargetMode.CustomRootNumberFolder,
+                        false,
+                        @"C:\Media\Bad*Root")),
+                "A custom root with an invalid directory segment was accepted.");
+        }
 
         var occupiedRoot = workspace.WriteFile("occupied-root", [0x01]);
         var occupiedPlan = FileOrganizationService.BuildPlan(
@@ -263,6 +276,9 @@ internal static class FileOrganizationRegressionTests
                     @"Z:\Jellyfin\Movies"));
             AssertEx.Equal(@"Z:\Jellyfin\Movies\IPX-888", crossDrive.TargetDirectory);
             AssertEx.Equal(@"Z:\Jellyfin\Movies\IPX-888\IPX-888.mp4", crossDrive.TargetVideoPath);
+            AssertEx.True(
+                OrganizationPathPlanner.GetExecutionBlockReason(crossDrive)?.Contains("跨盘符", StringComparison.Ordinal) == true,
+                "A different-drive target was not blocked before the safe copy transaction exists.");
 
             var unc = OrganizationPathPlanner.Resolve(
                 sourcePath,
@@ -275,11 +291,46 @@ internal static class FileOrganizationRegressionTests
             AssertEx.Equal(
                 @"\\JavMetaLiteTest\Media\IPX-888\source.mp4",
                 unc.TargetVideoPath);
+            AssertEx.True(
+                OrganizationPathPlanner.GetExecutionBlockReason(unc)?.Contains("网络路径", StringComparison.Ordinal) == true,
+                "A UNC target was not blocked before the safe copy transaction exists.");
         }
 
         AssertEx.FileExists(sourcePath);
         workspace.AssertNoTemporaryArtifacts();
         return Task.CompletedTask;
+    }
+
+    private static async Task TestSameVolumeCustomTargetExecution()
+    {
+        using var workspace = new TestWorkspace("same-volume-custom-target");
+        var sourcePath = workspace.WriteFile("incoming/download @ IPX-889-UC.mkv", VideoBytes);
+        var sourceHash = AssertEx.Sha256(sourcePath);
+        var customRoot = workspace.CreateDirectory("library");
+        var metadata = Metadata("IPX-889", "同卷自定义目标");
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            NfoOnly(),
+            new OrganizationOptions(
+                OrganizationTargetMode.CustomRootNumberFolder,
+                true,
+                customRoot));
+
+        AssertEx.False(plan.HasBlockingConflicts, "A same-volume custom target was unexpectedly blocked.");
+        AssertEx.Equal(Path.Combine(customRoot, "IPX-889", "IPX-889.mkv"), plan.TargetVideoPath);
+
+        using var outputService = new OutputService();
+        var result = await new FileOrganizationService(outputService)
+            .ExecuteAsync(plan, metadata, false);
+
+        AssertEx.Equal(plan.TargetVideoPath, result.VideoPath);
+        AssertEx.True(result.VideoMoved, "The movie was not moved to the same-volume custom target.");
+        AssertEx.FileDoesNotExist(sourcePath);
+        AssertEx.FileExists(result.VideoPath);
+        AssertEx.Equal(sourceHash, AssertEx.Sha256(result.VideoPath), "The movie bytes changed during custom organization.");
+        AssertEx.FileExists(Path.Combine(customRoot, "IPX-889", "IPX-889.nfo"));
+        workspace.AssertNoTemporaryArtifacts();
     }
 
     private static async Task TestOverwritePolicy()

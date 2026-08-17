@@ -53,6 +53,31 @@ public static class OrganizationPathPlanner
             options.UsesCustomRoot);
     }
 
+    public static string? GetExecutionBlockReason(OrganizationPathPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (!plan.UsesCustomRoot)
+        {
+            return null;
+        }
+
+        if (IsUncPath(plan.TargetRootDirectory))
+        {
+            return $"当前版本尚未支持保存到网络路径；将在安全复制事务完成后开放：{plan.TargetRootDirectory}";
+        }
+
+        var sourceRoot = Path.GetPathRoot(plan.SourceVideoPath);
+        var targetRoot = Path.GetPathRoot(plan.TargetDirectory);
+        if (string.IsNullOrWhiteSpace(sourceRoot) || string.IsNullOrWhiteSpace(targetRoot) ||
+            !Path.TrimEndingDirectorySeparator(sourceRoot)
+                .Equals(Path.TrimEndingDirectorySeparator(targetRoot), StringComparison.OrdinalIgnoreCase))
+        {
+            return $"当前版本尚未支持跨盘符整理；将在安全复制与 SHA-256 校验完成后开放：{plan.TargetDirectory}";
+        }
+
+        return null;
+    }
+
     private static string NormalizeCustomRoot(string? customRootDirectory)
     {
         if (string.IsNullOrWhiteSpace(customRootDirectory))
@@ -68,7 +93,9 @@ public static class OrganizationPathPlanner
 
         try
         {
-            return Path.TrimEndingDirectorySeparator(Path.GetFullPath(candidate));
+            var fullPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(candidate));
+            ValidateDirectorySegments(fullPath);
+            return fullPath;
         }
         catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
         {
@@ -83,6 +110,26 @@ public static class OrganizationPathPlanner
         return directoryName.Equals(normalizedId, StringComparison.OrdinalIgnoreCase)
             ? normalizedRoot
             : Path.Combine(normalizedRoot, normalizedId);
+    }
+
+    private static bool IsUncPath(string path) =>
+        path.StartsWith("\\\\", StringComparison.Ordinal) ||
+        Uri.TryCreate(path, UriKind.Absolute, out var uri) && uri.IsUnc;
+
+    private static void ValidateDirectorySegments(string fullPath)
+    {
+        var root = Path.GetPathRoot(fullPath) ?? string.Empty;
+        var remainder = fullPath[root.Length..];
+        foreach (var segment in remainder.Split(
+                     [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+                segment.EndsWith('.') || segment.EndsWith(' '))
+            {
+                throw new InvalidOperationException($"自定义目标根目录包含不能用于 Windows 文件夹名的字符：{segment}");
+            }
+        }
     }
 
     private static string NormalizeId(string id)

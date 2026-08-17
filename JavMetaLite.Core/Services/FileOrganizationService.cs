@@ -42,6 +42,12 @@ public sealed class FileOrganizationService
         var expectations = new List<SourceFileExpectation>();
         var retirePaths = new List<string>();
 
+        var executionBlockReason = OrganizationPathPlanner.GetExecutionBlockReason(pathPlan);
+        if (executionBlockReason is not null)
+        {
+            blockingConflicts.Add(executionBlockReason);
+        }
+
         if (pathPlan.UsesCustomRoot && File.Exists(pathPlan.TargetRootDirectory))
         {
             blockingConflicts.Add($"自定义目标根目录路径已被文件占用：{pathPlan.TargetRootDirectory}");
