@@ -1,5 +1,68 @@
 # Changelog
 
+## v0.6.0 — Stable
+
+- Promotes RC1 without functional changes after the complete automated gate, dev4 B01–B07 checks, and RC1 R01–R06 Jellyfin integration acceptance passed.
+- Adds safe re-editing of existing local Jellyfin metadata with local values retained as the initial review choice and online sources available per field.
+- Selectively updates supported NFO fields while preserving unknown XML elements, attributes, comments, provider data, and unchanged sidecar bytes.
+- Loads an existing poster/fanart pair as one artwork source and supports explicit replacement from LibreDMM, R18.dev, JAVLibrary, or a manually selected complete cover.
+- Extends change previews, organization, conflict detection, and transactional rollback across the movie, NFO, poster, and fanart workflow.
+- Final acceptance confirmed Jellyfin rescan and second-load consistency, no-op zero writes, preserved unknown XML, and unchanged movie SHA-256.
+
+## v0.6.0-rc1 — Release candidate
+
+- Promotes the fully accepted dev4 build without functional changes and freezes the v0.6 feature set.
+- Completes the single-movie local editing loop: load an existing NFO and artwork, review local and online candidates, preview actual changes, and save safely beside the movie.
+- Retains selective NFO updates with unknown XML preservation, byte-identical local artwork retention, explicit replacement, sidecar migration, external-change detection, and transactional rollback.
+- Keeps malformed NFO files blocked from every write path and keeps movie files protected from overwrite or content modification.
+- Adds a focused real-Jellyfin round-trip checklist covering initial ingestion, mixed-source edits, artwork replacement, rescan, and a second JavMetaLite load.
+- RC1 is feature-frozen; only defects found by final integration testing will be changed before the stable release.
+- Passed R01–R06 final integration acceptance: existing Jellyfin metadata loaded correctly, mixed local/online edits and artwork replacement saved safely, Jellyfin rescanned the result, the second JavMetaLite load was lossless, movie SHA-256 stayed unchanged, and unknown XML survived.
+
+## v0.6.0-dev4 — Safe NFO round-trip saves
+
+- Enables saving after a valid local NFO has been loaded; malformed or unsafe NFO files remain protected from all write paths.
+- Updates only supported metadata fields inside the original XML document while retaining unknown elements, attributes, comments, provider IDs, and unmanaged nested data.
+- Avoids rewriting an unchanged NFO and labels the save preview as `生成`, `更新`, `保持不变`, or `替换图片` according to the actual operation.
+- Preserves a selected local poster/fanart pair byte-for-byte, including its original image extensions, and safely migrates known sidecars when folder organization or movie renaming is enabled.
+- Replaces local artwork only when an online or manually selected complete cover is active and the corresponding image outputs are enabled.
+- Detects a loaded NFO changed by another program after review and refuses to overwrite it.
+- Extends the transaction to back up and restore NFO, poster, and fanart files in reverse order if any metadata commit or final movie move fails.
+- Added offline coverage for no-op and cancelled previews, unknown-XML preservation, sidecar migration, external-change conflicts, preview action labels, exact rollback hashes, and unchanged movie bytes.
+- Passed B01–B07 manual acceptance, covering real NFO edits, cancelled and no-op saves, artwork replacement, explicit direct-save behavior, sidecar organization, external-change protection, and unchanged movie SHA-256.
+
+## v0.6.0-dev3 — Local artwork and manual complete covers
+
+- Detects and previews same-name local poster and fanart files when a movie is selected, with `本地图片` as the default unified artwork source.
+- Keeps local poster and fanart as one review candidate while preserving each file independently; a missing counterpart remains visibly absent and is never fabricated from the other image.
+- Keeps local artwork selected after online metadata searches while adding LibreDMM and R18.dev covers to the same compact source menu.
+- Adds `选择本地完整封套…` through the Windows image picker; the selected JPG, JPEG, PNG, or WEBP drives both poster and fanart previews and can be used by the existing output pipeline.
+- Reads manual covers directly from disk, validates their image content and size, and leaves the source cover and movie bytes unchanged.
+- Ignores invalid local sidecars independently, reports them in the status/log, and continues loading available NFO metadata or the valid counterpart.
+- Prevents an existing poster/fanart sidecar pair from being reused as a complete-cover output source, avoiding silent cross-role conversion.
+- Added offline Core and WPF coverage for local discovery, partial/invalid pairs, unified selection, manual cover output dimensions, UI previews, online composition, logging, and movie-byte preservation.
+- Passed A01–A05 manual acceptance, including native Windows file selection, real artwork quality, invalid-image isolation, and unchanged movie SHA-256.
+
+## v0.6.0-dev2 — Local NFO review in the main window
+
+- Automatically detects and safely loads a same-name NFO when a movie is selected.
+- Shows loaded values with the existing `本地 NFO` per-field source badges and reports the complete NFO path in the status bar and log.
+- Keeps non-empty local values selected when online sources are searched, while allowing online metadata to fill local blank fields.
+- Places local, LibreDMM, R18.dev, JAVLibrary, and subsequent manual values into the existing candidate menus without adding a second editor.
+- Rebuilds the review session for every new movie and online search so candidates from an earlier movie or earlier response cannot leak forward.
+- Treats malformed or unsafe local NFO files as read-only failures with a clear status and log entry, leaving the original file untouched.
+- Disables saving whenever a pre-existing local NFO was detected; lossless round-trip updates remain intentionally deferred to dev4.
+- Added Core and WPF smoke coverage for local defaults, online blank filling, actor-source consistency, manual restoration, stale-candidate clearing, read-only UI state, and invalid-NFO handling.
+
+## v0.6.0-dev1 — Local NFO read-only foundation
+
+- Added case-insensitive detection of same-name NFO, poster, and fanart sidecars beside the selected movie.
+- Added a bounded, DTD-disabled NFO reader that rejects malformed XML, external entities, oversized files, and roots other than `<movie>`.
+- Parsed the current editable movie fields, multiple directors/genres/actors, actor thumbnail URLs, and `Label:` / `Series:` tags into a local metadata source snapshot.
+- Preserved an independent clone of the complete original XML document, including unknown elements, attributes, comments, and whitespace, for the later round-trip save stage.
+- Kept dev1 isolated from the main window and all write paths: selecting and saving behavior remains identical to v0.5.0.
+- Added offline tests proving successful and partial reads, sidecar matching, zero file mutations, unknown XML preservation, and security rejection behavior.
+
 ## v0.5.0 — Stable
 
 - Promoted RC1 without functional changes after all six focused integration checks passed.

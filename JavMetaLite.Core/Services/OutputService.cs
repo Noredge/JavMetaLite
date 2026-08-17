@@ -25,7 +25,7 @@ public sealed class OutputService : IDisposable
         SaveOptions options,
         CancellationToken cancellationToken = default)
     {
-        return await SaveAsync(videoPath, videoPath, metadata, options, cancellationToken);
+        return await SaveAsync(videoPath, videoPath, metadata, options, null, cancellationToken);
     }
 
     public async Task<SaveResult> SaveAsync(
@@ -33,6 +33,23 @@ public sealed class OutputService : IDisposable
         string outputVideoPath,
         MovieMetadata metadata,
         SaveOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        return await SaveAsync(
+            sourceVideoPath,
+            outputVideoPath,
+            metadata,
+            options,
+            null,
+            cancellationToken);
+    }
+
+    public async Task<SaveResult> SaveAsync(
+        string sourceVideoPath,
+        string outputVideoPath,
+        MovieMetadata metadata,
+        SaveOptions options,
+        NfoWriteContext? nfoWriteContext,
         CancellationToken cancellationToken = default)
     {
         if (!File.Exists(sourceVideoPath))
@@ -54,7 +71,7 @@ public sealed class OutputService : IDisposable
         DownloadedImage? cover = null;
         if (options.DownloadPoster || options.DownloadFanart)
         {
-            AppLog.Info($"下载封面 id={metadata.Id} source={metadata.SourceDisplayName}");
+            AppLog.Info($"读取封面 id={metadata.Id} source={metadata.SourceDisplayName}");
             cover = await DownloadBestCoverAsync(metadata, cancellationToken);
         }
 
@@ -109,13 +126,35 @@ public sealed class OutputService : IDisposable
 
         if (nfoPath is not null)
         {
-            await NfoWriter.WriteAsync(
-                nfoPath,
-                metadata,
-                posterPath is null ? null : Path.GetFileName(posterPath),
-                fanartPath is null ? null : Path.GetFileName(fanartPath),
-                options.OverwriteExisting,
-                cancellationToken);
+            var posterReference = nfoWriteContext?.UpdatePosterReference == true
+                ? nfoWriteContext.PosterFileName
+                : posterPath is null ? null : Path.GetFileName(posterPath);
+            var fanartReference = nfoWriteContext?.UpdateFanartReference == true
+                ? nfoWriteContext.FanartFileName
+                : fanartPath is null ? null : Path.GetFileName(fanartPath);
+            if (nfoWriteContext?.LocalBundle is not null)
+            {
+                await NfoRoundTripWriter.WriteAsync(
+                    nfoPath,
+                    nfoWriteContext.LocalBundle,
+                    metadata,
+                    nfoWriteContext.UpdatePosterReference,
+                    posterReference,
+                    nfoWriteContext.UpdateFanartReference,
+                    fanartReference,
+                    options.OverwriteExisting,
+                    cancellationToken);
+            }
+            else
+            {
+                await NfoWriter.WriteAsync(
+                    nfoPath,
+                    metadata,
+                    posterReference,
+                    fanartReference,
+                    options.OverwriteExisting,
+                    cancellationToken);
+            }
         }
 
         AppLog.Info(
@@ -175,7 +214,8 @@ public sealed class OutputService : IDisposable
     private async Task<DownloadedImage> DownloadBestCoverAsync(MovieMetadata metadata, CancellationToken cancellationToken)
     {
         var candidates = new[] { metadata.CoverUrl, metadata.FallbackCoverUrl, metadata.PosterUrl }
-            .Where(value => Uri.TryCreate(value, UriKind.Absolute, out _))
+            .Where(ArtworkLocationHelper.IsSupported)
+            .Select(ArtworkLocationHelper.Normalize)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         if (candidates.Length == 0)
@@ -232,6 +272,18 @@ public sealed class OutputService : IDisposable
 
     private async Task<DownloadedImage> DownloadImageAsync(string url, CancellationToken cancellationToken)
     {
+        if (ArtworkLocationHelper.TryGetLocalPath(url, out var localPath))
+        {
+            var bytes = await ArtworkLocationHelper.ReadLocalImageAsync(localPath, cancellationToken);
+            var dimensions = PosterImageProcessor.GetDimensions(bytes);
+            return new DownloadedImage(
+                localPath,
+                bytes,
+                dimensions.Width,
+                dimensions.Height,
+                Convert.ToHexString(SHA256.HashData(bytes)));
+        }
+
         Exception? lastError = null;
         foreach (var candidate in DmmImageUrlHelper.GetDownloadCandidates(url).Distinct(StringComparer.OrdinalIgnoreCase))
         {

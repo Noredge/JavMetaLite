@@ -11,7 +11,10 @@ public enum PlannedChangeKind
     RenameVideo,
     MoveAndRenameVideo,
     CreateFile,
-    OverwriteFile
+    OverwriteFile,
+    UpdateFile,
+    KeepFile,
+    ReplaceImage
 }
 
 public sealed record PlannedFileChange(
@@ -33,11 +36,49 @@ public sealed record SavePlan(
     IReadOnlyList<string> OverwriteConflicts,
     IReadOnlyList<string> BlockingConflicts)
 {
+    public SaveOptions OutputGenerationOptions { get; init; } = SaveOptions;
+
+    public LocalSaveContext? LocalContext { get; init; }
+
+    public NfoWriteContext? NfoWriteContext { get; init; }
+
+    public IReadOnlyList<LocalSidecarTransfer> SidecarTransfers { get; init; } = [];
+
+    public IReadOnlyList<SourceFileExpectation> SourceFileExpectations { get; init; } = [];
+
+    public IReadOnlyList<string> SourcePathsToRetire { get; init; } = [];
+
     public bool HasBlockingConflicts => BlockingConflicts.Count > 0;
 
     public bool VideoWillMove =>
         !string.Equals(SourceVideoPath, TargetVideoPath, StringComparison.OrdinalIgnoreCase);
+
+    public bool HasActualChanges => VideoWillMove || Changes.Any(change =>
+        change.Kind is not PlannedChangeKind.KeepFile);
 }
+
+public sealed record LocalSaveContext(
+    LocalMetadataBundle? MetadataBundle,
+    ArtworkCoverCandidate? LocalArtwork,
+    ArtworkCoverCandidate? SelectedArtwork);
+
+public enum LocalSidecarRole
+{
+    Nfo,
+    Poster,
+    Fanart
+}
+
+public sealed record LocalSidecarTransfer(
+    LocalSidecarRole Role,
+    string SourcePath,
+    string DestinationPath,
+    string ExpectedSha256);
+
+public sealed record SourceFileExpectation(
+    string Path,
+    string ExpectedSha256,
+    string Description);
 
 public sealed record OrganizedSaveResult(
     SaveResult Outputs,

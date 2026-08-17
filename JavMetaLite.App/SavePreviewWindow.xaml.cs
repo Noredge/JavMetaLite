@@ -92,6 +92,9 @@ public partial class SavePreviewWindow : Window
             PlannedChangeKind.MoveVideo => ("移动影片", "#193152", "#8DB8FF"),
             PlannedChangeKind.RenameVideo => ("重命名影片", "#193152", "#8DB8FF"),
             PlannedChangeKind.MoveAndRenameVideo => ("移动并重命名", "#193152", "#8DB8FF"),
+            PlannedChangeKind.UpdateFile => ("更新", "#1B3C36", "#72E3C1"),
+            PlannedChangeKind.KeepFile => ("保持不变", "#252D38", "#A9B7C8"),
+            PlannedChangeKind.ReplaceImage => ("替换图片", "#4A3218", "#FFD18A"),
             PlannedChangeKind.OverwriteFile => ("覆盖", "#4A3218", "#FFD18A"),
             _ => ("生成", "#233044", "#B8CFF0")
         };

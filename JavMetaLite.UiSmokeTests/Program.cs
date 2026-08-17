@@ -1,7 +1,9 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using System.Reflection;
 using JavMetaLite.App;
 using JavMetaLite.Core.Models;
@@ -15,6 +17,8 @@ internal static class Program
     private static void Main()
     {
         var application = new Application();
+        SynchronizationContext.SetSynchronizationContext(
+            new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
         var window = new MainWindow();
         window.Show();
 
@@ -226,6 +230,189 @@ internal static class Program
             throw new InvalidOperationException("无法恢复最近一次手动编辑值。 ");
         }
 
+        var localTestRoot = Path.Combine(Path.GetTempPath(), $"JavMetaLite.UiLocalNfo.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(localTestRoot);
+        AppLog.ConfigureDirectory(Path.Combine(localTestRoot, "logs"));
+        var selectVideoAsync = typeof(MainWindow).GetMethod("SelectVideoAsync", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("v0.6 本地影片载入入口未找到。 ");
+        var applyOnlineSources = typeof(MainWindow).GetMethod("ApplyOnlineSources", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("v0.6 在线候选组合入口未找到。 ");
+
+        var localVideoPath = Path.Combine(localTestRoot, "IPX-123.mp4");
+        var localNfoPath = Path.Combine(localTestRoot, "IPX-123.nfo");
+        var localPosterPath = Path.Combine(localTestRoot, "IPX-123-poster.png");
+        var localFanartPath = Path.Combine(localTestRoot, "IPX-123-fanart.png");
+        File.WriteAllBytes(localVideoPath, [0x01, 0x02, 0x03]);
+        File.WriteAllBytes(localPosterPath, onePixelPng);
+        File.WriteAllBytes(localFanartPath, onePixelPng);
+        File.WriteAllText(localNfoPath, """
+            <movie custom="keep">
+              <id>IPX-123</id>
+              <title>本地 NFO 标题</title>
+              <plot>本地简介</plot>
+              <actor><name>本地演员</name><thumb>https://local.example/actor.jpg</thumb></actor>
+              <unknown>keep me</unknown>
+            </movie>
+            """);
+        WaitForTask((Task)(selectVideoAsync.Invoke(window, [localVideoPath])
+            ?? throw new InvalidOperationException("本地影片载入没有返回任务。 ")));
+        window.UpdateLayout();
+        var localMetadata = window.DataContext as MovieMetadata
+            ?? throw new InvalidOperationException("本地 NFO 没有进入编辑模型。 ");
+        var statusText = window.FindName("StatusText") as TextBlock
+            ?? throw new InvalidOperationException("状态栏未创建。 ");
+        var posterImage = window.FindName("PosterImage") as System.Windows.Controls.Image
+            ?? throw new InvalidOperationException("poster 预览控件未创建。 ");
+        var fanartImage = window.FindName("FanartImage") as System.Windows.Controls.Image
+            ?? throw new InvalidOperationException("fanart 预览控件未创建。 ");
+        if (localMetadata.Title != "本地 NFO 标题" ||
+            titleSourceText.Content?.ToString() != "本地 NFO" ||
+            titleSourceText.Visibility != Visibility.Visible ||
+            !statusText.Text.Contains("本地 NFO", StringComparison.Ordinal) ||
+            !statusText.Text.Contains("poster + fanart", StringComparison.Ordinal) ||
+            !statusText.Text.Contains(localNfoPath, StringComparison.OrdinalIgnoreCase) ||
+            artworkSourceButton.Content?.ToString() != "本地图片 ▾" ||
+            posterImage.Source is null || fanartImage.Source is null ||
+            fanartHintText.Text != "横板封套：1×1" ||
+            !saveButton.IsEnabled ||
+            saveButton.ToolTip?.ToString()?.Contains("保留未知 XML", StringComparison.Ordinal) != true ||
+            !statusText.Text.Contains("可安全更新", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("本地 NFO 与现有图片没有以明确来源载入界面。 ");
+        }
+
+        var localLibre = new MovieMetadata
+        {
+            Id = "IPX-123",
+            Title = "LibreDMM 在线标题",
+            Director = "在线导演",
+            CoverUrl = "https://images.example.test/local-libre-cover.jpg",
+            SourceName = "libredmm",
+            SourceDisplayName = "LibreDMM"
+        };
+        var localR18 = new MovieMetadata
+        {
+            Id = "IPX-123",
+            Title = "R18 English title",
+            Director = "Online director",
+            CoverUrl = "https://images.example.test/local-r18-cover.jpg",
+            SourceName = "r18dev",
+            SourceDisplayName = "R18.dev"
+        };
+        var localOnlinePreferred = MetadataMerger.Merge(localLibre, localR18);
+        var reviewedLocalMetadata = applyOnlineSources.Invoke(
+            window,
+            [localOnlinePreferred, new MovieMetadata[] { localLibre, localR18 }]) as MovieMetadata
+            ?? throw new InvalidOperationException("在线候选没有加入本地编辑会话。 ");
+        window.UpdateLayout();
+        if (reviewedLocalMetadata.Title != "本地 NFO 标题" ||
+            reviewedLocalMetadata.Director != "在线导演" ||
+            titleSourceText.Content?.ToString() != "本地 NFO ▾" ||
+            directorSourceText.Content?.ToString() != "LibreDMM ▾" ||
+            artworkSourceButton.Content?.ToString() != "本地图片 ▾" ||
+            posterImage.Source is null || fanartImage.Source is null)
+        {
+            throw new InvalidOperationException("在线搜索改变了本地默认字段/图片，或没有补齐本地空白字段。 ");
+        }
+
+        artworkSourceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var localArtworkItems = artworkSourceButton.ContextMenu?.Items.OfType<MenuItem>().ToArray()
+            ?? throw new InvalidOperationException("本地封套候选菜单未创建。 ");
+        if (localArtworkItems.Length != 4 ||
+            localArtworkItems.All(item => item.Tag is not ArtworkCoverCandidate { Source.Name: "local-images" }) ||
+            localArtworkItems.All(item => item.Tag is not ArtworkCoverCandidate { Source.Name: "libredmm" }) ||
+            localArtworkItems.All(item => item.Tag is not ArtworkCoverCandidate { Source.Name: "r18dev" }) ||
+            localArtworkItems.All(item => item.Tag?.ToString() != "choose-local-cover"))
+        {
+            throw new InvalidOperationException("本地、在线与手动选择入口没有进入同一封套来源菜单。 ");
+        }
+        artworkSourceButton.ContextMenu!.IsOpen = false;
+
+        titleSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var localTitleCandidates = titleSourceText.ContextMenu?.Items.OfType<MenuItem>().ToArray()
+            ?? throw new InvalidOperationException("本地标题候选菜单未创建。 ");
+        if (localTitleCandidates.Length != 3 ||
+            localTitleCandidates.All(item => item.Tag is not MetadataFieldCandidate { Source.Name: "local-nfo" }) ||
+            localTitleCandidates.All(item => item.Tag is not MetadataFieldCandidate { Source.Name: "libredmm" }) ||
+            localTitleCandidates.All(item => item.Tag is not MetadataFieldCandidate { Source.Name: "r18dev" }))
+        {
+            throw new InvalidOperationException("本地、LibreDMM 与 R18.dev 没有出现在同一字段候选菜单。 ");
+        }
+        titleSourceText.ContextMenu!.IsOpen = false;
+
+        reviewedLocalMetadata.Title = "本地会话手动修正";
+        if (titleSourceText.Content?.ToString() != "手动编辑 ▾")
+        {
+            throw new InvalidOperationException("本地会话中的手动修改没有成为候选。 ");
+        }
+        titleSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var localTitle = titleSourceText.ContextMenu?.Items.OfType<MenuItem>().FirstOrDefault(item =>
+            item.Tag is MetadataFieldCandidate { Source.Name: "local-nfo" })
+            ?? throw new InvalidOperationException("手动修改后无法返回本地 NFO 候选。 ");
+        localTitle.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        titleSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var localManualTitle = titleSourceText.ContextMenu?.Items.OfType<MenuItem>().FirstOrDefault(item =>
+            item.Tag is MetadataFieldCandidate { Source.IsManual: true })
+            ?? throw new InvalidOperationException("切回本地 NFO 后没有保留手动候选。 ");
+        localManualTitle.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        if (reviewedLocalMetadata.Title != "本地会话手动修正")
+        {
+            throw new InvalidOperationException("本地会话无法恢复最近一次手动值。 ");
+        }
+
+        var manualCoverPath = Path.Combine(localTestRoot, "manual-cover.png");
+        File.WriteAllBytes(manualCoverPath, onePixelPng);
+        var applyManualCoverAsync = typeof(MainWindow).GetMethod(
+            "ApplyManualCoverAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("手动完整封套入口未找到。 ");
+        WaitForTask((Task)(applyManualCoverAsync.Invoke(window, [manualCoverPath])
+            ?? throw new InvalidOperationException("手动完整封套载入没有返回任务。 ")));
+        window.UpdateLayout();
+        if (artworkSourceButton.Content?.ToString() != "手动封套 ▾" ||
+            reviewedLocalMetadata.CoverUrl != Path.GetFullPath(manualCoverPath) ||
+            posterImage.Source is null || fanartImage.Source is null ||
+            fanartHintText.Text != "横板封套：1×1" ||
+            !statusText.Text.Contains("同一来源生成", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("手动完整封套没有锁定并同时预览 poster/fanart。 ");
+        }
+
+        var cleanVideoPath = Path.Combine(localTestRoot, "IPX-124.mp4");
+        File.WriteAllBytes(cleanVideoPath, [0x04]);
+        WaitForTask((Task)(selectVideoAsync.Invoke(window, [cleanVideoPath])
+            ?? throw new InvalidOperationException("第二个影片载入没有返回任务。 ")));
+        window.UpdateLayout();
+        var cleanMetadata = window.DataContext as MovieMetadata
+            ?? throw new InvalidOperationException("第二个影片没有编辑模型。 ");
+        if (cleanMetadata.Id != "IPX-124" || cleanMetadata.Title.Length != 0 ||
+            titleSourceText.Visibility != Visibility.Collapsed || !saveButton.IsEnabled || saveButton.ToolTip is not null)
+        {
+            throw new InvalidOperationException("选择新影片后残留了上一个影片的本地或在线候选。 ");
+        }
+
+        var invalidVideoPath = Path.Combine(localTestRoot, "IPX-125.mp4");
+        var invalidNfoPath = Path.Combine(localTestRoot, "IPX-125.nfo");
+        var invalidPosterPath = Path.Combine(localTestRoot, "IPX-125-poster.jpg");
+        File.WriteAllBytes(invalidVideoPath, [0x05]);
+        File.WriteAllText(invalidNfoPath, "<tvshow><title>错误根元素</title></tvshow>");
+        File.WriteAllBytes(invalidPosterPath, [0x00, 0x01, 0x02]);
+        WaitForTask((Task)(selectVideoAsync.Invoke(window, [invalidVideoPath])
+            ?? throw new InvalidOperationException("无效 NFO 载入没有返回任务。 ")));
+        window.UpdateLayout();
+        if (!statusText.Text.Contains("无法安全读取", StringComparison.Ordinal) ||
+            !statusText.Text.Contains("原文件未修改", StringComparison.Ordinal) ||
+            !statusText.Text.Contains("无效本地图片已忽略", StringComparison.Ordinal) ||
+            saveButton.IsEnabled || titleSourceText.Visibility != Visibility.Collapsed ||
+            !File.ReadAllText(AppLog.CurrentLogPath).Contains("本地 NFO 读取失败", StringComparison.Ordinal) ||
+            !File.ReadAllText(AppLog.CurrentLogPath).Contains("本地 poster 无效", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("无效 NFO/图片没有被安全隔离并记录日志。 ");
+        }
+
+        AppLog.ConfigureDirectory(null);
+        Directory.Delete(localTestRoot, true);
+
         var previewPlan = new SavePlan(
             "C:\\Media\\source.mp4",
             "C:\\Media\\IPX-123\\IPX-123.mp4",
@@ -233,7 +420,12 @@ internal static class Program
             "IPX-123",
             new JavMetaLite.Core.Models.SaveOptions(true, false, false, false, false),
             new OrganizationOptions(true, true),
-            [new PlannedFileChange(PlannedChangeKind.CreateFile, "生成 metadata", "C:\\Media\\IPX-123\\IPX-123.nfo")],
+            [
+                new PlannedFileChange(PlannedChangeKind.CreateFile, "生成 metadata", "C:\\Media\\IPX-123\\IPX-123.nfo"),
+                new PlannedFileChange(PlannedChangeKind.UpdateFile, "更新 NFO", "C:\\Media\\IPX-123\\IPX-123.nfo"),
+                new PlannedFileChange(PlannedChangeKind.KeepFile, "poster 内容保持不变", "C:\\Media\\IPX-123\\IPX-123-poster.jpg"),
+                new PlannedFileChange(PlannedChangeKind.ReplaceImage, "替换 fanart", "C:\\Media\\IPX-123\\IPX-123-fanart.jpg")
+            ],
             [],
             []);
         var previewWindow = new SavePreviewWindow(previewPlan) { Owner = window };
@@ -243,10 +435,38 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.4 保存预览窗口未成功创建。 ");
         }
+        var previewChanges = previewWindow.FindName("ChangesList") as ListView
+            ?? throw new InvalidOperationException("保存预览变更列表未创建。 ");
+        var previewActions = previewChanges.Items.Cast<object>()
+            .Select(item => item.GetType().GetProperty("Action")?.GetValue(item)?.ToString())
+            .ToArray();
+        if (!new[] { "生成", "更新", "保持不变", "替换图片" }.All(previewActions.Contains))
+        {
+            throw new InvalidOperationException("dev4 保存预览没有区分创建、更新、保持不变和替换图片。 ");
+        }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True directSaveDefaultsOff=True organizeDefaultsOff=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True organizeDefaultsOff=True");
         window.Close();
         application.Shutdown();
+    }
+
+    private static void WaitForTask(Task task)
+    {
+        if (task.IsCompleted)
+        {
+            task.GetAwaiter().GetResult();
+            return;
+        }
+
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        var frame = new DispatcherFrame();
+        _ = task.ContinueWith(
+            _ => dispatcher.BeginInvoke(() => frame.Continue = false),
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            TaskScheduler.Default);
+        Dispatcher.PushFrame(frame);
+        task.GetAwaiter().GetResult();
     }
 }

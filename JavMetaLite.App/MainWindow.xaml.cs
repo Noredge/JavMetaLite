@@ -42,7 +42,14 @@ public partial class MainWindow : Window
     private MovieMetadata _metadata = new();
     private MetadataReviewSession? _metadataReview;
     private ArtworkCoverReviewSession? _artworkCoverReview;
+    private LocalMetadataBundle? _localMetadataBundle;
+    private MovieMetadata? _localSourceMetadata;
+    private ArtworkCoverCandidate? _localArtworkCandidate;
+    private ArtworkCoverCandidate? _manualArtworkCandidate;
+    private IReadOnlyList<MovieMetadata> _currentSourceResults = [];
+    private string? _preferredArtworkSourceName;
     private string? _videoPath;
+    private bool _localNfoSaveBlocked;
     private bool _busy;
 
     public MainWindow()
@@ -51,10 +58,10 @@ public partial class MainWindow : Window
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
         ApplyMetadata(_metadata, []);
-        AppLog.Info("JavMetaLite v0.5.0 启动");
+        AppLog.Info("JavMetaLite v0.6.0 启动");
     }
 
-    private void ChooseFile_Click(object sender, RoutedEventArgs e)
+    private async void ChooseFile_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
         {
@@ -66,7 +73,7 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog(this) == true)
         {
-            SelectVideo(dialog.FileName);
+            await SelectVideoAsync(dialog.FileName);
         }
     }
 
@@ -76,11 +83,11 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void Window_Drop(object sender, DragEventArgs e)
+    private async void Window_Drop(object sender, DragEventArgs e)
     {
         if (TryGetDroppedVideo(e.Data, out var path))
         {
-            SelectVideo(path!);
+            await SelectVideoAsync(path!);
         }
     }
 
@@ -108,8 +115,7 @@ public partial class MainWindow : Window
             try
             {
                 var outcome = await SearchFromSelectedSourceAsync(source, _metadata.Id);
-                var result = outcome.Metadata;
-                ApplyMetadata(result, outcome.Sources);
+                var result = ApplyOnlineSources(outcome.Metadata, outcome.Sources);
                 var successfulSources = string.Join(
                     "+",
                     outcome.Sources.Select(GetSourceDisplayName).Distinct(StringComparer.OrdinalIgnoreCase));
@@ -119,9 +125,8 @@ public partial class MainWindow : Window
                 AppLog.Info(
                     $"metadata 搜索成功 sources={successfulSources} failedSources={failedSources} id={result.Id} " +
                     $"contentId={result.ContentId} screenshots={result.ScreenshotUrls.Count} " +
-                    $"reviewSources={outcome.Sources.Count}");
-                var posterLoaded = await LoadPosterPreviewAsync(result);
-                var fanartLoaded = await LoadFanartPreviewAsync(result);
+                    $"reviewSources={outcome.Sources.Count} localDefault={_localSourceMetadata is not null}");
+                var artworkLoaded = await LoadSelectedArtworkPreviewAsync();
                 var sourceName = string.Join(
                     " + ",
                     outcome.Sources.Select(GetSourceDisplayName).Distinct(StringComparer.OrdinalIgnoreCase));
@@ -131,10 +136,13 @@ public partial class MainWindow : Window
                 var imageSummary = result.ScreenshotUrls.Count > 0
                     ? $"，找到 {result.ScreenshotUrls.Count} 张样张"
                     : "，没有独立样张";
+                var localPrefix = _localSourceMetadata is null
+                    ? $"已从 {sourceName} 读取 {result.Id}"
+                    : $"已加入 {sourceName} 在线候选，当前保留本地 NFO";
                 SetStatus(
-                    posterLoaded
-                        ? $"已从 {sourceName} 读取 {result.Id}{imageSummary}{(fanartLoaded ? string.Empty : "；完整封套 fanart 预览未加载")}{degradedNote}"
-                        : $"已从 {sourceName} 读取 {result.Id}；封面预览未加载，不影响资料编辑{degradedNote}",
+                    artworkLoaded.Poster
+                        ? $"{localPrefix}{imageSummary}{(artworkLoaded.Fanart ? string.Empty : "；fanart 预览未加载")}{degradedNote}"
+                        : $"{localPrefix}；封面预览未加载，不影响资料编辑{degradedNote}",
                     string.IsNullOrWhiteSpace(failedSources));
             }
             catch (JavLibraryChallengeException exception)
@@ -210,12 +218,19 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (_localNfoSaveBlocked)
+        {
+            ShowError("检测到无法安全读取的本地 NFO。为保护原文件，必须修复或移走该 NFO 后重新选择影片，当前不能保存。");
+            return;
+        }
+
         var options = new SaveOptions(
             WriteNfoCheckBox.IsChecked == true,
             DownloadPosterCheckBox.IsChecked == true,
             DownloadFanartCheckBox.IsChecked == true,
             DownloadExtrafanartCheckBox.IsChecked == true,
             DirectSaveOverwriteCheckBox.IsChecked == true);
+
         var organizationOptions = new OrganizationOptions(
             OrganizeFolderCheckBox.IsChecked == true,
             RenameVideoCheckBox.IsChecked == true);
@@ -223,7 +238,15 @@ public partial class MainWindow : Window
         SavePlan plan;
         try
         {
-            plan = FileOrganizationService.BuildPlan(_videoPath, _metadata, options, organizationOptions);
+            plan = FileOrganizationService.BuildPlan(
+                _videoPath,
+                _metadata,
+                options,
+                organizationOptions,
+                new LocalSaveContext(
+                    _localMetadataBundle,
+                    _localArtworkCandidate,
+                    _artworkCoverReview?.SelectedCandidate));
         }
         catch (Exception exception)
         {
@@ -265,8 +288,6 @@ public partial class MainWindow : Window
                 allowOverwrite,
                 _lifetimeCancellation.Token);
             _videoPath = result.VideoPath;
-            FileNameText.Text = Path.GetFileName(result.VideoPath);
-            FilePathText.Text = result.VideoPath;
             var outputs = new[] { result.Outputs.NfoPath, result.Outputs.PosterPath, result.Outputs.FanartPath }
                 .Where(path => path is not null)
                 .Select(Path.GetFileName)
@@ -279,11 +300,18 @@ public partial class MainWindow : Window
                 ? string.Empty
                 : result.Outputs.FanartUsedFullCover ? "；fanart 来自完整封套" : string.Empty;
             var moveNote = result.VideoMoved ? $"；影片已整理为 {Path.GetFileName(result.VideoPath)}" : string.Empty;
-            SetStatus($"保存完成：{string.Join("、", outputs)}{fanartNote}{moveNote}", true);
+            await SelectVideoCoreAsync(result.VideoPath);
+            var outputSummary = outputs.Count == 0
+                ? plan.HasActualChanges ? "sidecar 已安全迁移" : "没有需要写入的变更"
+                : string.Join("、", outputs);
+            SetStatus($"保存完成：{outputSummary}{fanartNote}{moveNote}", true);
         });
     }
 
-    private void SelectVideo(string path)
+    private Task SelectVideoAsync(string path) =>
+        RunBusyAsync("正在检查影片旁的本地 metadata…", () => SelectVideoCoreAsync(path));
+
+    private async Task SelectVideoCoreAsync(string path)
     {
         if (!File.Exists(path) || !SupportedExtensions.Contains(Path.GetExtension(path)))
         {
@@ -292,6 +320,12 @@ public partial class MainWindow : Window
         }
 
         _videoPath = path;
+        _localMetadataBundle = null;
+        _localSourceMetadata = null;
+        _localArtworkCandidate = null;
+        _manualArtworkCandidate = null;
+        _preferredArtworkSourceName = null;
+        _localNfoSaveBlocked = false;
         AppLog.Info($"选择影片 path={path}");
         FileNameText.Text = Path.GetFileName(path);
         FilePathText.Text = path;
@@ -299,14 +333,114 @@ public partial class MainWindow : Window
         ApplyMetadata(new MovieMetadata { Id = id ?? string.Empty }, []);
         ClearPosterPreview();
         ClearFanartPreview();
-        if (!string.IsNullOrWhiteSpace(id))
+
+        LocalSidecarPaths sidecars;
+        try
         {
-            SetStatus($"已识别番号 {id}，可以搜索资料", true);
+            sidecars = LocalSidecarLocator.Locate(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            AppLog.Warning($"无法检查本地 sidecar path={path}", exception);
+            SetStatus($"无法检查影片旁的本地文件：{exception.Message}", false);
+            return;
+        }
+
+        string metadataStatus;
+        var statusSuccess = !string.IsNullOrWhiteSpace(id);
+        if (!sidecars.HasNfo)
+        {
+            metadataStatus = !string.IsNullOrWhiteSpace(id)
+                ? $"已识别番号 {id}，未找到同名本地 NFO，可以搜索资料"
+                : "没有找到同名本地 NFO，也未从文件名识别到番号，请手动输入";
         }
         else
         {
-            SetStatus("没有从文件名识别到番号，请手动输入", false);
+            _localNfoSaveBlocked = true;
+            try
+            {
+                var bundle = await NfoReader.ReadAsync(sidecars, _lifetimeCancellation.Token);
+                var composition = LocalMetadataReviewComposer.CreateLocal(bundle.Metadata);
+                var editable = composition.Metadata;
+                if (string.IsNullOrWhiteSpace(editable.Id))
+                {
+                    editable.Id = id ?? string.Empty;
+                }
+
+                _localMetadataBundle = bundle;
+                _localSourceMetadata = composition.Sources[0];
+                _localNfoSaveBlocked = false;
+                ApplyMetadata(editable, composition.Sources);
+                AppLog.Info(
+                    $"本地 NFO 载入成功 path={bundle.Sidecars.NfoPath} id={editable.Id} " +
+                    $"diagnostics={bundle.Diagnostics.Count}");
+                var diagnosticNote = bundle.Diagnostics.Count == 0
+                    ? string.Empty
+                    : $"；{string.Join("；", bundle.Diagnostics)}";
+                metadataStatus = $"已从本地 NFO 载入（可安全更新）：{bundle.Sidecars.NfoPath}{diagnosticNote}";
+                statusSuccess = true;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                AppLog.Warning($"本地 NFO 读取失败 path={sidecars.NfoPath}", exception);
+                metadataStatus =
+                    $"检测到本地 NFO，但无法安全读取，原文件未修改：{Path.GetFileName(sidecars.NfoPath)}；{exception.Message}";
+                statusSuccess = false;
+            }
         }
+
+        var artworkDiscovery = await DiscoverLocalArtworkAsync(sidecars);
+        if (!string.IsNullOrWhiteSpace(artworkDiscovery.Summary))
+        {
+            metadataStatus += $"；{artworkDiscovery.Summary}";
+        }
+        if (artworkDiscovery.HasErrors)
+        {
+            statusSuccess = false;
+        }
+
+        SetStatus(metadataStatus, statusSuccess);
+    }
+
+    private async Task<(string Summary, bool HasErrors)> DiscoverLocalArtworkAsync(LocalSidecarPaths sidecars)
+    {
+        var discovery = await LocalArtworkDiscovery.DiscoverAsync(
+            sidecars,
+            _lifetimeCancellation.Token);
+        foreach (var diagnostic in discovery.Diagnostics)
+        {
+            AppLog.Warning(diagnostic);
+        }
+
+        _localArtworkCandidate = discovery.Candidate;
+        if (_localArtworkCandidate is null)
+        {
+            RebuildArtworkReview();
+            var invalidSummary = discovery.Diagnostics.Count == 0
+                ? string.Empty
+                : $"{discovery.Diagnostics.Count} 个无效本地图片已忽略（见日志）";
+            return (invalidSummary, discovery.Diagnostics.Count > 0);
+        }
+
+        _preferredArtworkSourceName = _localArtworkCandidate.Source.Name;
+        RebuildArtworkReview();
+        var loaded = await LoadSelectedArtworkPreviewAsync();
+        var availability = (_localArtworkCandidate.HasPoster, _localArtworkCandidate.HasFanart) switch
+        {
+            (true, true) => "poster + fanart",
+            (true, false) => "仅 poster，fanart 缺失",
+            (false, true) => "仅 fanart，poster 缺失",
+            _ => "无可用图片"
+        };
+        var diagnosticNote = discovery.Diagnostics.Count == 0
+            ? string.Empty
+            : $"；{discovery.Diagnostics.Count} 个无效图片已忽略";
+        var previewNote = loaded.Poster == _localArtworkCandidate.HasPoster &&
+                          loaded.Fanart == _localArtworkCandidate.HasFanart
+            ? string.Empty
+            : "；预览加载不完整";
+        return ($"本地图片已载入（{availability}）{diagnosticNote}{previewNote}",
+            discovery.Diagnostics.Count > 0 || previewNote.Length > 0);
     }
 
     private async void OpenBrowser(string url)
@@ -326,16 +460,36 @@ public partial class MainWindow : Window
                     browser.PageUrl ?? url,
                     _metadata.Id,
                     _lifetimeCancellation.Token);
-                ApplyMetadata(result, [result]);
-                var posterLoaded = await LoadPosterPreviewAsync(result);
-                await LoadFanartPreviewAsync(result);
+                ApplyOnlineSources(result, [result]);
+                var artworkLoaded = await LoadSelectedArtworkPreviewAsync();
+                var localNote = _localSourceMetadata is null ? string.Empty : "，当前保留本地 NFO";
                 SetStatus(
-                    posterLoaded
-                        ? $"已从浏览器读取 {result.Id}"
-                        : $"已从浏览器读取 {result.Id}；封面预览未加载，不影响保存",
+                    artworkLoaded.Poster
+                        ? $"已加入浏览器资料候选 {result.Id}{localNote}"
+                        : $"已加入浏览器资料候选 {result.Id}{localNote}；封面预览未加载，不影响资料编辑",
                     true);
             });
         }
+    }
+
+    private MovieMetadata ApplyOnlineSources(
+        MovieMetadata preferredOnlineMetadata,
+        IReadOnlyList<MovieMetadata> onlineSources)
+    {
+        if (_localSourceMetadata is null)
+        {
+            ApplyMetadata(preferredOnlineMetadata, onlineSources);
+            return _metadata;
+        }
+
+        var localForMerge = LocalMetadataReviewComposer.CreateLocal(_localSourceMetadata).Metadata;
+        localForMerge.Id = _metadata.Id;
+        var composition = LocalMetadataReviewComposer.ComposeWithOnline(
+            localForMerge,
+            preferredOnlineMetadata,
+            onlineSources);
+        ApplyMetadata(composition.Metadata, composition.Sources);
+        return _metadata;
     }
 
     private void ApplyMetadata(MovieMetadata result, IReadOnlyList<MovieMetadata> sourceResults)
@@ -348,10 +502,28 @@ public partial class MainWindow : Window
 
         _metadata = result;
         DataContext = _metadata;
-        _metadataReview = MetadataReviewSession.Create(result, sourceResults.ToArray());
+        _currentSourceResults = sourceResults.ToArray();
+        _metadataReview = MetadataReviewSession.Create(result, _currentSourceResults.ToArray());
         _metadataReview.SelectionChanged += MetadataReview_SelectionChanged;
-        _artworkCoverReview = ArtworkCoverReviewSession.Create(result, sourceResults.ToArray());
+        RebuildArtworkReview();
         RefreshSourceBadges();
+    }
+
+    private void RebuildArtworkReview()
+    {
+        var additionalCandidates = new[] { _localArtworkCandidate, _manualArtworkCandidate }
+            .Where(candidate => candidate is not null)
+            .Select(candidate => candidate!)
+            .ToArray();
+        _artworkCoverReview = ArtworkCoverReviewSession.CreateWithAdditionalCandidates(
+            _metadata,
+            additionalCandidates,
+            _preferredArtworkSourceName,
+            _currentSourceResults.ToArray());
+        if (_artworkCoverReview.SelectedCandidate is not null)
+        {
+            _preferredArtworkSourceName = _artworkCoverReview.SelectedCandidate.Source.Name;
+        }
         RefreshArtworkSourceBadge();
     }
 
@@ -473,22 +645,21 @@ public partial class MainWindow : Window
         var candidate = _artworkCoverReview?.SelectedCandidate;
         var candidates = _artworkCoverReview?.Candidates ?? [];
         ArtworkSourceButton.Content = candidate is null
-            ? string.Empty
-            : candidates.Count > 1
-                ? $"{candidate.Source.DisplayName} ▾"
-                : candidate.Source.DisplayName;
-        ArtworkSourceButton.Visibility = candidate is null ? Visibility.Collapsed : Visibility.Visible;
-        ArtworkSourceButton.IsEnabled = !_busy && candidates.Count > 1;
+            ? "选择封套…"
+            : $"{candidate.Source.DisplayName} ▾";
+        ArtworkSourceButton.Visibility = candidate is null && _videoPath is null
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        ArtworkSourceButton.IsEnabled = !_busy && (_videoPath is not null || candidate is not null);
         ArtworkSourceButton.ToolTip = candidate is null
-            ? null
-            : candidates.Count > 1
-                ? $"点击选择封套来源（{candidates.Count} 个候选）；poster 与 fanart 始终共用"
-                : $"封套来源：{candidate.Source.DisplayName}；poster 与 fanart 共用";
+            ? "选择一张本地完整封套，由同一张图生成 poster 与 fanart"
+            : $"点击选择封套来源（{candidates.Count} 个现有候选），或选择本地完整封套";
     }
 
     private void ArtworkSourceButton_Click(object sender, RoutedEventArgs eventArgs)
     {
-        if (_artworkCoverReview is null || _artworkCoverReview.Candidates.Count <= 1)
+        if (_artworkCoverReview is null ||
+            (_videoPath is null && _artworkCoverReview.Candidates.Count == 0))
         {
             return;
         }
@@ -511,9 +682,7 @@ public partial class MainWindow : Window
             };
             var valueText = new TextBlock
             {
-                Text = candidate.Urls.Count > 1
-                    ? $"poster / fanart 共用 · {candidate.Urls.Count} 个封套地址"
-                    : "poster / fanart 共用此完整封套",
+                Text = GetArtworkCandidateDescription(candidate),
                 Foreground = new SolidColorBrush(Color.FromRgb(184, 197, 214)),
                 FontSize = 11,
                 Margin = new Thickness(0, 3, 0, 0)
@@ -533,6 +702,35 @@ public partial class MainWindow : Window
             menu.Items.Add(menuItem);
         }
 
+        if (_videoPath is not null)
+        {
+            var chooseSourceText = new TextBlock
+            {
+                Text = "选择本地完整封套…",
+                Foreground = new SolidColorBrush(Color.FromRgb(111, 168, 255)),
+                FontWeight = FontWeights.SemiBold
+            };
+            var chooseValueText = new TextBlock
+            {
+                Text = "选择一张图片，统一生成 poster 与 fanart",
+                Foreground = new SolidColorBrush(Color.FromRgb(184, 197, 214)),
+                FontSize = 11,
+                Margin = new Thickness(0, 3, 0, 0)
+            };
+            var chooseHeader = new StackPanel();
+            chooseHeader.Children.Add(chooseSourceText);
+            chooseHeader.Children.Add(chooseValueText);
+            var chooseItem = new MenuItem
+            {
+                Header = chooseHeader,
+                Tag = "choose-local-cover",
+                Style = (Style)FindResource("CandidateMenuItem"),
+                ToolTip = "支持 JPG、JPEG、PNG 与 WEBP"
+            };
+            chooseItem.Click += async (_, _) => await ChooseManualCoverAsync();
+            menu.Items.Add(chooseItem);
+        }
+
         ArtworkSourceButton.ContextMenu = menu;
         menu.IsOpen = true;
         eventArgs.Handled = true;
@@ -545,13 +743,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        _preferredArtworkSourceName = candidate.Source.Name;
         RefreshArtworkSourceBadge();
         AppLog.Info($"统一封套来源切换 source={candidate.Source.Name} posterFanartLocked=true");
         await RunBusyAsync($"正在加载 {candidate.Source.DisplayName} 封套…", async () =>
         {
-            var posterLoaded = await LoadPosterPreviewAsync(_metadata);
-            var fanartLoaded = await LoadFanartPreviewAsync(_metadata);
-            var loaded = posterLoaded && fanartLoaded;
+            var preview = await LoadSelectedArtworkPreviewAsync();
+            var loaded = preview.Poster && preview.Fanart;
             SetStatus(
                 loaded
                     ? $"封套与 fanart 已同时切换为 {candidate.Source.DisplayName}"
@@ -559,6 +757,71 @@ public partial class MainWindow : Window
                 loaded);
         });
     }
+
+    private static string GetArtworkCandidateDescription(ArtworkCoverCandidate candidate)
+    {
+        if (candidate.IsSidecarPair)
+        {
+            return (candidate.HasPoster, candidate.HasFanart) switch
+            {
+                (true, true) => "现有 poster + fanart（成对来源）",
+                (true, false) => "现有 poster；fanart 缺失",
+                (false, true) => "现有 fanart；poster 缺失",
+                _ => "没有可用的本地图片"
+            };
+        }
+
+        return candidate.Source.Name == "manual-cover"
+            ? "本地完整封套 · 统一生成 poster / fanart"
+            : candidate.Urls.Count > 1
+                ? $"poster / fanart 共用 · {candidate.Urls.Count} 个封套地址"
+                : "poster / fanart 共用此完整封套";
+    }
+
+    private async Task ChooseManualCoverAsync()
+    {
+        if (_videoPath is null)
+        {
+            return;
+        }
+
+        var dialog = new OpenFileDialog
+        {
+            Title = "选择一张完整封套",
+            Filter = "图片文件|*.jpg;*.jpeg;*.png;*.webp|所有文件|*.*",
+            CheckFileExists = true,
+            Multiselect = false,
+            InitialDirectory = Path.GetDirectoryName(_videoPath)
+        };
+        if (dialog.ShowDialog(this) == true)
+        {
+            await ApplyManualCoverAsync(dialog.FileName);
+        }
+    }
+
+    private Task ApplyManualCoverAsync(string path) =>
+        RunBusyAsync("正在读取本地完整封套…", async () =>
+        {
+            var bytes = await ArtworkLocationHelper.ReadLocalImageAsync(
+                path,
+                _lifetimeCancellation.Token);
+            var dimensions = PosterImageProcessor.GetDimensions(bytes);
+            _manualArtworkCandidate = ArtworkCoverCandidate.CreateCompleteCover(
+                new MetadataCandidateSource("manual-cover", "手动封套", Path.GetFullPath(path)),
+                path);
+            _preferredArtworkSourceName = _manualArtworkCandidate.Source.Name;
+            RebuildArtworkReview();
+            var preview = await LoadSelectedArtworkPreviewAsync();
+            if (!preview.Poster || !preview.Fanart)
+            {
+                throw new InvalidDataException("本地完整封套无法同时生成 poster 与 fanart 预览。");
+            }
+
+            AppLog.Info($"手动完整封套载入成功 path={path} size={dimensions.Width}x{dimensions.Height}");
+            SetStatus(
+                $"已选择本地完整封套：{Path.GetFileName(path)}；poster 与 fanart 将由同一来源生成",
+                true);
+        });
 
     private static string BuildCandidatePreview(string value)
     {
@@ -606,10 +869,91 @@ public partial class MainWindow : Window
         yield return (MetadataField.Plot, PlotSourceText);
     }
 
+    private async Task<(bool Poster, bool Fanart)> LoadSelectedArtworkPreviewAsync()
+    {
+        var candidate = _artworkCoverReview?.SelectedCandidate;
+        if (candidate is null)
+        {
+            ClearPosterPreview();
+            ClearFanartPreview();
+            return (false, false);
+        }
+
+        if (!candidate.IsSidecarPair)
+        {
+            return (
+                await LoadPosterPreviewAsync(_metadata),
+                await LoadFanartPreviewAsync(_metadata));
+        }
+
+        var posterLoaded = await LoadLocalSidecarPreviewAsync(
+            candidate.LocalPosterPath,
+            isPoster: true);
+        var fanartLoaded = await LoadLocalSidecarPreviewAsync(
+            candidate.LocalFanartPath,
+            isPoster: false);
+        return (posterLoaded, fanartLoaded);
+    }
+
+    private async Task<bool> LoadLocalSidecarPreviewAsync(string path, bool isPoster)
+    {
+        if (!ArtworkLocationHelper.TryGetLocalPath(path, out var localPath))
+        {
+            if (isPoster)
+            {
+                ClearPosterPreview();
+            }
+            else
+            {
+                ClearFanartPreview();
+            }
+            return false;
+        }
+
+        try
+        {
+            var bytes = await ArtworkLocationHelper.ReadLocalImageAsync(
+                localPath,
+                _lifetimeCancellation.Token);
+            if (isPoster)
+            {
+                PosterImage.Source = PosterBitmapFactory.CreateFrozen(bytes);
+                DropHint.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                var dimensions = PosterImageProcessor.GetDimensions(bytes);
+                FanartImage.Source = PosterBitmapFactory.CreateFrozen(bytes);
+                FanartHintText.Text = $"横板封套：{dimensions.Width}×{dimensions.Height}";
+            }
+            return true;
+        }
+        catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or InvalidDataException or
+                NotSupportedException or FormatException)
+        {
+            AppLog.Warning($"本地 {(isPoster ? "poster" : "fanart")} 预览失败：{localPath}", exception);
+            if (isPoster)
+            {
+                ClearPosterPreview();
+            }
+            else
+            {
+                ClearFanartPreview();
+            }
+            return false;
+        }
+    }
+
     private async Task<bool> LoadPosterPreviewAsync(MovieMetadata metadata)
     {
         var candidates = new[] { metadata.CoverUrl, metadata.FallbackCoverUrl, metadata.PosterUrl }
-            .Where(value => Uri.TryCreate(value, UriKind.Absolute, out _))
+            .Where(ArtworkLocationHelper.IsSupported)
+            .Select(ArtworkLocationHelper.Normalize)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         if (candidates.Length == 0)
@@ -645,7 +989,8 @@ public partial class MainWindow : Window
     private async Task<bool> LoadFanartPreviewAsync(MovieMetadata metadata)
     {
         var candidates = new[] { metadata.CoverUrl, metadata.FallbackCoverUrl, metadata.PosterUrl }
-            .Where(value => Uri.TryCreate(value, UriKind.Absolute, out _))
+            .Where(ArtworkLocationHelper.IsSupported)
+            .Select(ArtworkLocationHelper.Normalize)
             .Distinct(StringComparer.OrdinalIgnoreCase);
         foreach (var candidate in candidates)
         {
@@ -673,6 +1018,13 @@ public partial class MainWindow : Window
 
     private async Task<byte[]> DownloadPreviewImageAsync(string url)
     {
+        if (ArtworkLocationHelper.TryGetLocalPath(url, out var localPath))
+        {
+            return await ArtworkLocationHelper.ReadLocalImageAsync(
+                localPath,
+                _lifetimeCancellation.Token);
+        }
+
         Exception? lastError = null;
         foreach (var candidate in DmmImageUrlHelper.GetDownloadCandidates(url).Distinct(StringComparer.OrdinalIgnoreCase))
         {
@@ -768,9 +1120,14 @@ public partial class MainWindow : Window
         {
             Mouse.OverrideCursor = null;
             SearchButton.IsEnabled = true;
-            SaveButton.IsEnabled = true;
-            ArtworkSourceButton.IsEnabled = (_artworkCoverReview?.Candidates.Count ?? 0) > 1;
+            SaveButton.IsEnabled = !_localNfoSaveBlocked;
+            SaveButton.ToolTip = _localNfoSaveBlocked
+                ? "本地 NFO 无法安全读取；修复或移走后重新选择影片"
+                : _localMetadataBundle is not null
+                    ? "保存时只更新受管理字段，并保留未知 XML"
+                    : null;
             _busy = false;
+            RefreshArtworkSourceBadge();
         }
     }
 
