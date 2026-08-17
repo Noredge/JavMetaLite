@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.6.0-rc1 — Release candidate
+
+- Promotes the fully accepted dev4 build without functional changes and freezes the v0.6 feature set.
+- Completes the single-movie local editing loop: load an existing NFO and artwork, review local and online candidates, preview actual changes, and save safely beside the movie.
+- Retains selective NFO updates with unknown XML preservation, byte-identical local artwork retention, explicit replacement, sidecar migration, external-change detection, and transactional rollback.
+- Keeps malformed NFO files blocked from every write path and keeps movie files protected from overwrite or content modification.
+- Adds a focused real-Jellyfin round-trip checklist covering initial ingestion, mixed-source edits, artwork replacement, rescan, and a second JavMetaLite load.
+- RC1 is feature-frozen; only defects found by final integration testing will be changed before the stable release.
+
 ## v0.6.0-dev4 — Safe NFO round-trip saves
 
 - Enables saving after a valid local NFO has been loaded; malformed or unsafe NFO files remain protected from all write paths.

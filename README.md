@@ -6,9 +6,9 @@
 
 `v0.5.0` 已通过完整自动化门槛与 RC1 六项人工集成验收。“多来源搜索（推荐）”会分别取得 LibreDMM 与 R18.dev 的完整资料，并允许逐字段选择与恢复手动值。左侧封套区域右上方只提供一个紧凑的“封套 / Fanart”来源下拉，poster 与 fanart 始终共用所选来源；完整封套加载后显示“横板封套：尺寸”，不显示等待提示，搜索前后两个预览框保持相同间距。不提供独立剧照来源，也不跨网站合并剧照，继续保持轻量单片编辑器定位。
 
-## v0.6.0-dev4 进行中
+## v0.6.0 RC
 
-dev4 已通过完整自动化门禁与 B01–B07 人工验收：有效 NFO 可以直接检查、修改和保存，软件只更新已支持字段，并保留未知 XML 元素、属性、注释和其他软件写入的数据；没有实质变化时不会重写 NFO。保存预览会区分“生成”“更新”“保持不变”和“替换图片”。本地 poster/fanart 作为同一来源时会逐字节保留，并在整理或重命名时与影片一起安全迁移；切换到在线或手动完整封套后才会替换图片。取消零写入、直接保存开关、外部修改冲突以及 sidecar 迁移均已通过真实文件检查，影片 SHA-256 保持一致。详细范围见 [`ROADMAP-v0.6.0.md`](ROADMAP-v0.6.0.md)。
+`v0.6.0-rc1` 已冻结功能。它在 dev4 全部自动化门禁与 B01–B07 人工验收通过的基座上，完成单片本地 metadata 再编辑闭环：载入既有 NFO 与图片、保留本地默认值、加入在线候选、逐字段或手动修改、预览实际变更，并安全更新或迁移 Jellyfin sidecar。未知 XML、未替换图片和影片字节继续受保护；解析失败或外部修改冲突会阻止覆盖。RC 阶段只修复最终 Jellyfin 往返验收发现的问题，不再增加功能。详细范围见 [`ROADMAP-v0.6.0.md`](ROADMAP-v0.6.0.md)。
 
 ## v0.4.0 稳定版
 
@@ -63,7 +63,7 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
 
 完整自动化测试分层、回归范围和手动检查边界见 [`TESTING.md`](TESTING.md)。
 
-v0.6.0-dev4 的增量人工检查见 [`MANUAL-CHECK-v0.6.0-dev4.md`](MANUAL-CHECK-v0.6.0-dev4.md)，dev3 的通过记录见 [`MANUAL-CHECK-v0.6.0-dev3.md`](MANUAL-CHECK-v0.6.0-dev3.md)。v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。v0.4.0 的真实来源、文件安全与 Jellyfin 完整人工验收见 [`MANUAL-ACCEPTANCE-v0.4.0-rc1.md`](MANUAL-ACCEPTANCE-v0.4.0-rc1.md)，START-237 修复的最终通过记录见 [`MANUAL-RETEST-v0.4.0-rc2.md`](MANUAL-RETEST-v0.4.0-rc2.md)。
+v0.6.0 RC1 的最终集成验收见 [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md)，dev4 的通过记录见 [`MANUAL-CHECK-v0.6.0-dev4.md`](MANUAL-CHECK-v0.6.0-dev4.md)。v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。v0.4.0 的真实来源、文件安全与 Jellyfin 完整人工验收见 [`MANUAL-ACCEPTANCE-v0.4.0-rc1.md`](MANUAL-ACCEPTANCE-v0.4.0-rc1.md)，START-237 修复的最终通过记录见 [`MANUAL-RETEST-v0.4.0-rc2.md`](MANUAL-RETEST-v0.4.0-rc2.md)。
 
 发布 Windows x64 单文件版本：
 
