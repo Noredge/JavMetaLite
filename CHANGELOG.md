@@ -10,6 +10,7 @@
 - Ignores invalid local sidecars independently, reports them in the status/log, and continues loading available NFO metadata or the valid counterpart.
 - Prevents an existing poster/fanart sidecar pair from being reused as a complete-cover output source, avoiding silent cross-role conversion.
 - Added offline Core and WPF coverage for local discovery, partial/invalid pairs, unified selection, manual cover output dimensions, UI previews, online composition, logging, and movie-byte preservation.
+- Passed A01–A05 manual acceptance, including native Windows file selection, real artwork quality, invalid-image isolation, and unchanged movie SHA-256.
 
 ## v0.6.0-dev2 — Local NFO review in the main window
 
