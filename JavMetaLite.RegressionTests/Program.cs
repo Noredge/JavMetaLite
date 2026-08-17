@@ -29,7 +29,7 @@ internal static class Program
             }
         }
 
-        Console.WriteLine($"JavMetaLite v0.4 regression suite — {tests.Count} test(s)");
+        Console.WriteLine($"JavMetaLite file transaction regression suite — {tests.Count} test(s)");
         var suiteTimer = Stopwatch.StartNew();
         var failures = new List<string>();
         foreach (var test in tests)

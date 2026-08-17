@@ -17,6 +17,10 @@ internal static class FileOrganizationRegressionTests
         new("layout", "当前文件夹已经是番号时不重复嵌套", TestExistingNumberFolder),
         new("layout", "Unicode 文件名与支持的扩展名保持有效", TestUnicodeAndExtensions),
         new("overwrite", "预览模式拒绝覆盖，直接模式允许覆盖", TestOverwritePolicy),
+        new("roundtrip", "生成变更预览后取消保持全部文件零写入", TestPreviewCancellationIsPure),
+        new("roundtrip", "已有 NFO 无变化零写入，修改后保留未知 XML", TestRoundTripUpdate),
+        new("roundtrip", "整理时迁移并重命名已知 sidecar", TestRoundTripOrganization),
+        new("conflict", "载入后的 NFO 被外部修改时拒绝保存", TestRoundTripExternalChange),
         new("conflict", "影片冲突即使允许覆盖也必须阻止", TestMovieConflict),
         new("conflict", "计划生成后出现 metadata 冲突必须重新检测", TestConflictAfterPlanning),
         new("rollback", "metadata 提交中断时恢复旧文件", TestLockedMetadataRollback),
@@ -171,6 +175,219 @@ internal static class FileOrganizationRegressionTests
         workspace.AssertNoTemporaryArtifacts();
     }
 
+    private static async Task TestRoundTripUpdate()
+    {
+        using var workspace = new TestWorkspace("roundtrip-update");
+        var sourcePath = workspace.WriteFile("SNOS-255.mp4", VideoBytes);
+        var nfoPath = workspace.PathOf("SNOS-255.nfo");
+        await File.WriteAllTextAsync(nfoPath, """
+            <?xml version="1.0" encoding="utf-8"?>
+            <!--roundtrip-comment-->
+            <movie custom="keep-root">
+              <title>旧标题</title>
+              <id>SNOS-255</id>
+              <uniqueid type="jav" default="true">snos00255</uniqueid>
+              <thumb aspect="poster">SNOS-255-poster.jpg</thumb>
+              <fanart><thumb>SNOS-255-fanart.jpg</thumb></fanart>
+              <unknown answer="42"><child>keep</child></unknown>
+            </movie>
+            """);
+        var posterPath = workspace.WriteFile("SNOS-255-poster.jpg", TestImageFactory.CreateJpeg(420, 600));
+        var fanartPath = workspace.WriteFile("SNOS-255-fanart.jpg", TestImageFactory.CreateJpeg(800, 538));
+        var movieHash = AssertEx.Sha256(sourcePath);
+        var nfoHash = AssertEx.Sha256(nfoPath);
+        var posterHash = AssertEx.Sha256(posterPath);
+        var fanartHash = AssertEx.Sha256(fanartPath);
+        var bundle = await NfoReader.ReadAsync(LocalSidecarLocator.Locate(sourcePath));
+        var editable = LocalMetadataReviewComposer.CreateLocal(bundle.Metadata).Metadata;
+        var localArtwork = ArtworkCoverCandidate.CreateSidecarPair(
+            new MetadataCandidateSource("local-images", "本地图片", workspace.Root),
+            posterPath,
+            fanartPath);
+        var context = new LocalSaveContext(bundle, localArtwork, localArtwork);
+        var options = new SaveOptions(true, true, true, false, false);
+        var noChangePlan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            editable,
+            options,
+            new OrganizationOptions(false, false),
+            context);
+
+        AssertEx.False(noChangePlan.HasActualChanges, "An untouched local bundle was planned as a write.");
+        AssertEx.False(noChangePlan.OutputGenerationOptions.WriteNfo, "Unchanged NFO should not be regenerated.");
+        AssertEx.Equal(0, noChangePlan.OverwriteConflicts.Count);
+        AssertEx.Equal(3, noChangePlan.Changes.Count(change => change.Kind == PlannedChangeKind.KeepFile));
+        using var outputService = new OutputService();
+        var organizer = new FileOrganizationService(outputService);
+        await organizer.ExecuteAsync(noChangePlan, editable, false);
+        AssertEx.Equal(nfoHash, AssertEx.Sha256(nfoPath), "No-op save rewrote the NFO.");
+        AssertEx.Equal(posterHash, AssertEx.Sha256(posterPath));
+        AssertEx.Equal(fanartHash, AssertEx.Sha256(fanartPath));
+
+        editable.Title = "更新后的标题";
+        editable.Plot = "新增简介";
+        var updatePlan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            editable,
+            options,
+            new OrganizationOptions(false, false),
+            context);
+        AssertEx.True(updatePlan.HasActualChanges, "Edited NFO was not planned as an update.");
+        AssertEx.True(
+            updatePlan.Changes.Any(change => change.Kind == PlannedChangeKind.UpdateFile),
+            "The NFO update was not classified as UpdateFile.");
+        AssertEx.Equal(1, updatePlan.OverwriteConflicts.Count);
+        await organizer.ExecuteAsync(updatePlan, editable, true);
+
+        var updated = XDocument.Load(nfoPath, LoadOptions.PreserveWhitespace);
+        AssertEx.Equal("更新后的标题", updated.Root?.Element("title")?.Value);
+        AssertEx.Equal("新增简介", updated.Root?.Element("plot")?.Value);
+        AssertEx.Equal("keep-root", updated.Root?.Attribute("custom")?.Value);
+        AssertEx.Equal("42", updated.Root?.Element("unknown")?.Attribute("answer")?.Value);
+        AssertEx.Equal("keep", updated.Root?.Element("unknown")?.Element("child")?.Value);
+        AssertEx.True(updated.DescendantNodes().OfType<XComment>().Any(), "The original XML comment was lost.");
+        AssertEx.Equal(movieHash, AssertEx.Sha256(sourcePath), "The movie changed during round-trip update.");
+        AssertEx.Equal(posterHash, AssertEx.Sha256(posterPath), "Preserved poster bytes changed.");
+        AssertEx.Equal(fanartHash, AssertEx.Sha256(fanartPath), "Preserved fanart bytes changed.");
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestPreviewCancellationIsPure()
+    {
+        using var workspace = new TestWorkspace("preview-cancel");
+        var sourcePath = workspace.WriteFile("IPX-321.mp4", VideoBytes);
+        var nfoPath = workspace.PathOf("IPX-321.nfo");
+        await File.WriteAllTextAsync(
+            nfoPath,
+            "<movie custom=\"keep\"><title>取消前标题</title><id>IPX-321</id><unknown>untouched</unknown></movie>");
+        var posterPath = workspace.WriteFile("IPX-321-poster.jpg", TestImageFactory.CreateJpeg(420, 600));
+        var movieHash = AssertEx.Sha256(sourcePath);
+        var nfoHash = AssertEx.Sha256(nfoPath);
+        var posterHash = AssertEx.Sha256(posterPath);
+        var bundle = await NfoReader.ReadAsync(LocalSidecarLocator.Locate(sourcePath));
+        var editable = LocalMetadataReviewComposer.CreateLocal(bundle.Metadata).Metadata;
+        editable.Title = "预览中的新标题";
+        var localArtwork = ArtworkCoverCandidate.CreateSidecarPair(
+            new MetadataCandidateSource("local-images", "本地图片", workspace.Root),
+            posterPath,
+            null);
+
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            editable,
+            new SaveOptions(true, true, true, false, false),
+            new OrganizationOptions(true, true),
+            new LocalSaveContext(bundle, localArtwork, localArtwork));
+
+        AssertEx.True(plan.HasActualChanges, "The cancellation fixture did not produce a meaningful preview.");
+        AssertEx.True(
+            plan.Changes.Any(change => change.Kind == PlannedChangeKind.UpdateFile),
+            "The cancellation preview did not contain an NFO update.");
+        AssertEx.True(plan.VideoWillMove, "The cancellation preview did not contain the planned movie move.");
+        // Cancellation is represented by not executing the immutable preview plan.
+        AssertEx.Equal(movieHash, AssertEx.Sha256(sourcePath), "Planning changed the movie before confirmation.");
+        AssertEx.Equal(nfoHash, AssertEx.Sha256(nfoPath), "Planning changed the NFO before confirmation.");
+        AssertEx.Equal(posterHash, AssertEx.Sha256(posterPath), "Planning changed the poster before confirmation.");
+        AssertEx.FileDoesNotExist(plan.TargetVideoPath);
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestRoundTripOrganization()
+    {
+        using var workspace = new TestWorkspace("roundtrip-organization");
+        var sourcePath = workspace.WriteFile("incoming/download @ IPX-850-UC.mkv", VideoBytes);
+        var nfoPath = workspace.PathOf("incoming/download @ IPX-850-UC.nfo");
+        await File.WriteAllTextAsync(nfoPath, """
+            <movie custom="keep">
+              <title>整理测试</title>
+              <id>IPX-850</id>
+              <thumb aspect="poster">download @ IPX-850-UC-poster.png</thumb>
+              <fanart><thumb>download @ IPX-850-UC-fanart.jpg</thumb></fanart>
+              <unknown>preserve</unknown>
+            </movie>
+            """);
+        var posterPath = workspace.WriteFile(
+            "incoming/download @ IPX-850-UC-poster.png",
+            TestImageFactory.CreateJpeg(420, 600));
+        var fanartPath = workspace.WriteFile(
+            "incoming/download @ IPX-850-UC-fanart.jpg",
+            TestImageFactory.CreateJpeg(800, 538));
+        var movieHash = AssertEx.Sha256(sourcePath);
+        var posterHash = AssertEx.Sha256(posterPath);
+        var fanartHash = AssertEx.Sha256(fanartPath);
+        var bundle = await NfoReader.ReadAsync(LocalSidecarLocator.Locate(sourcePath));
+        var editable = LocalMetadataReviewComposer.CreateLocal(bundle.Metadata).Metadata;
+        var localArtwork = ArtworkCoverCandidate.CreateSidecarPair(
+            new MetadataCandidateSource("local-images", "本地图片", workspace.Root),
+            posterPath,
+            fanartPath);
+        var context = new LocalSaveContext(bundle, localArtwork, localArtwork);
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            editable,
+            new SaveOptions(true, true, true, false, false),
+            new OrganizationOptions(true, true),
+            context);
+
+        AssertEx.True(plan.VideoWillMove, "Organization did not plan a movie move.");
+        AssertEx.True(plan.OutputGenerationOptions.WriteNfo, "Renamed artwork references should update the NFO.");
+        AssertEx.Equal(2, plan.SidecarTransfers.Count);
+        AssertEx.Equal(3, plan.SourcePathsToRetire.Count);
+        AssertEx.True(
+            plan.Changes.Any(change => change.Kind == PlannedChangeKind.UpdateFile),
+            "The migrated NFO was not classified as an update.");
+        AssertEx.Equal(2, plan.Changes.Count(change => change.Kind == PlannedChangeKind.KeepFile));
+        using var outputService = new OutputService();
+        var result = await new FileOrganizationService(outputService).ExecuteAsync(plan, editable, false);
+
+        var targetDirectory = workspace.PathOf("incoming", "IPX-850");
+        var targetVideo = Path.Combine(targetDirectory, "IPX-850.mkv");
+        var targetNfo = Path.Combine(targetDirectory, "IPX-850.nfo");
+        var targetPoster = Path.Combine(targetDirectory, "IPX-850-poster.png");
+        var targetFanart = Path.Combine(targetDirectory, "IPX-850-fanart.jpg");
+        AssertEx.Equal(targetVideo, result.VideoPath);
+        AssertEx.Equal(movieHash, AssertEx.Sha256(targetVideo));
+        AssertEx.Equal(posterHash, AssertEx.Sha256(targetPoster));
+        AssertEx.Equal(fanartHash, AssertEx.Sha256(targetFanart));
+        AssertEx.Equal("preserve", XDocument.Load(targetNfo).Root?.Element("unknown")?.Value);
+        AssertEx.Equal("IPX-850-poster.png", XDocument.Load(targetNfo).Root?.Elements("thumb")
+            .Single(element => element.Attribute("aspect")?.Value == "poster").Value);
+        AssertEx.Equal("IPX-850-fanart.jpg", XDocument.Load(targetNfo).Root?.Element("fanart")?.Element("thumb")?.Value);
+        AssertEx.FileDoesNotExist(sourcePath);
+        AssertEx.FileDoesNotExist(nfoPath);
+        AssertEx.FileDoesNotExist(posterPath);
+        AssertEx.FileDoesNotExist(fanartPath);
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestRoundTripExternalChange()
+    {
+        using var workspace = new TestWorkspace("roundtrip-external-change");
+        var sourcePath = workspace.WriteFile("IPX-654.mp4", VideoBytes);
+        var nfoPath = workspace.PathOf("IPX-654.nfo");
+        await File.WriteAllTextAsync(nfoPath, "<movie><title>载入标题</title><id>IPX-654</id><unknown>keep</unknown></movie>");
+        var bundle = await NfoReader.ReadAsync(LocalSidecarLocator.Locate(sourcePath));
+        var editable = LocalMetadataReviewComposer.CreateLocal(bundle.Metadata).Metadata;
+        editable.Title = "准备保存的标题";
+        var context = new LocalSaveContext(bundle, null, null);
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            editable,
+            NfoOnly(overwrite: true),
+            new OrganizationOptions(false, false),
+            context);
+        await File.WriteAllTextAsync(nfoPath, "<movie><title>外部程序修改</title><id>IPX-654</id></movie>");
+        var externalHash = AssertEx.Sha256(nfoPath);
+        var movieHash = AssertEx.Sha256(sourcePath);
+        using var outputService = new OutputService();
+        await AssertEx.ThrowsAsync<IOException>(
+            () => new FileOrganizationService(outputService).ExecuteAsync(plan, editable, true),
+            "An externally changed NFO was overwritten.");
+        AssertEx.Equal(externalHash, AssertEx.Sha256(nfoPath));
+        AssertEx.Equal(movieHash, AssertEx.Sha256(sourcePath));
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
     private static async Task TestMovieConflict()
     {
         using var workspace = new TestWorkspace("movie-conflict");
@@ -222,18 +439,32 @@ internal static class FileOrganizationRegressionTests
     {
         using var workspace = new TestWorkspace("locked-metadata");
         var sourcePath = workspace.WriteFile("IPX-666.mp4", VideoBytes);
-        var nfoPath = workspace.WriteFile("IPX-666.nfo", [0x4F, 0x4C, 0x44, 0x2D, 0x4E, 0x46, 0x4F]);
+        var nfoPath = workspace.PathOf("IPX-666.nfo");
+        await File.WriteAllTextAsync(
+            nfoPath,
+            "<movie custom=\"keep\"><title>旧标题</title><id>IPX-666</id><unknown>restore-me</unknown></movie>");
         var posterPath = workspace.WriteFile("IPX-666-poster.jpg", [0x4F, 0x4C, 0x44, 0x2D, 0x4A, 0x50, 0x47]);
         var nfoHash = AssertEx.Sha256(nfoPath);
         var posterHash = AssertEx.Sha256(posterPath);
-        var metadata = Metadata("IPX-666", "覆盖中断");
+        var bundle = await NfoReader.ReadAsync(LocalSidecarLocator.Locate(sourcePath));
+        var metadata = LocalMetadataReviewComposer.CreateLocal(bundle.Metadata).Metadata;
+        metadata.Title = "覆盖中断";
         metadata.CoverUrl = "https://images.example.test/cover.jpg";
+        var localArtwork = ArtworkCoverCandidate.CreateSidecarPair(
+            new MetadataCandidateSource("local-images", "本地图片", workspace.Root),
+            posterPath,
+            null);
+        var onlineArtwork = ArtworkCoverCandidate.CreateCompleteCover(
+            new MetadataCandidateSource("libredmm", "LibreDMM", "https://example.test/IPX-666"),
+            metadata.CoverUrl);
+        var context = new LocalSaveContext(bundle, localArtwork, onlineArtwork);
         var options = new SaveOptions(true, true, false, false, true);
         var plan = FileOrganizationService.BuildPlan(
             sourcePath,
             metadata,
             options,
-            new OrganizationOptions(false, false));
+            new OrganizationOptions(false, false),
+            context);
         using var httpClient = new HttpClient(new StaticImageHandler(TestImageFactory.CreateJpeg()));
         using var outputService = new OutputService(httpClient);
         var organizer = new FileOrganizationService(outputService);

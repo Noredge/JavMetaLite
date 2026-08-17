@@ -20,9 +20,9 @@ The projects run sequentially because the smoke and UI projects share build outp
 
 | Layer | Project | Purpose |
 | --- | --- | --- |
-| Core smoke | `JavMetaLite.SmokeTests` | Parsers, metadata merge, v0.5 multi-source orchestration/provenance, unified poster/fanart source selection, safe local sidecar/NFO/image reads, manual complete-cover output, NFO writing, image conversion, basic organization and logs |
-| v0.4 regression | `JavMetaLite.RegressionTests` | File layout matrix, overwrite policy, conflicts, rollback and input validation |
-| UI smoke | `JavMetaLite.UiSmokeTests` | WPF window construction, dark source selector, v0.5 mixed-source badges and artwork menus, v0.6 local-NFO and local-artwork loading, local defaults, online candidates, manual complete-cover preview, failure isolation, stale-candidate clearing, safe defaults and preview window |
+| Core smoke | `JavMetaLite.SmokeTests` | Parsers, metadata merge, v0.5 multi-source orchestration/provenance, unified poster/fanart selection, safe local sidecar/NFO/image reads, XML-preserving round-trip writing, image conversion, organization and logs |
+| File regression | `JavMetaLite.RegressionTests` | File layout matrix, preview purity, NFO no-op/update, sidecar migration, overwrite/conflict policy, exact rollback, movie hashes and input validation |
+| UI smoke | `JavMetaLite.UiSmokeTests` | WPF construction, source/candidate menus, v0.6 local metadata and artwork loading, editable valid NFO state, preview action kinds, manual cover preview, failure isolation and safe defaults |
 
 The regression runner supports discovery and category filters:
 
@@ -31,7 +31,7 @@ dotnet run --project .\JavMetaLite.RegressionTests -- --list
 dotnet run --project .\JavMetaLite.RegressionTests -- --category rollback
 ```
 
-Available categories are `layout`, `overwrite`, `conflict`, `rollback`, and `validation`.
+Available categories are `layout`, `overwrite`, `roundtrip`, `conflict`, `rollback`, and `validation`.
 
 ## Isolation rules
 
@@ -41,7 +41,8 @@ Available categories are `layout`, `overwrite`, `conflict`, `rollback`, and `val
 - Multi-source orchestration uses fake providers to cover two-source success, partial and total failure, ID mismatch, per-source call counts, and diagnostics without live requests.
 - Local NFO fixtures cover valid and partial metadata, unknown-node preservation, malformed XML, wrong roots, oversized files, and DTD/external-entity rejection without touching a real media folder.
 - Synthetic local-image fixtures verify independent poster/fanart discovery, missing-counterpart behavior, invalid-image isolation, decoded dimensions, manual full-cover poster/fanart generation, and unchanged movie/source bytes.
-- WPF local fixtures verify the visible NFO and artwork sources, read-only save state, local-first online composition, manual metadata restoration, manual complete-cover preview, invalid-file logging, and complete candidate reset on the next movie.
+- Round-trip fixtures verify a pure/cancelled preview, unchanged-NFO zero writes, selective field updates, unknown XML retention, known-sidecar migration, external NFO changes, byte-exact rollback, and unchanged movie hashes.
+- WPF local fixtures verify the visible NFO and artwork sources, editable valid-NFO state, blocked invalid-NFO state, local-first online composition, preview action labels, manual restoration, invalid-file logging, and complete candidate reset on the next movie.
 - Each test verifies and removes temporary transaction artifacts.
 - A failed test returns a non-zero process exit code and prevents the gate from continuing.
 - A fixed defect should receive a regression case before the fix is considered complete.

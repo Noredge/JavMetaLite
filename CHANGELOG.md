@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.6.0-dev4 — Safe NFO round-trip saves
+
+- Enables saving after a valid local NFO has been loaded; malformed or unsafe NFO files remain protected from all write paths.
+- Updates only supported metadata fields inside the original XML document while retaining unknown elements, attributes, comments, provider IDs, and unmanaged nested data.
+- Avoids rewriting an unchanged NFO and labels the save preview as `生成`, `更新`, `保持不变`, or `替换图片` according to the actual operation.
+- Preserves a selected local poster/fanart pair byte-for-byte, including its original image extensions, and safely migrates known sidecars when folder organization or movie renaming is enabled.
+- Replaces local artwork only when an online or manually selected complete cover is active and the corresponding image outputs are enabled.
+- Detects a loaded NFO changed by another program after review and refuses to overwrite it.
+- Extends the transaction to back up and restore NFO, poster, and fanart files in reverse order if any metadata commit or final movie move fails.
+- Added offline coverage for no-op and cancelled previews, unknown-XML preservation, sidecar migration, external-change conflicts, preview action labels, exact rollback hashes, and unchanged movie bytes.
+
 ## v0.6.0-dev3 — Local artwork and manual complete covers
 
 - Detects and previews same-name local poster and fanart files when a movie is selected, with `本地图片` as the default unified artwork source.

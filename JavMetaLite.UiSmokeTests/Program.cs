@@ -274,8 +274,9 @@ internal static class Program
             artworkSourceButton.Content?.ToString() != "本地图片 ▾" ||
             posterImage.Source is null || fanartImage.Source is null ||
             fanartHintText.Text != "横板封套：1×1" ||
-            saveButton.IsEnabled ||
-            saveButton.ToolTip?.ToString()?.Contains("只读检查", StringComparison.Ordinal) != true)
+            !saveButton.IsEnabled ||
+            saveButton.ToolTip?.ToString()?.Contains("保留未知 XML", StringComparison.Ordinal) != true ||
+            !statusText.Text.Contains("可安全更新", StringComparison.Ordinal))
         {
             throw new InvalidOperationException("本地 NFO 与现有图片没有以明确来源载入界面。 ");
         }
@@ -419,7 +420,12 @@ internal static class Program
             "IPX-123",
             new JavMetaLite.Core.Models.SaveOptions(true, false, false, false, false),
             new OrganizationOptions(true, true),
-            [new PlannedFileChange(PlannedChangeKind.CreateFile, "生成 metadata", "C:\\Media\\IPX-123\\IPX-123.nfo")],
+            [
+                new PlannedFileChange(PlannedChangeKind.CreateFile, "生成 metadata", "C:\\Media\\IPX-123\\IPX-123.nfo"),
+                new PlannedFileChange(PlannedChangeKind.UpdateFile, "更新 NFO", "C:\\Media\\IPX-123\\IPX-123.nfo"),
+                new PlannedFileChange(PlannedChangeKind.KeepFile, "poster 内容保持不变", "C:\\Media\\IPX-123\\IPX-123-poster.jpg"),
+                new PlannedFileChange(PlannedChangeKind.ReplaceImage, "替换 fanart", "C:\\Media\\IPX-123\\IPX-123-fanart.jpg")
+            ],
             [],
             []);
         var previewWindow = new SavePreviewWindow(previewPlan) { Owner = window };
@@ -429,9 +435,18 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.4 保存预览窗口未成功创建。 ");
         }
+        var previewChanges = previewWindow.FindName("ChangesList") as ListView
+            ?? throw new InvalidOperationException("保存预览变更列表未创建。 ");
+        var previewActions = previewChanges.Items.Cast<object>()
+            .Select(item => item.GetType().GetProperty("Action")?.GetValue(item)?.ToString())
+            .ToArray();
+        if (!new[] { "生成", "更新", "保持不变", "替换图片" }.All(previewActions.Contains))
+        {
+            throw new InvalidOperationException("dev4 保存预览没有区分创建、更新、保持不变和替换图片。 ");
+        }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True organizeDefaultsOff=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True organizeDefaultsOff=True");
         window.Close();
         application.Shutdown();
     }

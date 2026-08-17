@@ -108,6 +108,7 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("v0.6 本地 sidecar 定位", TestLocalSidecarLocator),
     ("v0.6 本地图片发现与损坏隔离", TestLocalArtworkDiscovery),
     ("v0.6 安全 NFO 只读解析", TestNfoReader),
+    ("v0.6 NFO 未知 XML 往返保留", TestNfoRoundTripWriter),
     ("v0.6 本地与在线候选组合", TestLocalMetadataReviewComposition),
     ("v0.4 本地运行日志", TestAppLog)
 };
@@ -1101,6 +1102,131 @@ static async Task TestNfoReader()
         await File.WriteAllBytesAsync(nfoPath, new byte[NfoReader.MaximumNfoBytes + 1]);
         await AssertThrowsAsync<InvalidDataException>(() =>
             NfoReader.ReadAsync(LocalSidecarLocator.Locate(videoPath)));
+    }
+    finally
+    {
+        Directory.Delete(root, true);
+    }
+}
+
+static async Task TestNfoRoundTripWriter()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.NfoRoundTripTests.{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    try
+    {
+        var videoPath = Path.Combine(root, "IPX-321.mp4");
+        var nfoPath = Path.Combine(root, "IPX-321.nfo");
+        var outputPath = Path.Combine(root, "updated.nfo");
+        await File.WriteAllBytesAsync(videoPath, [0x49, 0x50, 0x58]);
+        const string originalXml = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <!--keep-comment-->
+            <movie custom="root-keep">
+              <title origin="keep">旧标题</title>
+              <id>IPX-321</id>
+              <uniqueid type="jav" default="true">ipx00321</uniqueid>
+              <uniqueid type="tmdb">999</uniqueid>
+              <premiered>2024-01-02</premiered>
+              <releasedate>2024-01-01</releasedate>
+              <director rank="1">旧导演</director>
+              <genre>剧情</genre>
+              <actor custom="actor-keep">
+                <name>演员甲</name>
+                <thumb>https://example.test/old.jpg</thumb>
+                <role>Lead</role>
+              </actor>
+              <tag>Label: 旧厂牌</tag>
+              <tag custom="tag-keep">Custom tag</tag>
+              <thumb aspect="landscape">landscape.jpg</thumb>
+              <thumb aspect="poster" custom="poster-keep">old-poster.jpg</thumb>
+              <fanart custom="fanart-keep"><thumb>old-fanart.jpg</thumb><other>keep</other></fanart>
+              <unknown answer="42"><child>nested</child></unknown>
+            </movie>
+            """;
+        await File.WriteAllTextAsync(nfoPath, originalXml);
+        var originalHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            await File.ReadAllBytesAsync(nfoPath)));
+        var bundle = await NfoReader.ReadAsync(LocalSidecarLocator.Locate(videoPath));
+        var editable = LocalMetadataReviewComposer.CreateLocal(bundle.Metadata).Metadata;
+
+        AssertEqual(
+            "False",
+            NfoRoundTripWriter.HasChanges(bundle, editable, false, null, false, null).ToString());
+
+        editable.Title = "新标题";
+        editable.ReleaseDate = "2025-02-03";
+        editable.Director = "新导演, 第二导演";
+        editable.GenresText = "剧情, 4K";
+        editable.ActorsText = "演员甲, 演员乙";
+        editable.Actors =
+        [
+            new ActorMetadata("演员甲", "https://example.test/new.jpg"),
+            new ActorMetadata("演员乙", "https://example.test/b.jpg")
+        ];
+        editable.Label = string.Empty;
+        editable.Series = "示例系列";
+        editable.SourceUrl = "https://example.test/IPX-321";
+
+        AssertEqual(
+            "True",
+            NfoRoundTripWriter.HasChanges(
+                bundle,
+                editable,
+                true,
+                "IPX-321-poster.jpg",
+                true,
+                "IPX-321-fanart.jpg").ToString());
+        await NfoRoundTripWriter.WriteAsync(
+            outputPath,
+            bundle,
+            editable,
+            true,
+            "IPX-321-poster.jpg",
+            true,
+            "IPX-321-fanart.jpg",
+            false);
+
+        var updated = XDocument.Load(outputPath, LoadOptions.PreserveWhitespace);
+        var movie = updated.Root!;
+        AssertEqual("root-keep", movie.Attribute("custom")?.Value);
+        AssertEqual("True", updated.DescendantNodes().OfType<XComment>().Any().ToString());
+        AssertEqual("42", movie.Element("unknown")?.Attribute("answer")?.Value);
+        AssertEqual("nested", movie.Element("unknown")?.Element("child")?.Value);
+        AssertEqual("新标题", movie.Element("title")?.Value);
+        AssertEqual("keep", movie.Element("title")?.Attribute("origin")?.Value);
+        AssertEqual("2025-02-03", movie.Element("premiered")?.Value);
+        AssertEqual("2025-02-03", movie.Element("releasedate")?.Value);
+        AssertEqual("2025", movie.Element("year")?.Value);
+        AssertEqual("2", movie.Elements("director").Count().ToString());
+        AssertEqual("1", movie.Elements("director").First().Attribute("rank")?.Value);
+        AssertEqual("2", movie.Elements("genre").Count().ToString());
+        AssertEqual("999", movie.Elements("uniqueid").First(element =>
+            element.Attribute("type")?.Value == "tmdb").Value);
+        AssertEqual("Custom tag", movie.Elements("tag").Single(element =>
+            element.Attribute("custom")?.Value == "tag-keep").Value);
+        AssertEqual("False", movie.Elements("tag").Any(element =>
+            element.Value.StartsWith("Label:", StringComparison.OrdinalIgnoreCase)).ToString());
+        AssertEqual("Series: 示例系列", movie.Elements("tag").Single(element =>
+            element.Value.StartsWith("Series:", StringComparison.OrdinalIgnoreCase)).Value);
+        var retainedActor = movie.Elements("actor").First(element => element.Element("name")?.Value == "演员甲");
+        AssertEqual("actor-keep", retainedActor.Attribute("custom")?.Value);
+        AssertEqual("Lead", retainedActor.Element("role")?.Value);
+        AssertEqual("https://example.test/new.jpg", retainedActor.Element("thumb")?.Value);
+        AssertEqual("landscape.jpg", movie.Elements("thumb").Single(element =>
+            element.Attribute("aspect")?.Value == "landscape").Value);
+        var poster = movie.Elements("thumb").Single(element => element.Attribute("aspect")?.Value == "poster");
+        AssertEqual("poster-keep", poster.Attribute("custom")?.Value);
+        AssertEqual("IPX-321-poster.jpg", poster.Value);
+        var fanart = movie.Element("fanart")!;
+        AssertEqual("fanart-keep", fanart.Attribute("custom")?.Value);
+        AssertEqual("keep", fanart.Element("other")?.Value);
+        AssertEqual("IPX-321-fanart.jpg", fanart.Element("thumb")?.Value);
+        AssertEqual("https://example.test/IPX-321", movie.Element("website")?.Value);
+        AssertEqual(
+            originalHash,
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                await File.ReadAllBytesAsync(nfoPath))));
     }
     finally
     {

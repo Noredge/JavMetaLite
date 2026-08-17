@@ -25,7 +25,7 @@ public sealed class OutputService : IDisposable
         SaveOptions options,
         CancellationToken cancellationToken = default)
     {
-        return await SaveAsync(videoPath, videoPath, metadata, options, cancellationToken);
+        return await SaveAsync(videoPath, videoPath, metadata, options, null, cancellationToken);
     }
 
     public async Task<SaveResult> SaveAsync(
@@ -33,6 +33,23 @@ public sealed class OutputService : IDisposable
         string outputVideoPath,
         MovieMetadata metadata,
         SaveOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        return await SaveAsync(
+            sourceVideoPath,
+            outputVideoPath,
+            metadata,
+            options,
+            null,
+            cancellationToken);
+    }
+
+    public async Task<SaveResult> SaveAsync(
+        string sourceVideoPath,
+        string outputVideoPath,
+        MovieMetadata metadata,
+        SaveOptions options,
+        NfoWriteContext? nfoWriteContext,
         CancellationToken cancellationToken = default)
     {
         if (!File.Exists(sourceVideoPath))
@@ -109,13 +126,35 @@ public sealed class OutputService : IDisposable
 
         if (nfoPath is not null)
         {
-            await NfoWriter.WriteAsync(
-                nfoPath,
-                metadata,
-                posterPath is null ? null : Path.GetFileName(posterPath),
-                fanartPath is null ? null : Path.GetFileName(fanartPath),
-                options.OverwriteExisting,
-                cancellationToken);
+            var posterReference = nfoWriteContext?.UpdatePosterReference == true
+                ? nfoWriteContext.PosterFileName
+                : posterPath is null ? null : Path.GetFileName(posterPath);
+            var fanartReference = nfoWriteContext?.UpdateFanartReference == true
+                ? nfoWriteContext.FanartFileName
+                : fanartPath is null ? null : Path.GetFileName(fanartPath);
+            if (nfoWriteContext?.LocalBundle is not null)
+            {
+                await NfoRoundTripWriter.WriteAsync(
+                    nfoPath,
+                    nfoWriteContext.LocalBundle,
+                    metadata,
+                    nfoWriteContext.UpdatePosterReference,
+                    posterReference,
+                    nfoWriteContext.UpdateFanartReference,
+                    fanartReference,
+                    options.OverwriteExisting,
+                    cancellationToken);
+            }
+            else
+            {
+                await NfoWriter.WriteAsync(
+                    nfoPath,
+                    metadata,
+                    posterReference,
+                    fanartReference,
+                    options.OverwriteExisting,
+                    cancellationToken);
+            }
         }
 
         AppLog.Info(

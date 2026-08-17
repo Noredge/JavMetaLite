@@ -1,5 +1,6 @@
 using System.Xml;
 using System.Xml.Linq;
+using System.Security.Cryptography;
 using JavMetaLite.Core.Models;
 
 namespace JavMetaLite.Core.Services;
@@ -30,6 +31,20 @@ public static class NfoReader
             throw new InvalidDataException($"NFO 文件过大，最大允许 {MaximumNfoBytes} 字节。");
         }
 
+        byte[] nfoBytes;
+        try
+        {
+            nfoBytes = await File.ReadAllBytesAsync(nfoPath, cancellationToken);
+        }
+        catch (IOException)
+        {
+            throw;
+        }
+        if (nfoBytes.LongLength > MaximumNfoBytes)
+        {
+            throw new InvalidDataException($"NFO 文件过大，最大允许 {MaximumNfoBytes} 字节。");
+        }
+
         XDocument document;
         try
         {
@@ -42,13 +57,7 @@ public static class NfoReader
                 IgnoreWhitespace = false,
                 MaxCharactersInDocument = MaximumNfoBytes
             };
-            await using var stream = new FileStream(
-                nfoPath,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                4096,
-                FileOptions.Asynchronous | FileOptions.SequentialScan);
+            await using var stream = new MemoryStream(nfoBytes, writable: false);
             using var reader = XmlReader.Create(stream, settings);
             document = await XDocument.LoadAsync(
                 reader,
@@ -120,6 +129,7 @@ public static class NfoReader
             sidecars with { NfoPath = nfoPath },
             metadata,
             document,
+            Convert.ToHexString(SHA256.HashData(nfoBytes)),
             diagnostics);
     }
 

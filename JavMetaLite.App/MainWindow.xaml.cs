@@ -49,7 +49,7 @@ public partial class MainWindow : Window
     private IReadOnlyList<MovieMetadata> _currentSourceResults = [];
     private string? _preferredArtworkSourceName;
     private string? _videoPath;
-    private bool _localNfoReadOnlyMode;
+    private bool _localNfoSaveBlocked;
     private bool _busy;
 
     public MainWindow()
@@ -58,7 +58,7 @@ public partial class MainWindow : Window
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
         ApplyMetadata(_metadata, []);
-        AppLog.Info("JavMetaLite v0.6.0-dev3 启动");
+        AppLog.Info("JavMetaLite v0.6.0-dev4 启动");
     }
 
     private async void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -218,9 +218,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_localNfoReadOnlyMode)
+        if (_localNfoSaveBlocked)
         {
-            ShowError("当前版本只允许读取和检查已有本地 NFO；安全更新将在后续往返保存阶段开放。原文件没有被修改。");
+            ShowError("检测到无法安全读取的本地 NFO。为保护原文件，必须修复或移走该 NFO 后重新选择影片，当前不能保存。");
             return;
         }
 
@@ -231,16 +231,6 @@ public partial class MainWindow : Window
             DownloadExtrafanartCheckBox.IsChecked == true,
             DirectSaveOverwriteCheckBox.IsChecked == true);
 
-        if (_artworkCoverReview?.SelectedCandidate?.IsSidecarPair == true &&
-            (options.DownloadPoster || options.DownloadFanart))
-        {
-            ShowError(
-                "当前选择的是影片旁已有的本地 poster/fanart。为避免把其中一张误当作完整封套，dev3 不会用它们重新生成图片。" +
-                Environment.NewLine + Environment.NewLine +
-                "请选择在线来源或“选择本地完整封套…”，也可以取消海报与 fanart 输出后只保存 NFO。");
-            return;
-        }
-
         var organizationOptions = new OrganizationOptions(
             OrganizeFolderCheckBox.IsChecked == true,
             RenameVideoCheckBox.IsChecked == true);
@@ -248,7 +238,15 @@ public partial class MainWindow : Window
         SavePlan plan;
         try
         {
-            plan = FileOrganizationService.BuildPlan(_videoPath, _metadata, options, organizationOptions);
+            plan = FileOrganizationService.BuildPlan(
+                _videoPath,
+                _metadata,
+                options,
+                organizationOptions,
+                new LocalSaveContext(
+                    _localMetadataBundle,
+                    _localArtworkCandidate,
+                    _artworkCoverReview?.SelectedCandidate));
         }
         catch (Exception exception)
         {
@@ -290,8 +288,6 @@ public partial class MainWindow : Window
                 allowOverwrite,
                 _lifetimeCancellation.Token);
             _videoPath = result.VideoPath;
-            FileNameText.Text = Path.GetFileName(result.VideoPath);
-            FilePathText.Text = result.VideoPath;
             var outputs = new[] { result.Outputs.NfoPath, result.Outputs.PosterPath, result.Outputs.FanartPath }
                 .Where(path => path is not null)
                 .Select(Path.GetFileName)
@@ -304,7 +300,11 @@ public partial class MainWindow : Window
                 ? string.Empty
                 : result.Outputs.FanartUsedFullCover ? "；fanart 来自完整封套" : string.Empty;
             var moveNote = result.VideoMoved ? $"；影片已整理为 {Path.GetFileName(result.VideoPath)}" : string.Empty;
-            SetStatus($"保存完成：{string.Join("、", outputs)}{fanartNote}{moveNote}", true);
+            await SelectVideoCoreAsync(result.VideoPath);
+            var outputSummary = outputs.Count == 0
+                ? plan.HasActualChanges ? "sidecar 已安全迁移" : "没有需要写入的变更"
+                : string.Join("、", outputs);
+            SetStatus($"保存完成：{outputSummary}{fanartNote}{moveNote}", true);
         });
     }
 
@@ -325,7 +325,7 @@ public partial class MainWindow : Window
         _localArtworkCandidate = null;
         _manualArtworkCandidate = null;
         _preferredArtworkSourceName = null;
-        _localNfoReadOnlyMode = false;
+        _localNfoSaveBlocked = false;
         AppLog.Info($"选择影片 path={path}");
         FileNameText.Text = Path.GetFileName(path);
         FilePathText.Text = path;
@@ -356,7 +356,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            _localNfoReadOnlyMode = true;
+            _localNfoSaveBlocked = true;
             try
             {
                 var bundle = await NfoReader.ReadAsync(sidecars, _lifetimeCancellation.Token);
@@ -369,6 +369,7 @@ public partial class MainWindow : Window
 
                 _localMetadataBundle = bundle;
                 _localSourceMetadata = composition.Sources[0];
+                _localNfoSaveBlocked = false;
                 ApplyMetadata(editable, composition.Sources);
                 AppLog.Info(
                     $"本地 NFO 载入成功 path={bundle.Sidecars.NfoPath} id={editable.Id} " +
@@ -376,7 +377,7 @@ public partial class MainWindow : Window
                 var diagnosticNote = bundle.Diagnostics.Count == 0
                     ? string.Empty
                     : $"；{string.Join("；", bundle.Diagnostics)}";
-                metadataStatus = $"已从本地 NFO 载入（只读检查）：{bundle.Sidecars.NfoPath}{diagnosticNote}";
+                metadataStatus = $"已从本地 NFO 载入（可安全更新）：{bundle.Sidecars.NfoPath}{diagnosticNote}";
                 statusSuccess = true;
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
@@ -1119,10 +1120,12 @@ public partial class MainWindow : Window
         {
             Mouse.OverrideCursor = null;
             SearchButton.IsEnabled = true;
-            SaveButton.IsEnabled = !_localNfoReadOnlyMode;
-            SaveButton.ToolTip = _localNfoReadOnlyMode
-                ? "当前只读检查：已有本地 NFO 的安全更新将在 dev4 开放"
-                : null;
+            SaveButton.IsEnabled = !_localNfoSaveBlocked;
+            SaveButton.ToolTip = _localNfoSaveBlocked
+                ? "本地 NFO 无法安全读取；修复或移走后重新选择影片"
+                : _localMetadataBundle is not null
+                    ? "保存时只更新受管理字段，并保留未知 XML"
+                    : null;
             _busy = false;
             RefreshArtworkSourceBadge();
         }
