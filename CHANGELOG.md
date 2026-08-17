@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.7.0-dev1 — Custom target path foundation
+
+- Added explicit `VideoDirectory`, `SourceNumberFolder`, and `CustomRootNumberFolder` destination modes while preserving the existing two-boolean API and v0.6 UI behavior.
+- Added a pure organization path planner that calculates the target movie, NFO, artwork, and sample-image base location without creating or moving files.
+- Kept movie renaming independent from destination selection and avoided duplicate nesting when the selected custom root is already named after the normalized movie ID.
+- Requires a fully qualified custom root and reports a file occupying that root, an occupied target folder, or an existing target movie as a blocking conflict.
+- Added offline regression coverage for same-drive paths, different drive letters, UNC roots, validation, collision protection, and planning purity.
+- Deliberately leaves custom-root UI selection and cross-volume/network transaction execution for later v0.7 development builds.
+
 ## v0.6.0 — Stable
 
 - Promotes RC1 without functional changes after the complete automated gate, dev4 B01–B07 checks, and RC1 R01–R06 Jellyfin integration acceptance passed.

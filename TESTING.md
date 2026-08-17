@@ -21,7 +21,7 @@ The projects run sequentially because the smoke and UI projects share build outp
 | Layer | Project | Purpose |
 | --- | --- | --- |
 | Core smoke | `JavMetaLite.SmokeTests` | Parsers, metadata merge, v0.5 multi-source orchestration/provenance, unified poster/fanart selection, safe local sidecar/NFO/image reads, XML-preserving round-trip writing, image conversion, organization and logs |
-| File regression | `JavMetaLite.RegressionTests` | File layout matrix, preview purity, NFO no-op/update, sidecar migration, overwrite/conflict policy, exact rollback, movie hashes and input validation |
+| File regression | `JavMetaLite.RegressionTests` | File layout and target-mode matrices, custom-root validation, preview purity, NFO no-op/update, sidecar migration, overwrite/conflict policy, exact rollback, movie hashes and input validation |
 | UI smoke | `JavMetaLite.UiSmokeTests` | WPF construction, source/candidate menus, v0.6 local metadata and artwork loading, editable valid NFO state, preview action kinds, manual cover preview, failure isolation and safe defaults |
 
 The regression runner supports discovery and category filters:
@@ -29,9 +29,10 @@ The regression runner supports discovery and category filters:
 ```powershell
 dotnet run --project .\JavMetaLite.RegressionTests -- --list
 dotnet run --project .\JavMetaLite.RegressionTests -- --category rollback
+dotnet run --project .\JavMetaLite.RegressionTests -- --category target
 ```
 
-Available categories are `layout`, `overwrite`, `roundtrip`, `conflict`, `rollback`, and `validation`.
+Available categories are `layout`, `target`, `overwrite`, `roundtrip`, `conflict`, `rollback`, and `validation`.
 
 ## Isolation rules
 
@@ -42,6 +43,7 @@ Available categories are `layout`, `overwrite`, `roundtrip`, `conflict`, `rollba
 - Local NFO fixtures cover valid and partial metadata, unknown-node preservation, malformed XML, wrong roots, oversized files, and DTD/external-entity rejection without touching a real media folder.
 - Synthetic local-image fixtures verify independent poster/fanart discovery, missing-counterpart behavior, invalid-image isolation, decoded dimensions, manual full-cover poster/fanart generation, and unchanged movie/source bytes.
 - Round-trip fixtures verify a pure/cancelled preview, unchanged-NFO zero writes, selective field updates, unknown XML retention, known-sidecar migration, external NFO changes, byte-exact rollback, and unchanged movie hashes.
+- Target fixtures verify all three destination modes, independent movie renaming, no duplicate number folder, absolute-root validation, file-occupied roots, movie conflicts, different-drive paths, UNC paths, and zero filesystem writes during pure planning.
 - WPF local fixtures verify the visible NFO and artwork sources, editable valid-NFO state, blocked invalid-NFO state, local-first online composition, preview action labels, manual restoration, invalid-file logging, and complete candidate reset on the next movie.
 - Each test verifies and removes temporary transaction artifacts.
 - A failed test returns a non-zero process exit code and prevents the gate from continuing.

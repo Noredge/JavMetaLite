@@ -1,8 +1,59 @@
 namespace JavMetaLite.Core.Models;
 
-public sealed record OrganizationOptions(
-    bool CreateMovieFolder,
-    bool RenameVideo);
+public enum OrganizationTargetMode
+{
+    VideoDirectory,
+    SourceNumberFolder,
+    CustomRootNumberFolder
+}
+
+public sealed record OrganizationOptions
+{
+    public OrganizationOptions(bool createMovieFolder, bool renameVideo)
+        : this(
+            createMovieFolder
+                ? OrganizationTargetMode.SourceNumberFolder
+                : OrganizationTargetMode.VideoDirectory,
+            renameVideo)
+    {
+    }
+
+    public OrganizationOptions(
+        OrganizationTargetMode targetMode,
+        bool renameVideo,
+        string? customRootDirectory = null)
+    {
+        TargetMode = targetMode;
+        RenameVideo = renameVideo;
+        CustomRootDirectory = customRootDirectory;
+    }
+
+    public OrganizationTargetMode TargetMode { get; }
+
+    public bool RenameVideo { get; }
+
+    public string? CustomRootDirectory { get; }
+
+    public bool CreateMovieFolder => TargetMode is not OrganizationTargetMode.VideoDirectory;
+
+    public bool UsesCustomRoot => TargetMode is OrganizationTargetMode.CustomRootNumberFolder;
+
+    public void Deconstruct(out bool createMovieFolder, out bool renameVideo)
+    {
+        createMovieFolder = CreateMovieFolder;
+        renameVideo = RenameVideo;
+    }
+}
+
+public sealed record OrganizationPathPlan(
+    string SourceVideoPath,
+    string SourceDirectory,
+    string NormalizedId,
+    string TargetRootDirectory,
+    string TargetDirectory,
+    string TargetBaseName,
+    string TargetVideoPath,
+    bool UsesCustomRoot);
 
 public enum PlannedChangeKind
 {

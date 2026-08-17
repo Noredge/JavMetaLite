@@ -16,6 +16,8 @@ internal static class FileOrganizationRegressionTests
         new("layout", "四种文件夹与重命名组合", TestOrganizationMatrix),
         new("layout", "当前文件夹已经是番号时不重复嵌套", TestExistingNumberFolder),
         new("layout", "Unicode 文件名与支持的扩展名保持有效", TestUnicodeAndExtensions),
+        new("target", "三种目标模式与独立影片重命名得到稳定路径", TestCustomTargetPlanning),
+        new("target", "自定义根目录校验、冲突、跨盘符与 UNC 规划", TestCustomTargetValidation),
         new("overwrite", "预览模式拒绝覆盖，直接模式允许覆盖", TestOverwritePolicy),
         new("roundtrip", "生成变更预览后取消保持全部文件零写入", TestPreviewCancellationIsPure),
         new("roundtrip", "已有 NFO 无变化零写入，修改后保留未知 XML", TestRoundTripUpdate),
@@ -131,6 +133,153 @@ internal static class FileOrganizationRegressionTests
             AssertEx.Equal(originalHash, AssertEx.Sha256(result.VideoPath));
             workspace.AssertNoTemporaryArtifacts();
         }
+    }
+
+    private static Task TestCustomTargetPlanning()
+    {
+        using var workspace = new TestWorkspace("custom-target-planning");
+        var sourceDirectory = workspace.CreateDirectory("incoming");
+        var sourcePath = workspace.WriteFile("incoming/download @ SNOS-255-UC.mkv", VideoBytes);
+        var customRoot = workspace.PathOf("library");
+        var metadata = Metadata("snos-255", "自定义目标路径");
+
+        var keepPlan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            NfoOnly(),
+            new OrganizationOptions(OrganizationTargetMode.VideoDirectory, false));
+        AssertEx.Equal(sourceDirectory, keepPlan.TargetDirectory);
+        AssertEx.Equal(Path.Combine(sourceDirectory, "download @ SNOS-255-UC.mkv"), keepPlan.TargetVideoPath);
+
+        var sourceFolderPlan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            NfoOnly(),
+            new OrganizationOptions(OrganizationTargetMode.SourceNumberFolder, false));
+        AssertEx.Equal(Path.Combine(sourceDirectory, "SNOS-255"), sourceFolderPlan.TargetDirectory);
+        AssertEx.Equal(
+            Path.Combine(sourceDirectory, "SNOS-255", "download @ SNOS-255-UC.mkv"),
+            sourceFolderPlan.TargetVideoPath);
+
+        var customPlan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            NfoOnly(),
+            new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, false, customRoot));
+        var expectedCustomDirectory = Path.Combine(customRoot, "SNOS-255");
+        AssertEx.Equal(expectedCustomDirectory, customPlan.TargetDirectory);
+        AssertEx.Equal(
+            Path.Combine(expectedCustomDirectory, "download @ SNOS-255-UC.mkv"),
+            customPlan.TargetVideoPath);
+        AssertEx.True(customPlan.OrganizationOptions.CreateMovieFolder, "Custom target must create/use a number folder.");
+        AssertEx.True(customPlan.OrganizationOptions.UsesCustomRoot, "Custom target mode was not preserved in the plan.");
+
+        var renamePlan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            NfoOnly(),
+            new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, true, customRoot));
+        AssertEx.Equal(Path.Combine(expectedCustomDirectory, "SNOS-255.mkv"), renamePlan.TargetVideoPath);
+
+        var selectedNumberDirectory = Path.Combine(customRoot, "snos-255");
+        var alreadySelectedPlan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            NfoOnly(),
+            new OrganizationOptions(
+                OrganizationTargetMode.CustomRootNumberFolder,
+                true,
+                selectedNumberDirectory + Path.DirectorySeparatorChar));
+        AssertEx.Equal(selectedNumberDirectory, alreadySelectedPlan.TargetDirectory);
+        AssertEx.False(
+            alreadySelectedPlan.TargetDirectory.EndsWith(
+                Path.Combine("snos-255", "SNOS-255"),
+                StringComparison.OrdinalIgnoreCase),
+            "An already selected number directory was nested again.");
+
+        AssertEx.False(Directory.Exists(expectedCustomDirectory), "Path planning unexpectedly created the target directory.");
+        AssertEx.FileExists(sourcePath);
+        workspace.AssertNoTemporaryArtifacts();
+        return Task.CompletedTask;
+    }
+
+    private static Task TestCustomTargetValidation()
+    {
+        using var workspace = new TestWorkspace("custom-target-validation");
+        var sourcePath = workspace.WriteFile("incoming/source.mp4", VideoBytes);
+
+        AssertEx.Throws<InvalidOperationException>(
+            () => OrganizationPathPlanner.Resolve(
+                sourcePath,
+                "IPX-888",
+                new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, false)),
+            "A blank custom root was accepted.");
+        AssertEx.Throws<InvalidOperationException>(
+            () => OrganizationPathPlanner.Resolve(
+                sourcePath,
+                "IPX-888",
+                new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, false, "relative/library")),
+            "A relative custom root was accepted.");
+        AssertEx.Throws<InvalidOperationException>(
+            () => OrganizationPathPlanner.Resolve(
+                sourcePath,
+                "IPX/888",
+                new OrganizationOptions(
+                    OrganizationTargetMode.CustomRootNumberFolder,
+                    false,
+                    workspace.PathOf("library"))),
+            "An invalid movie number was accepted for a custom target.");
+
+        var occupiedRoot = workspace.WriteFile("occupied-root", [0x01]);
+        var occupiedPlan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            Metadata("IPX-888", "根目录占位"),
+            NfoOnly(),
+            new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, false, occupiedRoot));
+        AssertEx.True(
+            occupiedPlan.BlockingConflicts.Any(conflict => conflict.Contains("自定义目标根目录", StringComparison.Ordinal)),
+            "A file occupying the custom root was not reported as a blocking conflict.");
+
+        var customRoot = workspace.CreateDirectory("library");
+        var targetDirectory = workspace.CreateDirectory("library", "IPX-888");
+        var existingTargetVideo = workspace.WriteFile("library/IPX-888/IPX-888.mp4", [0x09]);
+        var movieConflictPlan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            Metadata("IPX-888", "影片冲突"),
+            NfoOnly(overwrite: true),
+            new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, true, customRoot));
+        AssertEx.Equal(targetDirectory, movieConflictPlan.TargetDirectory);
+        AssertEx.Equal(existingTargetVideo, movieConflictPlan.TargetVideoPath);
+        AssertEx.True(movieConflictPlan.HasBlockingConflicts, "An existing target movie was not blocked.");
+
+        if (OperatingSystem.IsWindows())
+        {
+            var crossDrive = OrganizationPathPlanner.Resolve(
+                sourcePath,
+                "IPX-888",
+                new OrganizationOptions(
+                    OrganizationTargetMode.CustomRootNumberFolder,
+                    true,
+                    @"Z:\Jellyfin\Movies"));
+            AssertEx.Equal(@"Z:\Jellyfin\Movies\IPX-888", crossDrive.TargetDirectory);
+            AssertEx.Equal(@"Z:\Jellyfin\Movies\IPX-888\IPX-888.mp4", crossDrive.TargetVideoPath);
+
+            var unc = OrganizationPathPlanner.Resolve(
+                sourcePath,
+                "IPX-888",
+                new OrganizationOptions(
+                    OrganizationTargetMode.CustomRootNumberFolder,
+                    false,
+                    @"\\JavMetaLiteTest\Media"));
+            AssertEx.Equal(@"\\JavMetaLiteTest\Media\IPX-888", unc.TargetDirectory);
+            AssertEx.Equal(
+                @"\\JavMetaLiteTest\Media\IPX-888\source.mp4",
+                unc.TargetVideoPath);
+        }
+
+        AssertEx.FileExists(sourcePath);
+        workspace.AssertNoTemporaryArtifacts();
+        return Task.CompletedTask;
     }
 
     private static async Task TestOverwritePolicy()

@@ -2,6 +2,12 @@
 
 一个只处理单个影片的轻量 Windows metadata 工具。它不会扫描整个媒体库；文件整理和直接保存都默认关闭，用户可以先预览所有变更，也可以明确选择跳过预览并直接覆盖 metadata。
 
+## v0.7.0-dev1 开发构建
+
+`v0.7.0-dev1` 建立自定义目标路径的 Core 基座。保存计划现在明确区分“影片所在位置”“来源位置的番号文件夹”“自定义根目录下的番号文件夹”三种模式，影片重命名仍然是独立选项。路径解析会校验自定义根目录必须为绝对路径，并在用户已经选择番号文件夹本身时避免重复生成第二层番号目录；本地盘、不同盘符和 UNC 路径均有纯规划测试。dev1 尚未把新模式接入主界面，也不会执行跨盘或网络移动，界面行为与 v0.6.0 保持一致。
+
+完整范围与分阶段安排见 [`ROADMAP-v0.7.0.md`](ROADMAP-v0.7.0.md)。
+
 ## v0.6.0 稳定版
 
 `v0.6.0` 已通过完整自动化门禁、dev4 B01–B07 和 RC1 R01–R06 最终 Jellyfin 往返验收。它完成单片本地 metadata 再编辑闭环：载入既有 NFO 与 poster/fanart、保留本地默认值、加入在线候选、逐字段或手动修改、预览实际变更，并安全更新或迁移 Jellyfin sidecar。保存只更新已支持的 NFO 字段，未知 XML、未替换图片和影片字节继续受保护；解析失败、外部修改和目标冲突会阻止覆盖。Jellyfin 重扫与 JavMetaLite 二次载入均已验证，影片 SHA-256 保持一致。
@@ -55,7 +61,7 @@ dotnet build .\JavMetaLite.App\JavMetaLite.App.csproj
 dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
 ```
 
-运行完整自动化测试门槛（核心 smoke、v0.4 文件回归、WPF UI smoke）：
+运行完整自动化测试门槛（核心 smoke、文件事务与目标路径回归、WPF UI smoke）：
 
 ```powershell
 .\scripts\Test-Automated.ps1
@@ -89,7 +95,7 @@ dotnet publish .\JavMetaLite.App\JavMetaLite.App.csproj -c Release -r win-x64 --
 
 - v0.4 仍然是单片编辑器，不提供媒体库扫描或批量刮削。
 - 整理功能只移动当前选择的影片并生成本次选择的 metadata；不会自动搬运未知的字幕或旧伴随文件。
-- 自定义目标路径暂未提供；当前整理目标固定为影片当前目录内的番号子文件夹。
+- v0.7.0-dev1 已完成自定义目标路径的 Core 规划与校验，但主界面尚未开放该选项；当前可见整理行为仍固定为影片当前目录内的番号子文件夹。
 - 软件不会写入 MP4/MKV 容器内部 metadata。
 - `actors/` 暂不生成；演员图片以 NFO 内的远程 `thumb` 提供，`extrafanart/` 是可选输出。
 - 网站结构变化可能需要更新 `JavLibraryClient`。

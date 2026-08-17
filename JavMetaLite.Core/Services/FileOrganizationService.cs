@@ -26,23 +26,14 @@ public sealed class FileOrganizationService
         }
 
         ValidateOutputs(saveOptions);
-        var normalizedId = organizationOptions.CreateMovieFolder || organizationOptions.RenameVideo
-            ? NormalizeId(metadata.Id)
-            : metadata.Id.Trim().ToUpperInvariant();
-        var sourceDirectory = Path.GetDirectoryName(sourceVideoPath)!;
-        var sourceDirectoryName = new DirectoryInfo(sourceDirectory).Name;
-        var targetDirectory = organizationOptions.CreateMovieFolder &&
-                              !sourceDirectoryName.Equals(normalizedId, StringComparison.OrdinalIgnoreCase)
-            ? Path.Combine(sourceDirectory, normalizedId)
-            : sourceDirectory;
-        targetDirectory = Path.GetFullPath(targetDirectory);
-
-        var targetBaseName = organizationOptions.RenameVideo
-            ? normalizedId
-            : Path.GetFileNameWithoutExtension(sourceVideoPath);
-        var targetVideoPath = Path.Combine(
-            targetDirectory,
-            targetBaseName + Path.GetExtension(sourceVideoPath));
+        var pathPlan = OrganizationPathPlanner.Resolve(
+            sourceVideoPath,
+            metadata.Id,
+            organizationOptions);
+        var sourceDirectory = pathPlan.SourceDirectory;
+        var targetDirectory = pathPlan.TargetDirectory;
+        var targetBaseName = pathPlan.TargetBaseName;
+        var targetVideoPath = pathPlan.TargetVideoPath;
 
         var changes = new List<PlannedFileChange>();
         var overwriteConflicts = new List<string>();
@@ -51,6 +42,10 @@ public sealed class FileOrganizationService
         var expectations = new List<SourceFileExpectation>();
         var retirePaths = new List<string>();
 
+        if (pathPlan.UsesCustomRoot && File.Exists(pathPlan.TargetRootDirectory))
+        {
+            blockingConflicts.Add($"自定义目标根目录路径已被文件占用：{pathPlan.TargetRootDirectory}");
+        }
         if (File.Exists(targetDirectory))
         {
             blockingConflicts.Add($"目标文件夹路径已被文件占用：{targetDirectory}");
@@ -604,21 +599,6 @@ public sealed class FileOrganizationService
         {
             throw new InvalidOperationException("请至少选择一种输出：NFO、海报、fanart 或全部剧照。 ");
         }
-    }
-
-    private static string NormalizeId(string id)
-    {
-        var normalized = id.Trim().ToUpperInvariant();
-        if (string.IsNullOrWhiteSpace(normalized))
-        {
-            throw new InvalidOperationException("整理文件前需要有效的影片番号。 ");
-        }
-        if (normalized.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
-            normalized.EndsWith('.') || normalized.EndsWith(' '))
-        {
-            throw new InvalidOperationException($"影片番号不能作为 Windows 文件名：{id}");
-        }
-        return normalized;
     }
 
     private static bool PathsEqual(string left, string right) =>
