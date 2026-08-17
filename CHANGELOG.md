@@ -8,6 +8,7 @@
 - Keeps malformed NFO files blocked from every write path and keeps movie files protected from overwrite or content modification.
 - Adds a focused real-Jellyfin round-trip checklist covering initial ingestion, mixed-source edits, artwork replacement, rescan, and a second JavMetaLite load.
 - RC1 is feature-frozen; only defects found by final integration testing will be changed before the stable release.
+- Passed R01–R06 final integration acceptance: existing Jellyfin metadata loaded correctly, mixed local/online edits and artwork replacement saved safely, Jellyfin rescanned the result, the second JavMetaLite load was lossless, movie SHA-256 stayed unchanged, and unknown XML survived.
 
 ## v0.6.0-dev4 — Safe NFO round-trip saves
 
