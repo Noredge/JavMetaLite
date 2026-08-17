@@ -10,6 +10,7 @@
 - Detects a loaded NFO changed by another program after review and refuses to overwrite it.
 - Extends the transaction to back up and restore NFO, poster, and fanart files in reverse order if any metadata commit or final movie move fails.
 - Added offline coverage for no-op and cancelled previews, unknown-XML preservation, sidecar migration, external-change conflicts, preview action labels, exact rollback hashes, and unchanged movie bytes.
+- Passed B01–B07 manual acceptance, covering real NFO edits, cancelled and no-op saves, artwork replacement, explicit direct-save behavior, sidecar organization, external-change protection, and unchanged movie SHA-256.
 
 ## v0.6.0-dev3 — Local artwork and manual complete covers
 
