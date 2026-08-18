@@ -9,6 +9,7 @@
 - Moves “影片重命名为番号” into the save-method row and increases the visual gap between the custom-folder picker and Save button.
 - Adds offline verified-copy coverage for success, cancellation, hash mismatch, late target conflicts, post-commit rollback, progress reporting, source preservation, and movie hashes.
 - Records D01–D08 as passed for dev2 and advances dev3 to focused real-drive/UNC testing.
+- Passed T01–T05 and T08 manual checks for UI layout, real cross-drive preview/save/cancel/conflict behavior, and same-volume regression; T06–T07 were skipped because no UNC test share was available.
 
 ## v0.7.0-dev2 — Custom target location UI
 
