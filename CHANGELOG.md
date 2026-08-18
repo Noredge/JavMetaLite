@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.0-dev3 — Verified cross-volume transactions
+
+- Opens different-drive and UNC custom targets through a verified copy transaction while retaining the existing atomic move path for same-volume destinations.
+- Streams the movie into a target-side temporary area, hashes the source during copy, hashes the completed target copy independently, and commits only when both SHA-256 values match.
+- Removes the source movie and migrated sidecars only after the target movie and metadata have committed; cancellation and failures restore metadata, preserve the source, and clean temporary targets.
+- Adds live copy/verification status and a per-operation cancel button, plus a local-volume free-space preflight and late-conflict protection.
+- Moves “影片重命名为番号” into the save-method row and increases the visual gap between the custom-folder picker and Save button.
+- Adds offline verified-copy coverage for success, cancellation, hash mismatch, late target conflicts, post-commit rollback, progress reporting, source preservation, and movie hashes.
+- Records D01–D08 as passed for dev2 and advances dev3 to focused real-drive/UNC testing.
+
 ## v0.7.0-dev2 — Custom target location UI
 
 - Replaced the legacy organization checkbox with three explicit target modes: keep beside the movie, use a number folder at the source, or use a number folder below a custom root.

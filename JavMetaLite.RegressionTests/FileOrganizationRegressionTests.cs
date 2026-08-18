@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Xml.Linq;
 using JavMetaLite.Core.Models;
 using JavMetaLite.Core.Services;
@@ -19,6 +20,11 @@ internal static class FileOrganizationRegressionTests
         new("target", "三种目标模式与独立影片重命名得到稳定路径", TestCustomTargetPlanning),
         new("target", "同卷自定义根目录安全执行并保持影片字节", TestSameVolumeCustomTargetExecution),
         new("target", "自定义根目录校验、冲突、跨盘符与 UNC 规划", TestCustomTargetValidation),
+        new("transfer", "安全复制、SHA-256 校验并在提交后移除来源", TestVerifiedCopySuccess),
+        new("transfer", "复制期间取消会保留来源并清理目标", TestVerifiedCopyCancellation),
+        new("transfer", "SHA-256 不一致会拒绝提交并保留来源", TestVerifiedCopyHashMismatch),
+        new("transfer", "复制后出现目标影片冲突会保留两边文件", TestVerifiedCopyLateTargetConflict),
+        new("transfer", "目标提交后来源锁定会回滚目标", TestVerifiedCopyLateSourceFailure),
         new("overwrite", "预览模式拒绝覆盖，直接模式允许覆盖", TestOverwritePolicy),
         new("roundtrip", "生成变更预览后取消保持全部文件零写入", TestPreviewCancellationIsPure),
         new("roundtrip", "已有 NFO 无变化零写入，修改后保留未知 XML", TestRoundTripUpdate),
@@ -277,8 +283,8 @@ internal static class FileOrganizationRegressionTests
             AssertEx.Equal(@"Z:\Jellyfin\Movies\IPX-888", crossDrive.TargetDirectory);
             AssertEx.Equal(@"Z:\Jellyfin\Movies\IPX-888\IPX-888.mp4", crossDrive.TargetVideoPath);
             AssertEx.True(
-                OrganizationPathPlanner.GetExecutionBlockReason(crossDrive)?.Contains("跨盘符", StringComparison.Ordinal) == true,
-                "A different-drive target was not blocked before the safe copy transaction exists.");
+                crossDrive.RequiresVerifiedCopy,
+                "A different-drive target did not select the verified-copy transaction.");
 
             var unc = OrganizationPathPlanner.Resolve(
                 sourcePath,
@@ -292,13 +298,219 @@ internal static class FileOrganizationRegressionTests
                 @"\\JavMetaLiteTest\Media\IPX-888\source.mp4",
                 unc.TargetVideoPath);
             AssertEx.True(
-                OrganizationPathPlanner.GetExecutionBlockReason(unc)?.Contains("网络路径", StringComparison.Ordinal) == true,
-                "A UNC target was not blocked before the safe copy transaction exists.");
+                unc.RequiresVerifiedCopy,
+                "A UNC target did not select the verified-copy transaction.");
         }
 
         AssertEx.FileExists(sourcePath);
         workspace.AssertNoTemporaryArtifacts();
         return Task.CompletedTask;
+    }
+
+    private static async Task TestVerifiedCopySuccess()
+    {
+        using var workspace = new TestWorkspace("verified-copy-success");
+        var sourceBytes = Enumerable.Range(0, 3 * 1024 * 1024 + 317)
+            .Select(index => (byte)(index % 251))
+            .ToArray();
+        var sourcePath = workspace.WriteFile("incoming/cross-source.mkv", sourceBytes);
+        var sourceHash = AssertEx.Sha256(sourcePath);
+        var customRoot = workspace.CreateDirectory("library");
+        var metadata = Metadata("IPX-890", "安全复制成功");
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            NfoOnly(),
+            new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, true, customRoot)) with
+        {
+            RequiresVerifiedVideoCopy = true
+        };
+        var stages = new List<FileTransactionStage>();
+        var progress = new InlineProgress<FileTransactionProgress>(update => stages.Add(update.Stage));
+
+        using var outputService = new OutputService();
+        var result = await new FileOrganizationService(outputService)
+            .ExecuteAsync(plan, metadata, false, CancellationToken.None, progress);
+
+        AssertEx.FileDoesNotExist(sourcePath);
+        AssertEx.FileExists(result.VideoPath);
+        AssertEx.Equal(sourceHash, AssertEx.Sha256(result.VideoPath));
+        AssertEx.True(stages.Contains(FileTransactionStage.CopyingMovie), "Movie copy progress was not reported.");
+        AssertEx.True(stages.Contains(FileTransactionStage.VerifyingMovie), "Movie verification progress was not reported.");
+        AssertEx.True(stages.Contains(FileTransactionStage.RetiringSource), "Source retirement was not reported.");
+        AssertEx.True(stages.Contains(FileTransactionStage.Completed), "Transaction completion was not reported.");
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestVerifiedCopyCancellation()
+    {
+        using var workspace = new TestWorkspace("verified-copy-cancel");
+        var sourcePath = workspace.WriteFile("incoming/cancel-source.mp4", new byte[3 * 1024 * 1024]);
+        var sourceHash = AssertEx.Sha256(sourcePath);
+        var metadata = Metadata("IPX-891", "复制取消");
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            NfoOnly(),
+            new OrganizationOptions(
+                OrganizationTargetMode.CustomRootNumberFolder,
+                true,
+                workspace.CreateDirectory("library"))) with
+        {
+            RequiresVerifiedVideoCopy = true
+        };
+        using var cancellation = new CancellationTokenSource();
+        var progress = new InlineProgress<FileTransactionProgress>(update =>
+        {
+            if (update.Stage == FileTransactionStage.CopyingMovie && update.BytesProcessed > 0)
+            {
+                cancellation.Cancel();
+            }
+        });
+
+        using var outputService = new OutputService();
+        await AssertEx.ThrowsAsync<OperationCanceledException>(
+            () => new FileOrganizationService(outputService)
+                .ExecuteAsync(plan, metadata, false, cancellation.Token, progress),
+            "Cancelling a verified copy did not stop the transaction.");
+
+        AssertEx.FileExists(sourcePath);
+        AssertEx.Equal(sourceHash, AssertEx.Sha256(sourcePath));
+        AssertEx.FileDoesNotExist(plan.TargetVideoPath);
+        AssertEx.FileDoesNotExist(Path.Combine(plan.TargetDirectory, "IPX-891.nfo"));
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestVerifiedCopyHashMismatch()
+    {
+        using var workspace = new TestWorkspace("verified-copy-hash-mismatch");
+        var sourcePath = workspace.WriteFile("incoming/hash-source.mp4", new byte[2 * 1024 * 1024]);
+        var sourceHash = AssertEx.Sha256(sourcePath);
+        var metadata = Metadata("IPX-892", "校验失败");
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            NfoOnly(),
+            new OrganizationOptions(
+                OrganizationTargetMode.CustomRootNumberFolder,
+                true,
+                workspace.CreateDirectory("library"))) with
+        {
+            RequiresVerifiedVideoCopy = true
+        };
+        var corrupted = false;
+        var progress = new InlineProgress<FileTransactionProgress>(update =>
+        {
+            if (!corrupted && update.Stage == FileTransactionStage.VerifyingMovie &&
+                update.BytesProcessed == 0 && update.TemporaryPath is not null)
+            {
+                using var stream = new FileStream(update.TemporaryPath, FileMode.Open, FileAccess.Write, FileShare.Read);
+                stream.WriteByte(0x7F);
+                corrupted = true;
+            }
+        });
+
+        using var outputService = new OutputService();
+        var exception = await AssertEx.ThrowsAsync<IOException>(
+            () => new FileOrganizationService(outputService)
+                .ExecuteAsync(plan, metadata, false, CancellationToken.None, progress),
+            "A corrupted target copy was committed.");
+
+        AssertEx.True(exception.Message.Contains("SHA-256", StringComparison.Ordinal), "Hash mismatch was not reported.");
+        AssertEx.FileExists(sourcePath);
+        AssertEx.Equal(sourceHash, AssertEx.Sha256(sourcePath));
+        AssertEx.FileDoesNotExist(plan.TargetVideoPath);
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestVerifiedCopyLateSourceFailure()
+    {
+        using var workspace = new TestWorkspace("verified-copy-late-source-failure");
+        var sourcePath = workspace.WriteFile("incoming/locked-source.mp4", new byte[2 * 1024 * 1024]);
+        var sourceHash = AssertEx.Sha256(sourcePath);
+        var metadata = Metadata("IPX-893", "来源移除失败");
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            NfoOnly(),
+            new OrganizationOptions(
+                OrganizationTargetMode.CustomRootNumberFolder,
+                true,
+                workspace.CreateDirectory("library"))) with
+        {
+            RequiresVerifiedVideoCopy = true
+        };
+        FileStream? sourceLock = null;
+        var progress = new InlineProgress<FileTransactionProgress>(update =>
+        {
+            if (sourceLock is null && update.Stage == FileTransactionStage.RetiringSource)
+            {
+                sourceLock = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.None);
+            }
+        });
+
+        using var outputService = new OutputService();
+        try
+        {
+            await AssertEx.ThrowsAsync<IOException>(
+                () => new FileOrganizationService(outputService)
+                    .ExecuteAsync(plan, metadata, false, CancellationToken.None, progress),
+                "A locked source movie did not roll back the committed target.");
+        }
+        finally
+        {
+            sourceLock?.Dispose();
+        }
+
+        AssertEx.FileExists(sourcePath);
+        AssertEx.Equal(sourceHash, AssertEx.Sha256(sourcePath));
+        AssertEx.FileDoesNotExist(plan.TargetVideoPath);
+        AssertEx.FileDoesNotExist(Path.Combine(plan.TargetDirectory, "IPX-893.nfo"));
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestVerifiedCopyLateTargetConflict()
+    {
+        using var workspace = new TestWorkspace("verified-copy-late-target-conflict");
+        var sourcePath = workspace.WriteFile("incoming/late-conflict-source.mp4", new byte[2 * 1024 * 1024]);
+        var sourceHash = AssertEx.Sha256(sourcePath);
+        var metadata = Metadata("IPX-894", "晚到目标冲突");
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            NfoOnly(),
+            new OrganizationOptions(
+                OrganizationTargetMode.CustomRootNumberFolder,
+                true,
+                workspace.CreateDirectory("library"))) with
+        {
+            RequiresVerifiedVideoCopy = true
+        };
+        var conflictBytes = new byte[] { 0x43, 0x4F, 0x4E, 0x46, 0x4C, 0x49, 0x43, 0x54 };
+        var conflictCreated = false;
+        var progress = new InlineProgress<FileTransactionProgress>(update =>
+        {
+            if (!conflictCreated && update.Stage == FileTransactionStage.VerifyingMovie &&
+                update.BytesProcessed == 0)
+            {
+                Directory.CreateDirectory(plan.TargetDirectory);
+                File.WriteAllBytes(plan.TargetVideoPath, conflictBytes);
+                conflictCreated = true;
+            }
+        });
+
+        using var outputService = new OutputService();
+        await AssertEx.ThrowsAsync<IOException>(
+            () => new FileOrganizationService(outputService)
+                .ExecuteAsync(plan, metadata, false, CancellationToken.None, progress),
+            "A target movie created after planning was overwritten.");
+
+        AssertEx.FileExists(sourcePath);
+        AssertEx.Equal(sourceHash, AssertEx.Sha256(sourcePath));
+        AssertEx.FileExists(plan.TargetVideoPath);
+        AssertEx.Equal(Convert.ToHexString(SHA256.HashData(conflictBytes)), AssertEx.Sha256(plan.TargetVideoPath));
+        AssertEx.FileDoesNotExist(Path.Combine(plan.TargetDirectory, "IPX-894.nfo"));
+        workspace.AssertNoTemporaryArtifacts();
     }
 
     private static async Task TestSameVolumeCustomTargetExecution()

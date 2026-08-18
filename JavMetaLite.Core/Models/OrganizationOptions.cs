@@ -53,7 +53,8 @@ public sealed record OrganizationPathPlan(
     string TargetDirectory,
     string TargetBaseName,
     string TargetVideoPath,
-    bool UsesCustomRoot);
+    bool UsesCustomRoot,
+    bool RequiresVerifiedCopy);
 
 public enum PlannedChangeKind
 {
@@ -61,6 +62,7 @@ public enum PlannedChangeKind
     MoveVideo,
     RenameVideo,
     MoveAndRenameVideo,
+    CopyAndVerifyVideo,
     CreateFile,
     OverwriteFile,
     UpdateFile,
@@ -99,6 +101,8 @@ public sealed record SavePlan(
 
     public IReadOnlyList<string> SourcePathsToRetire { get; init; } = [];
 
+    public bool RequiresVerifiedVideoCopy { get; init; }
+
     public bool HasBlockingConflicts => BlockingConflicts.Count > 0;
 
     public bool VideoWillMove =>
@@ -135,3 +139,25 @@ public sealed record OrganizedSaveResult(
     SaveResult Outputs,
     string VideoPath,
     bool VideoMoved);
+
+public enum FileTransactionStage
+{
+    Preparing,
+    CopyingMovie,
+    VerifyingMovie,
+    Committing,
+    RetiringSource,
+    Completed
+}
+
+public sealed record FileTransactionProgress(
+    FileTransactionStage Stage,
+    string Message,
+    long BytesProcessed = 0,
+    long TotalBytes = 0,
+    string? TemporaryPath = null)
+{
+    public int Percentage => TotalBytes <= 0
+        ? 0
+        : (int)Math.Clamp(BytesProcessed * 100L / TotalBytes, 0, 100);
+}

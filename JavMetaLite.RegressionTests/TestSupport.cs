@@ -120,6 +120,11 @@ internal static class AssertEx
         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
 }
 
+internal sealed class InlineProgress<T>(Action<T> callback) : IProgress<T>
+{
+    public void Report(T value) => callback(value);
+}
+
 internal static class TestImageFactory
 {
     public static byte[] CreateJpeg(int width = 80, int height = 54)

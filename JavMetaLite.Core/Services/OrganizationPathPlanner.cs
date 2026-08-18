@@ -50,32 +50,22 @@ public static class OrganizationPathPlanner
             targetDirectory,
             targetBaseName,
             targetVideoPath,
-            options.UsesCustomRoot);
+            options.UsesCustomRoot,
+            RequiresVerifiedCopy(sourceVideoPath, targetVideoPath));
     }
 
-    public static string? GetExecutionBlockReason(OrganizationPathPlan plan)
+    public static bool RequiresVerifiedCopy(string sourcePath, string targetPath)
     {
-        ArgumentNullException.ThrowIfNull(plan);
-        if (!plan.UsesCustomRoot)
-        {
-            return null;
-        }
-
-        if (IsUncPath(plan.TargetRootDirectory))
-        {
-            return $"当前版本尚未支持保存到网络路径；将在安全复制事务完成后开放：{plan.TargetRootDirectory}";
-        }
-
-        var sourceRoot = Path.GetPathRoot(plan.SourceVideoPath);
-        var targetRoot = Path.GetPathRoot(plan.TargetDirectory);
+        var sourceRoot = Path.GetPathRoot(Path.GetFullPath(sourcePath));
+        var targetRoot = Path.GetPathRoot(Path.GetFullPath(targetPath));
         if (string.IsNullOrWhiteSpace(sourceRoot) || string.IsNullOrWhiteSpace(targetRoot) ||
             !Path.TrimEndingDirectorySeparator(sourceRoot)
                 .Equals(Path.TrimEndingDirectorySeparator(targetRoot), StringComparison.OrdinalIgnoreCase))
         {
-            return $"当前版本尚未支持跨盘符整理；将在安全复制与 SHA-256 校验完成后开放：{plan.TargetDirectory}";
+            return true;
         }
 
-        return null;
+        return false;
     }
 
     private static string NormalizeCustomRoot(string? customRootDirectory)
@@ -111,10 +101,6 @@ public static class OrganizationPathPlanner
             ? normalizedRoot
             : Path.Combine(normalizedRoot, normalizedId);
     }
-
-    private static bool IsUncPath(string path) =>
-        path.StartsWith("\\\\", StringComparison.Ordinal) ||
-        Uri.TryCreate(path, UriKind.Absolute, out var uri) && uri.IsUnc;
 
     private static void ValidateDirectorySegments(string fullPath)
     {

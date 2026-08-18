@@ -479,6 +479,12 @@
                                 <WrapPanel Margin="0,10,0,0">
                                     <TextBlock Text="保存方式" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
                                     <CheckBox x:Name="DirectSaveOverwriteCheckBox" Content="直接保存并覆盖（跳过预览）" IsChecked="False" ToolTip="跳过保存前变更预览；已有 NFO 或图片将直接覆盖。影片文件永远不会被覆盖。" />
+                                    <CheckBox x:Name="RenameVideoCheckBox"
+                                              Content="影片重命名为番号"
+                                              IsChecked="False"
+                                              Checked="TargetOption_Changed"
+                                              Unchecked="TargetOption_Changed"
+                                              ToolTip="只改变影片文件名，不改变扩展名" />
                                 </WrapPanel>
                                 <WrapPanel Margin="0,10,0,0">
                                     <TextBlock Text="目标位置" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
@@ -492,12 +498,6 @@
                                         <ComboBoxItem Content="来源位置的番号文件夹" Tag="SourceNumberFolder" />
                                         <ComboBoxItem Content="自定义根目录的番号文件夹" Tag="CustomRootNumberFolder" />
                                     </ComboBox>
-                                    <CheckBox x:Name="RenameVideoCheckBox"
-                                              Content="影片重命名为番号"
-                                              IsChecked="False"
-                                              Checked="TargetOption_Changed"
-                                              Unchecked="TargetOption_Changed"
-                                              ToolTip="只改变影片文件名，不改变扩展名" />
                                 </WrapPanel>
                                 <Grid x:Name="CustomTargetPanel" Margin="0,10,0,0" Visibility="Collapsed">
                                     <Grid.ColumnDefinitions>
@@ -513,7 +513,7 @@
                                              Padding="8,5"
                                              FontSize="12"
                                              TextChanged="CustomRootText_Changed"
-                                             ToolTip="可直接粘贴本地绝对路径；网络路径将在 dev3 开放" />
+                                             ToolTip="可直接粘贴本地绝对路径或 UNC 网络共享路径" />
                                     <Button x:Name="ChooseTargetFolderButton"
                                             Grid.Column="4"
                                             Content="选择文件夹"
@@ -527,7 +527,7 @@
                                            TextWrapping="Wrap"
                                            Margin="0,8,0,0" />
                             </StackPanel>
-                            <Button x:Name="SaveButton" Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="保存" Click="Save_Click" />
+                            <Button x:Name="SaveButton" Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="保存" Click="Save_Click" Margin="28,0,0,0" />
                         </Grid>
                     </Border>
                 </Grid>
@@ -541,11 +541,23 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#72E3A6" VerticalAlignment="Center" Margin="0,0,9,0" />
                 <TextBlock x:Name="StatusText" Grid.Column="1" Text="准备就绪，请选择或拖入一个影片" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
-                <Button Grid.Column="2" Content="打开日志" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
-                <TextBlock Grid.Column="3" Text="v0.7.0-dev2 · 自定义目标位置" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <Button x:Name="CancelOperationButton"
+                        Grid.Column="2"
+                        Content="取消当前操作"
+                        Click="CancelOperation_Click"
+                        Padding="10,4"
+                        Margin="12,0,0,0"
+                        FontSize="11"
+                        FontWeight="Normal"
+                        Background="#4A2025"
+                        BorderBrush="#85363D"
+                        Visibility="Collapsed" />
+                <Button Grid.Column="3" Content="打开日志" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
+                <TextBlock Grid.Column="4" Text="v0.7.0-dev3 · 跨卷安全事务" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>

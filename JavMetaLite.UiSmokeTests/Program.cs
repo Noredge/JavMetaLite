@@ -106,6 +106,18 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.4 保存入口未创建。 ");
         }
+        if (window.FindName("CancelOperationButton") is not Button { Visibility: Visibility.Collapsed })
+        {
+            throw new InvalidOperationException("dev3 取消操作按钮没有保持默认隐藏。 ");
+        }
+        window.UpdateLayout();
+        var directSaveY = directSaveCheckBox.TranslatePoint(new Point(0, 0), window).Y;
+        var renameVideoY = renameCheckBox.TranslatePoint(new Point(0, 0), window).Y;
+        var targetModeY = targetModeComboBox.TranslatePoint(new Point(0, 0), window).Y;
+        if (Math.Abs(directSaveY - renameVideoY) > 3 || targetModeY <= renameVideoY)
+        {
+            throw new InvalidOperationException("dev3 影片重命名选项没有移动到保存方式一行。 ");
+        }
 
         var titleSourceText = window.FindName("TitleSourceText") as Button
             ?? throw new InvalidOperationException("v0.5 标题来源标记未创建。 ");
@@ -413,6 +425,14 @@ internal static class Program
         {
             throw new InvalidOperationException("dev2 同卷自定义根目录没有生成可保存的实时目标路径。 ");
         }
+        var chooseTargetFolderButton = (Button)window.FindName("ChooseTargetFolderButton");
+        var folderButtonRight = chooseTargetFolderButton
+            .TranslatePoint(new Point(chooseTargetFolderButton.ActualWidth, 0), window).X;
+        var saveButtonLeft = saveButton.TranslatePoint(new Point(0, 0), window).X;
+        if (saveButtonLeft - folderButtonRight < 20)
+        {
+            throw new InvalidOperationException("dev3 选择文件夹与保存按钮之间的留白不足。 ");
+        }
 
         customRootTextBox.Text = Path.Combine(customRoot, "ipx-124") + Path.DirectorySeparatorChar;
         window.UpdateLayout();
@@ -429,11 +449,10 @@ internal static class Program
             var otherDrive = sourceRoot.StartsWith("Z:", StringComparison.OrdinalIgnoreCase) ? "C:" : "Z:";
             customRootTextBox.Text = $@"{otherDrive}\JavMetaLite-dev2-test";
             window.UpdateLayout();
-            if (saveButton.IsEnabled ||
-                !targetPathHintText.Text.Contains("跨盘符", StringComparison.Ordinal) ||
-                saveButton.ToolTip?.ToString()?.Contains("跨盘符", StringComparison.Ordinal) != true)
+            if (!saveButton.IsEnabled ||
+                !targetPathHintText.Text.Contains("安全复制 + SHA-256", StringComparison.Ordinal))
             {
-                throw new InvalidOperationException("dev2 跨盘符目标没有被明确阻止。 ");
+                throw new InvalidOperationException("dev3 跨盘符目标没有启用安全复制提示。 ");
             }
         }
 
@@ -483,7 +502,8 @@ internal static class Program
                 new PlannedFileChange(PlannedChangeKind.CreateFile, "生成 metadata", "C:\\Media\\IPX-123\\IPX-123.nfo"),
                 new PlannedFileChange(PlannedChangeKind.UpdateFile, "更新 NFO", "C:\\Media\\IPX-123\\IPX-123.nfo"),
                 new PlannedFileChange(PlannedChangeKind.KeepFile, "poster 内容保持不变", "C:\\Media\\IPX-123\\IPX-123-poster.jpg"),
-                new PlannedFileChange(PlannedChangeKind.ReplaceImage, "替换 fanart", "C:\\Media\\IPX-123\\IPX-123-fanart.jpg")
+                new PlannedFileChange(PlannedChangeKind.ReplaceImage, "替换 fanart", "C:\\Media\\IPX-123\\IPX-123-fanart.jpg"),
+                new PlannedFileChange(PlannedChangeKind.CopyAndVerifyVideo, "安全复制影片", "D:\\Media\\IPX-123\\IPX-123.mp4", "C:\\Media\\source.mp4")
             ],
             [],
             []);
@@ -504,13 +524,13 @@ internal static class Program
         var previewActions = previewChanges.Items.Cast<object>()
             .Select(item => item.GetType().GetProperty("Action")?.GetValue(item)?.ToString())
             .ToArray();
-        if (!new[] { "生成", "更新", "保持不变", "替换图片" }.All(previewActions.Contains))
+        if (!new[] { "生成", "更新", "保持不变", "替换图片", "复制并校验" }.All(previewActions.Contains))
         {
             throw new InvalidOperationException("dev4 保存预览没有区分创建、更新、保持不变和替换图片。 ");
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True targetModes=True customTargetPreview=True crossDriveBlocked=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True");
         window.Close();
         application.Shutdown();
     }
