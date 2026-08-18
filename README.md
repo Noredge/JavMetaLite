@@ -2,11 +2,11 @@
 
 一个只处理单个影片的轻量 Windows metadata 工具。它不会扫描整个媒体库；文件整理和直接保存都默认关闭，用户可以先预览所有变更，也可以明确选择跳过预览并直接覆盖 metadata。
 
-## v0.7.0-dev3 开发构建
+## v0.7.0-rc1 发布候选版
 
-`v0.7.0-dev3` 已开放跨盘符与 UNC 网络目标。跨卷保存会先把影片复制到目标侧临时区，对来源和副本分别计算 SHA-256；校验及 metadata 提交全部成功后才移除来源。复制、校验、冲突或提交失败时会保留来源并回滚未完成目标，长时间复制也可从状态栏取消。同卷路径继续使用原有原子移动事务。
+`v0.7.0-rc1` 冻结了自定义目标路径功能。用户可以把单部影片与 Jellyfin metadata 保留在原位、整理到来源位置的番号文件夹，或保存到自定义根目录的番号文件夹。跨盘符与 UNC 目标使用“目标暂存 → 独立 SHA-256 校验 → 提交 → 移除来源”事务；同卷路径继续使用原子移动。复制可显示进度并取消，失败时优先保留来源并恢复现场。
 
-目标位置仍是清晰的三选一，最终影片和每个 metadata 目标都会在保存前显示。界面同时把“影片重命名为番号”移到“保存方式”一行，并加大自定义目录选择按钮与保存按钮之间的距离。
+dev1–dev3 的自动化与人工检查已经通过。RC1 只进行最终跨盘符、Jellyfin 扫描及再次载入闭环验收，不再增加新的整理规则。当前没有真实 UNC 测试环境，因此真实共享测试明确记为可选；UNC 路径选择和失败安全继续由离线自动化覆盖。
 
 完整范围与分阶段安排见 [`ROADMAP-v0.7.0.md`](ROADMAP-v0.7.0.md)。
 
@@ -71,7 +71,7 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
 
 完整自动化测试分层、回归范围和手动检查边界见 [`TESTING.md`](TESTING.md)。
 
-v0.6.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md)，dev4 的通过记录见 [`MANUAL-CHECK-v0.6.0-dev4.md`](MANUAL-CHECK-v0.6.0-dev4.md)。v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。v0.4.0 的真实来源、文件安全与 Jellyfin 完整人工验收见 [`MANUAL-ACCEPTANCE-v0.4.0-rc1.md`](MANUAL-ACCEPTANCE-v0.4.0-rc1.md)，START-237 修复的最终通过记录见 [`MANUAL-RETEST-v0.4.0-rc2.md`](MANUAL-RETEST-v0.4.0-rc2.md)。
+v0.7.0 RC1 的最终验收步骤见 [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md)，dev3 的通过记录见 [`MANUAL-CHECK-v0.7.0-dev3.md`](MANUAL-CHECK-v0.7.0-dev3.md)。v0.6.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md)，dev4 的通过记录见 [`MANUAL-CHECK-v0.6.0-dev4.md`](MANUAL-CHECK-v0.6.0-dev4.md)。v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。v0.4.0 的真实来源、文件安全与 Jellyfin 完整人工验收见 [`MANUAL-ACCEPTANCE-v0.4.0-rc1.md`](MANUAL-ACCEPTANCE-v0.4.0-rc1.md)，START-237 修复的最终通过记录见 [`MANUAL-RETEST-v0.4.0-rc2.md`](MANUAL-RETEST-v0.4.0-rc2.md)。
 
 发布 Windows x64 单文件版本：
 
@@ -97,7 +97,7 @@ dotnet publish .\JavMetaLite.App\JavMetaLite.App.csproj -c Release -r win-x64 --
 
 - v0.4 仍然是单片编辑器，不提供媒体库扫描或批量刮削。
 - 整理功能只移动当前选择的影片并生成本次选择的 metadata；不会自动搬运未知的字幕或旧伴随文件。
-- v0.7.0-dev3 已开放同卷、跨盘符与 UNC 目标；网络共享的实际速度、权限和可用性仍取决于 Windows 与目标服务器。
+- v0.7.0-rc1 已开放同卷、跨盘符与 UNC 目标；真实 UNC 共享尚未在当前环境实测，网络速度、权限与可用性取决于 Windows 和目标服务器。
 - 软件不会写入 MP4/MKV 容器内部 metadata。
 - `actors/` 暂不生成；演员图片以 NFO 内的远程 `thumb` 提供，`extrafanart/` 是可选输出。
 - 网站结构变化可能需要更新 `JavLibraryClient`。

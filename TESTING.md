@@ -66,4 +66,4 @@ The following remain manual because they depend on external state or human visua
 
 These checks complement the automated gate; they are not replaced by it.
 
-The focused final integration checklist and passing result for v0.6.0 is [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md). It validates a real Jellyfin local-metadata round trip without repeating every accepted dev4 file-safety case. The passing v0.5 checklist remains in [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md).
+The focused v0.7 RC checklist is [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md). It validates a packaged cross-drive Jellyfin round trip without repeating accepted dev2/dev3 safety cases; a real UNC run is optional when no share is available. The passing v0.6 and v0.5 checklists remain in [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md) and [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md).

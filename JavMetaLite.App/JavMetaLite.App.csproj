@@ -8,8 +8,8 @@
     <AssemblyName>JavMetaLite</AssemblyName>
     <RootNamespace>JavMetaLite.App</RootNamespace>
     <Version>0.7.0</Version>
-    <FileVersion>0.7.0.3</FileVersion>
-    <InformationalVersion>0.7.0-dev3</InformationalVersion>
+    <FileVersion>0.7.0.4</FileVersion>
+    <InformationalVersion>0.7.0-rc1</InformationalVersion>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>

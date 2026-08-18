@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.7.0-rc1 — Release candidate
+
+- Promotes the accepted dev3 build without functional changes and freezes the v0.7 custom-destination scope.
+- Offers three explicit destinations while keeping movie renaming independent and every final movie/NFO/artwork path visible before writing.
+- Retains atomic same-volume moves and verified cross-volume/UNC copies with target-side staging, independent SHA-256 verification, progress, cancellation, late-conflict protection, and rollback.
+- Carries forward the passed dev2 D01–D08 and dev3 T01–T05/T08 manual checks plus the complete offline automated gate.
+- Treats a live UNC-share run as optional for this RC because no test share is available; automated UNC planning and verified-transfer failure coverage remain required and passing.
+- Adds a focused RC checklist for packaged startup, real cross-drive organization, Jellyfin ingestion, local metadata reloading, no-op preservation, and final movie hashes.
+
 ## v0.7.0-dev3 — Verified cross-volume transactions
 
 - Opens different-drive and UNC custom targets through a verified copy transaction while retaining the existing atomic move path for same-volume destinations.
