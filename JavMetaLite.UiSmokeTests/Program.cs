@@ -85,10 +85,16 @@ internal static class Program
         {
             throw new InvalidOperationException("搜索前后两个封套预览框的间距不一致。 ");
         }
-        if (window.FindName("OrganizeFolderCheckBox") is not CheckBox organizeCheckBox || organizeCheckBox.IsChecked == true ||
+        if (window.FindName("TargetModeComboBox") is not ComboBox targetModeComboBox ||
+            targetModeComboBox.SelectedItem is not ComboBoxItem { Tag: "VideoDirectory" } ||
+            window.FindName("CustomTargetPanel") is not Grid { Visibility: Visibility.Collapsed } ||
+            window.FindName("CustomRootTextBox") is not TextBox ||
+            window.FindName("ChooseTargetFolderButton") is not Button ||
+            window.FindName("TargetPathHintText") is not TextBlock { Text: "选择影片后显示最终路径" } ||
+            window.FindName("OrganizeFolderCheckBox") is not null ||
             window.FindName("RenameVideoCheckBox") is not CheckBox renameCheckBox || renameCheckBox.IsChecked == true)
         {
-            throw new InvalidOperationException("v0.4 整理选项未创建或没有保持安全的默认关闭状态。 ");
+            throw new InvalidOperationException("dev2 目标位置控件未创建或没有保持安全默认值。 ");
         }
         if (window.FindName("DirectSaveOverwriteCheckBox") is not CheckBox directSaveCheckBox ||
             directSaveCheckBox.IsChecked == true ||
@@ -99,6 +105,18 @@ internal static class Program
         if (window.FindName("SaveButton") is not Button saveButton || saveButton.Content?.ToString() != "保存")
         {
             throw new InvalidOperationException("v0.4 保存入口未创建。 ");
+        }
+        if (window.FindName("CancelOperationButton") is not Button { Visibility: Visibility.Collapsed })
+        {
+            throw new InvalidOperationException("dev3 取消操作按钮没有保持默认隐藏。 ");
+        }
+        window.UpdateLayout();
+        var directSaveY = directSaveCheckBox.TranslatePoint(new Point(0, 0), window).Y;
+        var renameVideoY = renameCheckBox.TranslatePoint(new Point(0, 0), window).Y;
+        var targetModeY = targetModeComboBox.TranslatePoint(new Point(0, 0), window).Y;
+        if (Math.Abs(directSaveY - renameVideoY) > 3 || targetModeY <= renameVideoY)
+        {
+            throw new InvalidOperationException("dev3 影片重命名选项没有移动到保存方式一行。 ");
         }
 
         var titleSourceText = window.FindName("TitleSourceText") as Button
@@ -275,7 +293,7 @@ internal static class Program
             posterImage.Source is null || fanartImage.Source is null ||
             fanartHintText.Text != "横板封套：1×1" ||
             !saveButton.IsEnabled ||
-            saveButton.ToolTip?.ToString()?.Contains("保留未知 XML", StringComparison.Ordinal) != true ||
+            saveButton.ToolTip?.ToString()?.Contains("保留检测到的未知 XML", StringComparison.Ordinal) != true ||
             !statusText.Text.Contains("可安全更新", StringComparison.Ordinal))
         {
             throw new InvalidOperationException("本地 NFO 与现有图片没有以明确来源载入界面。 ");
@@ -300,19 +318,20 @@ internal static class Program
             SourceDisplayName = "R18.dev"
         };
         var localOnlinePreferred = MetadataMerger.Merge(localLibre, localR18);
+        localMetadata.Title = "搜索前手动标题";
         var reviewedLocalMetadata = applyOnlineSources.Invoke(
             window,
             [localOnlinePreferred, new MovieMetadata[] { localLibre, localR18 }]) as MovieMetadata
             ?? throw new InvalidOperationException("在线候选没有加入本地编辑会话。 ");
         window.UpdateLayout();
-        if (reviewedLocalMetadata.Title != "本地 NFO 标题" ||
+        if (reviewedLocalMetadata.Title != "LibreDMM 在线标题" ||
             reviewedLocalMetadata.Director != "在线导演" ||
-            titleSourceText.Content?.ToString() != "本地 NFO ▾" ||
+            titleSourceText.Content?.ToString() != "LibreDMM ▾" ||
             directorSourceText.Content?.ToString() != "LibreDMM ▾" ||
             artworkSourceButton.Content?.ToString() != "本地图片 ▾" ||
             posterImage.Source is null || fanartImage.Source is null)
         {
-            throw new InvalidOperationException("在线搜索改变了本地默认字段/图片，或没有补齐本地空白字段。 ");
+            throw new InvalidOperationException("在线搜索后没有默认选择新文字资料，或意外改变了本地图片。 ");
         }
 
         artworkSourceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -331,12 +350,13 @@ internal static class Program
         titleSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         var localTitleCandidates = titleSourceText.ContextMenu?.Items.OfType<MenuItem>().ToArray()
             ?? throw new InvalidOperationException("本地标题候选菜单未创建。 ");
-        if (localTitleCandidates.Length != 3 ||
+        if (localTitleCandidates.Length != 4 ||
             localTitleCandidates.All(item => item.Tag is not MetadataFieldCandidate { Source.Name: "local-nfo" }) ||
             localTitleCandidates.All(item => item.Tag is not MetadataFieldCandidate { Source.Name: "libredmm" }) ||
-            localTitleCandidates.All(item => item.Tag is not MetadataFieldCandidate { Source.Name: "r18dev" }))
+            localTitleCandidates.All(item => item.Tag is not MetadataFieldCandidate { Source.Name: "r18dev" }) ||
+            localTitleCandidates.All(item => item.Tag is not MetadataFieldCandidate { Source.IsManual: true }))
         {
-            throw new InvalidOperationException("本地、LibreDMM 与 R18.dev 没有出现在同一字段候选菜单。 ");
+            throw new InvalidOperationException("本地、在线与搜索前手动值没有一起保留在字段候选菜单。 ");
         }
         titleSourceText.ContextMenu!.IsOpen = false;
 
@@ -391,6 +411,66 @@ internal static class Program
             throw new InvalidOperationException("选择新影片后残留了上一个影片的本地或在线候选。 ");
         }
 
+        var customTargetPanel = (Grid)window.FindName("CustomTargetPanel");
+        var customRootTextBox = (TextBox)window.FindName("CustomRootTextBox");
+        var targetPathHintText = (TextBlock)window.FindName("TargetPathHintText");
+        var customRoot = Path.Combine(localTestRoot, "library");
+        Directory.CreateDirectory(customRoot);
+        targetModeComboBox.SelectedIndex = 2;
+        renameCheckBox.IsChecked = true;
+        customRootTextBox.Text = customRoot;
+        window.UpdateLayout();
+        var expectedCustomVideo = Path.Combine(customRoot, "IPX-124", "IPX-124.mp4");
+        if (customTargetPanel.Visibility != Visibility.Visible ||
+            !targetPathHintText.Text.Contains(expectedCustomVideo, StringComparison.OrdinalIgnoreCase) ||
+            !saveButton.IsEnabled)
+        {
+            throw new InvalidOperationException("dev2 同卷自定义根目录没有生成可保存的实时目标路径。 ");
+        }
+        var chooseTargetFolderButton = (Button)window.FindName("ChooseTargetFolderButton");
+        var folderButtonRight = chooseTargetFolderButton
+            .TranslatePoint(new Point(chooseTargetFolderButton.ActualWidth, 0), window).X;
+        var saveButtonLeft = saveButton.TranslatePoint(new Point(0, 0), window).X;
+        if (saveButtonLeft - folderButtonRight < 20)
+        {
+            throw new InvalidOperationException("dev3 选择文件夹与保存按钮之间的留白不足。 ");
+        }
+
+        customRootTextBox.Text = Path.Combine(customRoot, "ipx-124") + Path.DirectorySeparatorChar;
+        window.UpdateLayout();
+        if (targetPathHintText.Text.Contains(
+                Path.Combine("ipx-124", "IPX-124", "IPX-124.mp4"),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("dev2 已选择番号目录时仍重复生成了番号子目录。 ");
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            var sourceRoot = Path.GetPathRoot(cleanVideoPath) ?? "C:\\";
+            var otherDrive = sourceRoot.StartsWith("Z:", StringComparison.OrdinalIgnoreCase) ? "C:" : "Z:";
+            customRootTextBox.Text = $@"{otherDrive}\JavMetaLite-dev2-test";
+            window.UpdateLayout();
+            if (!saveButton.IsEnabled ||
+                !targetPathHintText.Text.Contains("安全复制 + SHA-256", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("dev3 跨盘符目标没有启用安全复制提示。 ");
+            }
+        }
+
+        targetModeComboBox.SelectedIndex = 1;
+        renameCheckBox.IsChecked = false;
+        window.UpdateLayout();
+        var expectedSourceNumberVideo = Path.Combine(localTestRoot, "IPX-124", "IPX-124.mp4");
+        if (customTargetPanel.Visibility != Visibility.Collapsed ||
+            !targetPathHintText.Text.Contains(expectedSourceNumberVideo, StringComparison.OrdinalIgnoreCase) ||
+            !saveButton.IsEnabled)
+        {
+            throw new InvalidOperationException("dev2 来源位置番号文件夹模式没有正确恢复。 ");
+        }
+        targetModeComboBox.SelectedIndex = 0;
+        window.UpdateLayout();
+
         var invalidVideoPath = Path.Combine(localTestRoot, "IPX-125.mp4");
         var invalidNfoPath = Path.Combine(localTestRoot, "IPX-125.nfo");
         var invalidPosterPath = Path.Combine(localTestRoot, "IPX-125-poster.jpg");
@@ -424,7 +504,8 @@ internal static class Program
                 new PlannedFileChange(PlannedChangeKind.CreateFile, "生成 metadata", "C:\\Media\\IPX-123\\IPX-123.nfo"),
                 new PlannedFileChange(PlannedChangeKind.UpdateFile, "更新 NFO", "C:\\Media\\IPX-123\\IPX-123.nfo"),
                 new PlannedFileChange(PlannedChangeKind.KeepFile, "poster 内容保持不变", "C:\\Media\\IPX-123\\IPX-123-poster.jpg"),
-                new PlannedFileChange(PlannedChangeKind.ReplaceImage, "替换 fanart", "C:\\Media\\IPX-123\\IPX-123-fanart.jpg")
+                new PlannedFileChange(PlannedChangeKind.ReplaceImage, "替换 fanart", "C:\\Media\\IPX-123\\IPX-123-fanart.jpg"),
+                new PlannedFileChange(PlannedChangeKind.CopyAndVerifyVideo, "安全复制影片", "D:\\Media\\IPX-123\\IPX-123.mp4", "C:\\Media\\source.mp4")
             ],
             [],
             []);
@@ -435,18 +516,23 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.4 保存预览窗口未成功创建。 ");
         }
+        if (previewWindow.FindName("TargetPathTextBox") is not TextBox targetPathTextBox ||
+            targetPathTextBox.Text != previewPlan.TargetVideoPath)
+        {
+            throw new InvalidOperationException("dev2 保存预览没有显示最终影片绝对路径。 ");
+        }
         var previewChanges = previewWindow.FindName("ChangesList") as ListView
             ?? throw new InvalidOperationException("保存预览变更列表未创建。 ");
         var previewActions = previewChanges.Items.Cast<object>()
             .Select(item => item.GetType().GetProperty("Action")?.GetValue(item)?.ToString())
             .ToArray();
-        if (!new[] { "生成", "更新", "保持不变", "替换图片" }.All(previewActions.Contains))
+        if (!new[] { "生成", "更新", "保持不变", "替换图片", "复制并校验" }.All(previewActions.Contains))
         {
             throw new InvalidOperationException("dev4 保存预览没有区分创建、更新、保持不变和替换图片。 ");
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True organizeDefaultsOff=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True");
         window.Close();
         application.Shutdown();
     }

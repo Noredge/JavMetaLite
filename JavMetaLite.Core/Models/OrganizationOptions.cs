@@ -1,8 +1,60 @@
 namespace JavMetaLite.Core.Models;
 
-public sealed record OrganizationOptions(
-    bool CreateMovieFolder,
-    bool RenameVideo);
+public enum OrganizationTargetMode
+{
+    VideoDirectory,
+    SourceNumberFolder,
+    CustomRootNumberFolder
+}
+
+public sealed record OrganizationOptions
+{
+    public OrganizationOptions(bool createMovieFolder, bool renameVideo)
+        : this(
+            createMovieFolder
+                ? OrganizationTargetMode.SourceNumberFolder
+                : OrganizationTargetMode.VideoDirectory,
+            renameVideo)
+    {
+    }
+
+    public OrganizationOptions(
+        OrganizationTargetMode targetMode,
+        bool renameVideo,
+        string? customRootDirectory = null)
+    {
+        TargetMode = targetMode;
+        RenameVideo = renameVideo;
+        CustomRootDirectory = customRootDirectory;
+    }
+
+    public OrganizationTargetMode TargetMode { get; }
+
+    public bool RenameVideo { get; }
+
+    public string? CustomRootDirectory { get; }
+
+    public bool CreateMovieFolder => TargetMode is not OrganizationTargetMode.VideoDirectory;
+
+    public bool UsesCustomRoot => TargetMode is OrganizationTargetMode.CustomRootNumberFolder;
+
+    public void Deconstruct(out bool createMovieFolder, out bool renameVideo)
+    {
+        createMovieFolder = CreateMovieFolder;
+        renameVideo = RenameVideo;
+    }
+}
+
+public sealed record OrganizationPathPlan(
+    string SourceVideoPath,
+    string SourceDirectory,
+    string NormalizedId,
+    string TargetRootDirectory,
+    string TargetDirectory,
+    string TargetBaseName,
+    string TargetVideoPath,
+    bool UsesCustomRoot,
+    bool RequiresVerifiedCopy);
 
 public enum PlannedChangeKind
 {
@@ -10,6 +62,7 @@ public enum PlannedChangeKind
     MoveVideo,
     RenameVideo,
     MoveAndRenameVideo,
+    CopyAndVerifyVideo,
     CreateFile,
     OverwriteFile,
     UpdateFile,
@@ -48,6 +101,8 @@ public sealed record SavePlan(
 
     public IReadOnlyList<string> SourcePathsToRetire { get; init; } = [];
 
+    public bool RequiresVerifiedVideoCopy { get; init; }
+
     public bool HasBlockingConflicts => BlockingConflicts.Count > 0;
 
     public bool VideoWillMove =>
@@ -84,3 +139,25 @@ public sealed record OrganizedSaveResult(
     SaveResult Outputs,
     string VideoPath,
     bool VideoMoved);
+
+public enum FileTransactionStage
+{
+    Preparing,
+    CopyingMovie,
+    VerifyingMovie,
+    Committing,
+    RetiringSource,
+    Completed
+}
+
+public sealed record FileTransactionProgress(
+    FileTransactionStage Stage,
+    string Message,
+    long BytesProcessed = 0,
+    long TotalBytes = 0,
+    string? TemporaryPath = null)
+{
+    public int Percentage => TotalBytes <= 0
+        ? 0
+        : (int)Math.Clamp(BytesProcessed * 100L / TotalBytes, 0, 100);
+}

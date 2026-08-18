@@ -9,6 +9,23 @@ public static class NfoReader
 {
     public const long MaximumNfoBytes = 4 * 1024 * 1024;
 
+    private static readonly HashSet<string> StandardElementNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "movie", "title", "originaltitle", "sorttitle", "customrating", "mpaa", "certification",
+        "id", "uniqueid", "criticrating", "country", "premiered", "releasedate", "year",
+        "runtime", "studio", "tagline", "plot", "outline", "rating", "ratings", "value", "votes",
+        "userrating", "top250", "director", "credits", "actor", "name", "role", "type", "order",
+        "thumb", "trailer", "genre", "tag", "set", "art", "fanart", "dateadded", "fileinfo",
+        "streamdetails", "video", "audio", "subtitle", "codec", "aspect", "width", "height",
+        "durationinseconds", "language", "channels", "scantype", "resume", "position", "total",
+        "playcount", "lastplayed", "watched", "status", "code", "website", "lockedfields"
+    };
+
+    private static readonly HashSet<string> StandardAttributeNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "type", "default", "aspect", "preview", "max", "name", "order"
+    };
+
     public static async Task<LocalMetadataBundle> ReadAsync(
         LocalSidecarPaths sidecars,
         CancellationToken cancellationToken = default)
@@ -130,7 +147,34 @@ public static class NfoReader
             metadata,
             document,
             Convert.ToHexString(SHA256.HashData(nfoBytes)),
+            HasUnknownXml(document),
             diagnostics);
+    }
+
+    private static bool HasUnknownXml(XDocument document)
+    {
+        if (document.DescendantNodes().Any(node => node is XComment or XProcessingInstruction))
+        {
+            return true;
+        }
+
+        foreach (var element in document.Descendants())
+        {
+            if (!StandardElementNames.Contains(element.Name.LocalName))
+            {
+                return true;
+            }
+
+            foreach (var attribute in element.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration))
+            {
+                if (element == document.Root || !StandardAttributeNames.Contains(attribute.Name.LocalName))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static IEnumerable<XElement> Elements(XElement parent, string localName) =>

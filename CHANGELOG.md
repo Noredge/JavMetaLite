@@ -1,5 +1,73 @@
 # Changelog
 
+## v0.7.0 — Stable
+
+- Promotes RC3 without functional changes after P01–P03 and movie SHA-256 verification all passed.
+- Adds three explicit destination modes: keep beside the movie, organize into a source-side number folder, or organize beneath a user-selected custom root.
+- Keeps movie renaming independent while previewing every final movie, NFO, artwork, and screenshot path before writing.
+- Uses atomic same-volume moves and verified cross-volume/UNC copies with target-side staging, independent SHA-256 verification, cancellation, late-conflict protection, and rollback.
+- Prefers fresh non-empty online text fields after a successful search while retaining local NFO and manual candidates plus existing local artwork.
+- Shows the unknown-XML preservation notice only when the loaded NFO actually contains extra XML; lossless round-trip behavior remains unchanged.
+- Final acceptance confirmed standard and extended NFO preview wording, unknown XML preservation, and unchanged movie SHA-256.
+
+## v0.7.0-rc3 — Conditional unknown-XML notice
+
+- Records RC2 C01–C06 and movie SHA-256 verification as passed.
+- Detects whether a loaded NFO actually contains XML outside the recognized Jellyfin/Kodi structure, including custom elements, attributes, comments, or processing instructions.
+- Shows `更新 NFO` for a standard document and adds `（保留未知 XML）` only when such content was detected.
+- Applies the same condition to the Save-button tooltip while keeping the existing lossless round-trip behavior unchanged.
+- Adds standard/extended NFO reader coverage and a file-plan regression for both preview descriptions.
+- Leaves online-after-search defaults, local artwork, file organization, cross-volume verification, and rollback unchanged.
+
+## v0.7.0-rc2 — Online defaults after search
+
+- Records the complete RC1 R01–R06 acceptance as passed before making this focused behavior correction.
+- Keeps local NFO values selected when a movie is first opened, but selects the latest non-empty online text values after a successful search.
+- Falls back field-by-field to the local NFO when the selected online result has no value, so searching never clears useful local metadata.
+- Keeps local NFO and prior manual text values in each field menu, including when an online and local value are identical; users can switch sources at any time.
+- Leaves the unified poster/fanart selection unchanged, so existing local artwork remains selected after a text search.
+- Keeps the accepted custom-target, cross-volume verification, cancellation, rollback, and UNC behavior unchanged.
+- Adds focused Core and WPF coverage plus a short RC2 manual retest before stable promotion.
+
+## v0.7.0-rc1 — Release candidate
+
+- Promotes the accepted dev3 build without functional changes and freezes the v0.7 custom-destination scope.
+- Offers three explicit destinations while keeping movie renaming independent and every final movie/NFO/artwork path visible before writing.
+- Retains atomic same-volume moves and verified cross-volume/UNC copies with target-side staging, independent SHA-256 verification, progress, cancellation, late-conflict protection, and rollback.
+- Carries forward the passed dev2 D01–D08 and dev3 T01–T05/T08 manual checks plus the complete offline automated gate.
+- Treats a live UNC-share run as optional for this RC because no test share is available; automated UNC planning and verified-transfer failure coverage remain required and passing.
+- Adds a focused RC checklist for packaged startup, real cross-drive organization, Jellyfin ingestion, local metadata reloading, no-op preservation, and final movie hashes.
+
+## v0.7.0-dev3 — Verified cross-volume transactions
+
+- Opens different-drive and UNC custom targets through a verified copy transaction while retaining the existing atomic move path for same-volume destinations.
+- Streams the movie into a target-side temporary area, hashes the source during copy, hashes the completed target copy independently, and commits only when both SHA-256 values match.
+- Removes the source movie and migrated sidecars only after the target movie and metadata have committed; cancellation and failures restore metadata, preserve the source, and clean temporary targets.
+- Adds live copy/verification status and a per-operation cancel button, plus a local-volume free-space preflight and late-conflict protection.
+- Moves “影片重命名为番号” into the save-method row and increases the visual gap between the custom-folder picker and Save button.
+- Adds offline verified-copy coverage for success, cancellation, hash mismatch, late target conflicts, post-commit rollback, progress reporting, source preservation, and movie hashes.
+- Records D01–D08 as passed for dev2 and advances dev3 to focused real-drive/UNC testing.
+- Passed T01–T05 and T08 manual checks for UI layout, real cross-drive preview/save/cancel/conflict behavior, and same-volume regression; T06–T07 were skipped because no UNC test share was available.
+
+## v0.7.0-dev2 — Custom target location UI
+
+- Replaced the legacy organization checkbox with three explicit target modes: keep beside the movie, use a number folder at the source, or use a number folder below a custom root.
+- Added a native Windows folder picker plus an editable absolute-path field; the last valid custom root and selected mode remain available while the app stays open.
+- Added a live final-movie path below the controls and kept movie renaming independent from target selection.
+- Renamed the save-preview summary to `最终影片`; the preview continues to list the absolute destination of every planned movie and metadata change.
+- Enables same-volume custom-root execution through the existing transactional save path and retains movie SHA-256.
+- Blocks different-drive and UNC targets in both UI and Core until dev3 adds verified copy/delete semantics.
+- Added invalid directory-segment checks plus automated same-volume execution, UI mode switching, duplicate-folder prevention, final-path preview, and cross-drive blocking coverage.
+
+## v0.7.0-dev1 — Custom target path foundation
+
+- Added explicit `VideoDirectory`, `SourceNumberFolder`, and `CustomRootNumberFolder` destination modes while preserving the existing two-boolean API and v0.6 UI behavior.
+- Added a pure organization path planner that calculates the target movie, NFO, artwork, and sample-image base location without creating or moving files.
+- Kept movie renaming independent from destination selection and avoided duplicate nesting when the selected custom root is already named after the normalized movie ID.
+- Requires a fully qualified custom root and reports a file occupying that root, an occupied target folder, or an existing target movie as a blocking conflict.
+- Added offline regression coverage for same-drive paths, different drive letters, UNC roots, validation, collision protection, and planning purity.
+- Deliberately leaves custom-root UI selection and cross-volume/network transaction execution for later v0.7 development builds.
+
 ## v0.6.0 — Stable
 
 - Promotes RC1 without functional changes after the complete automated gate, dev4 B01–B07 checks, and RC1 R01–R06 Jellyfin integration acceptance passed.

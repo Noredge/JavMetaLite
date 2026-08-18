@@ -23,20 +23,21 @@ public static class LocalMetadataReviewComposer
 
         var local = Clone(localSource);
         var online = Clone(onlinePreferred);
-        var metadata = MetadataMerger.Merge(local, online);
+        var metadata = MetadataMerger.Merge(online, local);
 
         // Actors are one selectable field. Do not silently union online actors into
-        // a non-empty local selection before the user chooses that source.
-        if (!string.IsNullOrWhiteSpace(local.ActorsText))
+        // the selected source before the user explicitly chooses another candidate.
+        if (!string.IsNullOrWhiteSpace(online.ActorsText))
+        {
+            metadata.Actors = online.Actors;
+        }
+        else if (!string.IsNullOrWhiteSpace(local.ActorsText))
         {
             metadata.Actors = local.Actors;
         }
 
-        var sources = new List<MovieMetadata> { local };
-        var sourceNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            GetSourceKey(local)
-        };
+        var sources = new List<MovieMetadata>();
+        var sourceNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var source in onlineSources)
         {
             if (source is null)
@@ -51,9 +52,15 @@ public static class LocalMetadataReviewComposer
             }
         }
 
-        if (sources.Count == 1)
+        if (sources.Count == 0)
         {
             sources.Add(online);
+            sourceNames.Add(GetSourceKey(online));
+        }
+
+        if (sourceNames.Add(GetSourceKey(local)))
+        {
+            sources.Add(local);
         }
 
         return new LocalMetadataReviewComposition(metadata, sources);

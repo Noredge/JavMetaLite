@@ -7,9 +7,9 @@
     <Nullable>enable</Nullable>
     <AssemblyName>JavMetaLite</AssemblyName>
     <RootNamespace>JavMetaLite.App</RootNamespace>
-    <Version>0.6.0</Version>
-    <FileVersion>0.6.0.6</FileVersion>
-    <InformationalVersion>0.6.0</InformationalVersion>
+    <Version>0.7.0</Version>
+    <FileVersion>0.7.0.6</FileVersion>
+    <InformationalVersion>0.7.0</InformationalVersion>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>

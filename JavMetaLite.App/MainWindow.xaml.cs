@@ -39,6 +39,7 @@ public partial class MainWindow : Window
     private readonly FileOrganizationService _fileOrganizationService;
     private readonly HttpClient _previewHttpClient = CreatePreviewClient();
     private readonly CancellationTokenSource _lifetimeCancellation = new();
+    private CancellationTokenSource? _activeOperationCancellation;
     private MovieMetadata _metadata = new();
     private MetadataReviewSession? _metadataReview;
     private ArtworkCoverReviewSession? _artworkCoverReview;
@@ -49,16 +50,24 @@ public partial class MainWindow : Window
     private IReadOnlyList<MovieMetadata> _currentSourceResults = [];
     private string? _preferredArtworkSourceName;
     private string? _videoPath;
+    private string? _lastValidCustomRootDirectory;
+    private string? _targetConfigurationError;
     private bool _localNfoSaveBlocked;
     private bool _busy;
+    private bool _uiInitialized;
+
+    private CancellationToken CurrentOperationToken =>
+        _activeOperationCancellation?.Token ?? _lifetimeCancellation.Token;
 
     public MainWindow()
     {
         _outputService = new OutputService();
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
+        _uiInitialized = true;
         ApplyMetadata(_metadata, []);
-        AppLog.Info("JavMetaLite v0.6.0 启动");
+        RefreshTargetLocationUi();
+        AppLog.Info("JavMetaLite v0.7.0 启动");
     }
 
     private async void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -125,7 +134,7 @@ public partial class MainWindow : Window
                 AppLog.Info(
                     $"metadata 搜索成功 sources={successfulSources} failedSources={failedSources} id={result.Id} " +
                     $"contentId={result.ContentId} screenshots={result.ScreenshotUrls.Count} " +
-                    $"reviewSources={outcome.Sources.Count} localDefault={_localSourceMetadata is not null}");
+                    $"reviewSources={outcome.Sources.Count} onlineDefault=true localCandidate={_localSourceMetadata is not null}");
                 var artworkLoaded = await LoadSelectedArtworkPreviewAsync();
                 var sourceName = string.Join(
                     " + ",
@@ -138,7 +147,7 @@ public partial class MainWindow : Window
                     : "，没有独立样张";
                 var localPrefix = _localSourceMetadata is null
                     ? $"已从 {sourceName} 读取 {result.Id}"
-                    : $"已加入 {sourceName} 在线候选，当前保留本地 NFO";
+                    : $"已从 {sourceName} 读取新资料；可逐字段切回本地 NFO";
                 SetStatus(
                     artworkLoaded.Poster
                         ? $"{localPrefix}{imageSummary}{(artworkLoaded.Fanart ? string.Empty : "；fanart 预览未加载")}{degradedNote}"
@@ -169,7 +178,7 @@ public partial class MainWindow : Window
                     await MetadataSearchCoordinator.SearchSingleAsync(
                         id,
                         _libreDmmClient,
-                        _lifetimeCancellation.Token));
+                        CurrentOperationToken));
             }
 
             if (source == "r18dev")
@@ -178,7 +187,7 @@ public partial class MainWindow : Window
                     await MetadataSearchCoordinator.SearchSingleAsync(
                         id,
                         _r18DevClient,
-                        _lifetimeCancellation.Token));
+                        CurrentOperationToken));
             }
 
             if (source == "javlibrary")
@@ -187,14 +196,14 @@ public partial class MainWindow : Window
                     await MetadataSearchCoordinator.SearchSingleAsync(
                         id,
                         _javLibraryClient,
-                        _lifetimeCancellation.Token));
+                        CurrentOperationToken));
             }
 
             var multiSourceResult = await MetadataSearchCoordinator.SearchAllAsync(
                 id,
                 _libreDmmClient,
                 _r18DevClient,
-                _lifetimeCancellation.Token);
+                CurrentOperationToken);
             return MetadataSearchOutcome.FromMultipleSources(multiSourceResult);
         }
         catch (Exception exception)
@@ -231,9 +240,7 @@ public partial class MainWindow : Window
             DownloadExtrafanartCheckBox.IsChecked == true,
             DirectSaveOverwriteCheckBox.IsChecked == true);
 
-        var organizationOptions = new OrganizationOptions(
-            OrganizeFolderCheckBox.IsChecked == true,
-            RenameVideoCheckBox.IsChecked == true);
+        var organizationOptions = GetOrganizationOptions();
 
         SavePlan plan;
         try
@@ -282,11 +289,15 @@ public partial class MainWindow : Window
 
         await RunBusyAsync("正在安全生成并提交文件…", async () =>
         {
+            var transactionProgress = new Progress<FileTransactionProgress>(update =>
+                SetStatus(update.Message, null));
             var result = await _fileOrganizationService.ExecuteAsync(
                 plan,
                 _metadata,
                 allowOverwrite,
-                _lifetimeCancellation.Token);
+                CurrentOperationToken,
+                transactionProgress);
+            CancelOperationButton.IsEnabled = false;
             _videoPath = result.VideoPath;
             var outputs = new[] { result.Outputs.NfoPath, result.Outputs.PosterPath, result.Outputs.FanartPath }
                 .Where(path => path is not null)
@@ -310,6 +321,152 @@ public partial class MainWindow : Window
 
     private Task SelectVideoAsync(string path) =>
         RunBusyAsync("正在检查影片旁的本地 metadata…", () => SelectVideoCoreAsync(path));
+
+    private void TargetMode_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_uiInitialized)
+        {
+            RefreshTargetLocationUi();
+        }
+    }
+
+    private void TargetOption_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_uiInitialized)
+        {
+            RefreshTargetLocationPreview();
+        }
+    }
+
+    private void CustomRootText_Changed(object sender, TextChangedEventArgs e)
+    {
+        if (_uiInitialized)
+        {
+            RefreshTargetLocationPreview();
+        }
+    }
+
+    private void ChooseTargetFolder_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "选择媒体库根目录",
+            Multiselect = false
+        };
+        var currentRoot = CustomRootTextBox.Text.Trim();
+        var sourceDirectory = _videoPath is null ? null : Path.GetDirectoryName(_videoPath);
+        var initialDirectory = Directory.Exists(currentRoot)
+            ? currentRoot
+            : Directory.Exists(_lastValidCustomRootDirectory)
+                ? _lastValidCustomRootDirectory
+                : sourceDirectory;
+        if (!string.IsNullOrWhiteSpace(initialDirectory))
+        {
+            dialog.InitialDirectory = initialDirectory;
+        }
+
+        if (dialog.ShowDialog(this) == true)
+        {
+            _lastValidCustomRootDirectory = dialog.FolderName;
+            CustomRootTextBox.Text = dialog.FolderName;
+            CustomRootTextBox.CaretIndex = CustomRootTextBox.Text.Length;
+            AppLog.Info($"选择自定义目标根目录 path={dialog.FolderName}");
+        }
+    }
+
+    private OrganizationOptions GetOrganizationOptions() =>
+        new(
+            GetSelectedTargetMode(),
+            RenameVideoCheckBox.IsChecked == true,
+            GetSelectedTargetMode() is OrganizationTargetMode.CustomRootNumberFolder
+                ? CustomRootTextBox.Text
+                : null);
+
+    private OrganizationTargetMode GetSelectedTargetMode()
+    {
+        var tag = (TargetModeComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString();
+        return Enum.TryParse<OrganizationTargetMode>(tag, out var mode)
+            ? mode
+            : OrganizationTargetMode.VideoDirectory;
+    }
+
+    private void RefreshTargetLocationUi()
+    {
+        var customMode = GetSelectedTargetMode() is OrganizationTargetMode.CustomRootNumberFolder;
+        CustomTargetPanel.Visibility = customMode ? Visibility.Visible : Visibility.Collapsed;
+        if (customMode && string.IsNullOrWhiteSpace(CustomRootTextBox.Text) &&
+            !string.IsNullOrWhiteSpace(_lastValidCustomRootDirectory))
+        {
+            CustomRootTextBox.Text = _lastValidCustomRootDirectory;
+        }
+        RefreshTargetLocationPreview();
+    }
+
+    private void RefreshTargetLocationPreview()
+    {
+        _targetConfigurationError = null;
+        if (_videoPath is null)
+        {
+            TargetPathHintText.Text = GetSelectedTargetMode() is OrganizationTargetMode.CustomRootNumberFolder &&
+                                      string.IsNullOrWhiteSpace(CustomRootTextBox.Text)
+                ? "请选择自定义目标根目录；选择影片后将显示最终路径"
+                : "选择影片后显示最终路径";
+            TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(147, 164, 184));
+            RefreshSaveAvailability();
+            return;
+        }
+
+        try
+        {
+            var pathPlan = OrganizationPathPlanner.Resolve(
+                _videoPath,
+                _metadata.Id,
+                GetOrganizationOptions());
+            if (pathPlan.UsesCustomRoot)
+            {
+                _lastValidCustomRootDirectory = pathPlan.TargetRootDirectory;
+            }
+
+            TargetPathHintText.Text = $"最终影片：{pathPlan.TargetVideoPath}";
+            if (pathPlan.RequiresVerifiedCopy)
+            {
+                TargetPathHintText.Text +=
+                    $"{Environment.NewLine}传输方式：安全复制 + SHA-256 校验，成功后移除来源";
+                TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(141, 184, 255));
+            }
+            else
+            {
+                TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(114, 227, 166));
+            }
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            _targetConfigurationError = exception.Message;
+            TargetPathHintText.Text = exception.Message;
+            TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(255, 157, 166));
+        }
+
+        RefreshSaveAvailability();
+    }
+
+    private void RefreshSaveAvailability()
+    {
+        if (!_uiInitialized)
+        {
+            return;
+        }
+
+        SaveButton.IsEnabled = !_busy && !_localNfoSaveBlocked && _targetConfigurationError is null;
+        SaveButton.ToolTip = _localNfoSaveBlocked
+            ? "本地 NFO 无法安全读取；修复或移走后重新选择影片"
+            : _targetConfigurationError is not null
+                ? _targetConfigurationError
+                : _localMetadataBundle is not null
+                    ? _localMetadataBundle.HasUnknownXml
+                        ? "保存时只更新受管理字段，并保留检测到的未知 XML"
+                        : "保存时只更新受管理字段"
+                    : null;
+    }
 
     private async Task SelectVideoCoreAsync(string path)
     {
@@ -359,7 +516,7 @@ public partial class MainWindow : Window
             _localNfoSaveBlocked = true;
             try
             {
-                var bundle = await NfoReader.ReadAsync(sidecars, _lifetimeCancellation.Token);
+                var bundle = await NfoReader.ReadAsync(sidecars, CurrentOperationToken);
                 var composition = LocalMetadataReviewComposer.CreateLocal(bundle.Metadata);
                 var editable = composition.Metadata;
                 if (string.IsNullOrWhiteSpace(editable.Id))
@@ -406,7 +563,7 @@ public partial class MainWindow : Window
     {
         var discovery = await LocalArtworkDiscovery.DiscoverAsync(
             sidecars,
-            _lifetimeCancellation.Token);
+            CurrentOperationToken);
         foreach (var diagnostic in discovery.Diagnostics)
         {
             AppLog.Warning(diagnostic);
@@ -459,14 +616,14 @@ public partial class MainWindow : Window
                     browser.PageHtml,
                     browser.PageUrl ?? url,
                     _metadata.Id,
-                    _lifetimeCancellation.Token);
+                    CurrentOperationToken);
                 ApplyOnlineSources(result, [result]);
                 var artworkLoaded = await LoadSelectedArtworkPreviewAsync();
-                var localNote = _localSourceMetadata is null ? string.Empty : "，当前保留本地 NFO";
+                var localNote = _localSourceMetadata is null ? string.Empty : "；可逐字段切回本地 NFO";
                 SetStatus(
                     artworkLoaded.Poster
-                        ? $"已加入浏览器资料候选 {result.Id}{localNote}"
-                        : $"已加入浏览器资料候选 {result.Id}{localNote}；封面预览未加载，不影响资料编辑",
+                        ? $"已读取浏览器中的新资料 {result.Id}{localNote}"
+                        : $"已读取浏览器中的新资料 {result.Id}{localNote}；封面预览未加载，不影响资料编辑",
                     true);
             });
         }
@@ -476,9 +633,10 @@ public partial class MainWindow : Window
         MovieMetadata preferredOnlineMetadata,
         IReadOnlyList<MovieMetadata> onlineSources)
     {
+        var retainedManualCandidates = CaptureManualCandidates();
         if (_localSourceMetadata is null)
         {
-            ApplyMetadata(preferredOnlineMetadata, onlineSources);
+            ApplyMetadataCore(preferredOnlineMetadata, onlineSources, retainedManualCandidates);
             return _metadata;
         }
 
@@ -488,12 +646,27 @@ public partial class MainWindow : Window
             localForMerge,
             preferredOnlineMetadata,
             onlineSources);
-        ApplyMetadata(composition.Metadata, composition.Sources);
+        ApplyMetadataCore(composition.Metadata, composition.Sources, retainedManualCandidates);
         return _metadata;
     }
 
-    private void ApplyMetadata(MovieMetadata result, IReadOnlyList<MovieMetadata> sourceResults)
+    private MetadataFieldCandidate[] CaptureManualCandidates() =>
+        _metadataReview is null
+            ? []
+            : Enum.GetValues<MetadataField>()
+                .SelectMany(field => _metadataReview.GetCandidates(field))
+                .Where(candidate => candidate.Source.IsManual)
+                .ToArray();
+
+    private void ApplyMetadata(MovieMetadata result, IReadOnlyList<MovieMetadata> sourceResults) =>
+        ApplyMetadataCore(result, sourceResults, []);
+
+    private void ApplyMetadataCore(
+        MovieMetadata result,
+        IReadOnlyList<MovieMetadata> sourceResults,
+        IReadOnlyList<MetadataFieldCandidate> retainedManualCandidates)
     {
+        _metadata.PropertyChanged -= Metadata_PropertyChanged;
         if (_metadataReview is not null)
         {
             _metadataReview.SelectionChanged -= MetadataReview_SelectionChanged;
@@ -501,12 +674,31 @@ public partial class MainWindow : Window
         }
 
         _metadata = result;
+        _metadata.PropertyChanged += Metadata_PropertyChanged;
         DataContext = _metadata;
         _currentSourceResults = sourceResults.ToArray();
         _metadataReview = MetadataReviewSession.Create(result, _currentSourceResults.ToArray());
         _metadataReview.SelectionChanged += MetadataReview_SelectionChanged;
+        foreach (var manualCandidate in retainedManualCandidates)
+        {
+            var selectedCandidate = _metadataReview.GetSelectedCandidate(manualCandidate.Field);
+            _metadataReview.SetManualValue(manualCandidate.Field, manualCandidate.Value);
+            if (selectedCandidate is not null)
+            {
+                _metadataReview.SelectCandidate(manualCandidate.Field, selectedCandidate.Source.Name);
+            }
+        }
         RebuildArtworkReview();
         RefreshSourceBadges();
+        RefreshTargetLocationPreview();
+    }
+
+    private void Metadata_PropertyChanged(object? sender, PropertyChangedEventArgs eventArgs)
+    {
+        if (eventArgs.PropertyName == nameof(MovieMetadata.Id))
+        {
+            RefreshTargetLocationPreview();
+        }
     }
 
     private void RebuildArtworkReview()
@@ -804,7 +996,7 @@ public partial class MainWindow : Window
         {
             var bytes = await ArtworkLocationHelper.ReadLocalImageAsync(
                 path,
-                _lifetimeCancellation.Token);
+                CurrentOperationToken);
             var dimensions = PosterImageProcessor.GetDimensions(bytes);
             _manualArtworkCandidate = ArtworkCoverCandidate.CreateCompleteCover(
                 new MetadataCandidateSource("manual-cover", "手动封套", Path.GetFullPath(path)),
@@ -914,7 +1106,7 @@ public partial class MainWindow : Window
         {
             var bytes = await ArtworkLocationHelper.ReadLocalImageAsync(
                 localPath,
-                _lifetimeCancellation.Token);
+                CurrentOperationToken);
             if (isPoster)
             {
                 PosterImage.Source = PosterBitmapFactory.CreateFrozen(bytes);
@@ -1022,7 +1214,7 @@ public partial class MainWindow : Window
         {
             return await ArtworkLocationHelper.ReadLocalImageAsync(
                 localPath,
-                _lifetimeCancellation.Token);
+                CurrentOperationToken);
         }
 
         Exception? lastError = null;
@@ -1041,9 +1233,9 @@ public partial class MainWindow : Window
                 using var response = await _previewHttpClient.SendAsync(
                     request,
                     HttpCompletionOption.ResponseHeadersRead,
-                    _lifetimeCancellation.Token);
+                    CurrentOperationToken);
                 response.EnsureSuccessStatusCode();
-                var bytes = await response.Content.ReadAsByteArrayAsync(_lifetimeCancellation.Token);
+                var bytes = await response.Content.ReadAsByteArrayAsync(CurrentOperationToken);
                 if (bytes.Length < 128)
                 {
                     throw new InvalidDataException("图片内容太小。 ");
@@ -1098,9 +1290,14 @@ public partial class MainWindow : Window
         }
 
         _busy = true;
+        using var operationCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            _lifetimeCancellation.Token);
+        _activeOperationCancellation = operationCancellation;
         SearchButton.IsEnabled = false;
         SaveButton.IsEnabled = false;
         ArtworkSourceButton.IsEnabled = false;
+        CancelOperationButton.IsEnabled = true;
+        CancelOperationButton.Visibility = Visibility.Visible;
         Mouse.OverrideCursor = Cursors.Wait;
         SetStatus(message, null);
 
@@ -1108,8 +1305,13 @@ public partial class MainWindow : Window
         {
             await operation();
         }
-        catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
+        catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
         {
+            AppLog.Info("当前操作已取消，文件事务已执行安全恢复");
+            if (!_lifetimeCancellation.IsCancellationRequested)
+            {
+                SetStatus("操作已取消；未完成的文件事务已安全恢复", false);
+            }
         }
         catch (Exception exception)
         {
@@ -1120,15 +1322,24 @@ public partial class MainWindow : Window
         {
             Mouse.OverrideCursor = null;
             SearchButton.IsEnabled = true;
-            SaveButton.IsEnabled = !_localNfoSaveBlocked;
-            SaveButton.ToolTip = _localNfoSaveBlocked
-                ? "本地 NFO 无法安全读取；修复或移走后重新选择影片"
-                : _localMetadataBundle is not null
-                    ? "保存时只更新受管理字段，并保留未知 XML"
-                    : null;
+            CancelOperationButton.Visibility = Visibility.Collapsed;
+            _activeOperationCancellation = null;
             _busy = false;
+            RefreshSaveAvailability();
             RefreshArtworkSourceBadge();
         }
+    }
+
+    private void CancelOperation_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeOperationCancellation is null || _activeOperationCancellation.IsCancellationRequested)
+        {
+            return;
+        }
+
+        CancelOperationButton.IsEnabled = false;
+        SetStatus("正在取消并恢复文件，请稍候…", null);
+        _activeOperationCancellation.Cancel();
     }
 
     private void SetStatus(string message, bool? success)
@@ -1188,6 +1399,8 @@ public partial class MainWindow : Window
             _metadataReview.SelectionChanged -= MetadataReview_SelectionChanged;
             _metadataReview.Dispose();
         }
+        _metadata.PropertyChanged -= Metadata_PropertyChanged;
+        _activeOperationCancellation?.Cancel();
         _lifetimeCancellation.Cancel();
         _lifetimeCancellation.Dispose();
         _javLibraryClient.Dispose();
