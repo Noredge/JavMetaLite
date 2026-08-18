@@ -318,19 +318,20 @@ internal static class Program
             SourceDisplayName = "R18.dev"
         };
         var localOnlinePreferred = MetadataMerger.Merge(localLibre, localR18);
+        localMetadata.Title = "搜索前手动标题";
         var reviewedLocalMetadata = applyOnlineSources.Invoke(
             window,
             [localOnlinePreferred, new MovieMetadata[] { localLibre, localR18 }]) as MovieMetadata
             ?? throw new InvalidOperationException("在线候选没有加入本地编辑会话。 ");
         window.UpdateLayout();
-        if (reviewedLocalMetadata.Title != "本地 NFO 标题" ||
+        if (reviewedLocalMetadata.Title != "LibreDMM 在线标题" ||
             reviewedLocalMetadata.Director != "在线导演" ||
-            titleSourceText.Content?.ToString() != "本地 NFO ▾" ||
+            titleSourceText.Content?.ToString() != "LibreDMM ▾" ||
             directorSourceText.Content?.ToString() != "LibreDMM ▾" ||
             artworkSourceButton.Content?.ToString() != "本地图片 ▾" ||
             posterImage.Source is null || fanartImage.Source is null)
         {
-            throw new InvalidOperationException("在线搜索改变了本地默认字段/图片，或没有补齐本地空白字段。 ");
+            throw new InvalidOperationException("在线搜索后没有默认选择新文字资料，或意外改变了本地图片。 ");
         }
 
         artworkSourceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -349,12 +350,13 @@ internal static class Program
         titleSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         var localTitleCandidates = titleSourceText.ContextMenu?.Items.OfType<MenuItem>().ToArray()
             ?? throw new InvalidOperationException("本地标题候选菜单未创建。 ");
-        if (localTitleCandidates.Length != 3 ||
+        if (localTitleCandidates.Length != 4 ||
             localTitleCandidates.All(item => item.Tag is not MetadataFieldCandidate { Source.Name: "local-nfo" }) ||
             localTitleCandidates.All(item => item.Tag is not MetadataFieldCandidate { Source.Name: "libredmm" }) ||
-            localTitleCandidates.All(item => item.Tag is not MetadataFieldCandidate { Source.Name: "r18dev" }))
+            localTitleCandidates.All(item => item.Tag is not MetadataFieldCandidate { Source.Name: "r18dev" }) ||
+            localTitleCandidates.All(item => item.Tag is not MetadataFieldCandidate { Source.IsManual: true }))
         {
-            throw new InvalidOperationException("本地、LibreDMM 与 R18.dev 没有出现在同一字段候选菜单。 ");
+            throw new InvalidOperationException("本地、在线与搜索前手动值没有一起保留在字段候选菜单。 ");
         }
         titleSourceText.ContextMenu!.IsOpen = false;
 

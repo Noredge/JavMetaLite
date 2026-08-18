@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.0-rc2 — Online defaults after search
+
+- Records the complete RC1 R01–R06 acceptance as passed before making this focused behavior correction.
+- Keeps local NFO values selected when a movie is first opened, but selects the latest non-empty online text values after a successful search.
+- Falls back field-by-field to the local NFO when the selected online result has no value, so searching never clears useful local metadata.
+- Keeps local NFO and prior manual text values in each field menu, including when an online and local value are identical; users can switch sources at any time.
+- Leaves the unified poster/fanart selection unchanged, so existing local artwork remains selected after a text search.
+- Keeps the accepted custom-target, cross-volume verification, cancellation, rollback, and UNC behavior unchanged.
+- Adds focused Core and WPF coverage plus a short RC2 manual retest before stable promotion.
+
 ## v0.7.0-rc1 — Release candidate
 
 - Promotes the accepted dev3 build without functional changes and freezes the v0.7 custom-destination scope.

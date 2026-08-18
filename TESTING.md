@@ -46,7 +46,8 @@ Available categories are `layout`, `target`, `transfer`, `overwrite`, `roundtrip
 - Round-trip fixtures verify a pure/cancelled preview, unchanged-NFO zero writes, selective field updates, unknown XML retention, known-sidecar migration, external NFO changes, byte-exact rollback, and unchanged movie hashes.
 - Target fixtures verify all three destination modes, independent movie renaming, no duplicate number folder, absolute-root validation, file-occupied roots, movie conflicts, and correct atomic-move versus verified-copy selection.
 - Transfer fixtures force the verified-copy path inside isolated temporary directories and verify independent SHA-256 checks, progress, cancellation, hash mismatch, late movie conflicts, post-commit rollback, source preservation, target cleanup, and unchanged successful movie bytes.
-- WPF local fixtures verify the visible NFO and artwork sources, editable valid-NFO state, blocked invalid-NFO state, local-first online composition, preview action labels, manual restoration, invalid-file logging, and complete candidate reset on the next movie.
+- WPF local fixtures verify the visible NFO and artwork sources, editable valid-NFO state, blocked invalid-NFO state, online-after-search composition, preview action labels, manual restoration, invalid-file logging, and complete candidate reset on the next movie.
+- RC2 fixtures verify local values before search, online non-empty text defaults after search, local fallback for missing online fields, identical-value online provenance, retained manual/local candidates, and unchanged local artwork selection.
 - Each test verifies and removes temporary transaction artifacts.
 - A failed test returns a non-zero process exit code and prevents the gate from continuing.
 - A fixed defect should receive a regression case before the fix is considered complete.
@@ -66,4 +67,4 @@ The following remain manual because they depend on external state or human visua
 
 These checks complement the automated gate; they are not replaced by it.
 
-The focused v0.7 RC checklist is [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md). It validates a packaged cross-drive Jellyfin round trip without repeating accepted dev2/dev3 safety cases; a real UNC run is optional when no share is available. The passing v0.6 and v0.5 checklists remain in [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md) and [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md).
+The focused v0.7 RC2 retest is [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md); the complete cross-drive/Jellyfin RC1 acceptance is recorded in [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md). A real UNC run remains optional when no share is available. The passing v0.6 and v0.5 checklists remain in [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md) and [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md).

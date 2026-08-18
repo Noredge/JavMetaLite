@@ -1240,6 +1240,8 @@ static Task TestLocalMetadataReviewComposition()
     {
         Id = "SNOS-255",
         Title = "本地标题",
+        ReleaseDate = "2026-06-22",
+        Series = "本地独有系列",
         ActorsText = "本地演员",
         Actors = [new ActorMetadata("本地演员", "https://local.example/actor.jpg")],
         SourceName = "local-nfo",
@@ -1249,6 +1251,7 @@ static Task TestLocalMetadataReviewComposition()
     {
         Id = "SNOS-255",
         Title = "在线日文标题",
+        ReleaseDate = "2026-06-22",
         Director = "在线导演",
         Plot = "在线简介",
         ActorsText = "在线演员",
@@ -1272,12 +1275,14 @@ static Task TestLocalMetadataReviewComposition()
         local,
         onlinePreferred,
         [libre, r18]);
-    AssertEqual("本地标题", composition.Metadata.Title);
+    AssertEqual("在线日文标题", composition.Metadata.Title);
     AssertEqual("在线导演", composition.Metadata.Director);
     AssertEqual("在线简介", composition.Metadata.Plot);
-    AssertEqual("本地演员", composition.Metadata.ActorsText);
+    AssertEqual("在线演员", composition.Metadata.ActorsText);
     AssertEqual("1", composition.Metadata.Actors.Count.ToString());
-    AssertEqual("本地演员", composition.Metadata.Actors[0].Name);
+    AssertEqual("在线演员", composition.Metadata.Actors[0].Name);
+    AssertEqual("https://libre.example/actor.jpg", composition.Metadata.Actors[0].ImageUrl);
+    AssertEqual("本地独有系列", composition.Metadata.Series);
     AssertEqual("https://libre.example/cover.jpg", composition.Metadata.CoverUrl);
     AssertEqual("1", composition.Metadata.ScreenshotUrls.Count.ToString());
     AssertEqual("3", composition.Sources.Count.ToString());
@@ -1289,9 +1294,14 @@ static Task TestLocalMetadataReviewComposition()
         composition.Sources.ToArray()))
     {
         AssertEqual("3", review.GetCandidates(MetadataField.Title).Count.ToString());
-        AssertEqual("local-nfo", review.GetSelectedCandidate(MetadataField.Title)?.Source.Name);
+        AssertEqual("libredmm", review.GetSelectedCandidate(MetadataField.Title)?.Source.Name);
+        AssertEqual("libredmm", review.GetSelectedCandidate(MetadataField.ReleaseDate)?.Source.Name);
         AssertEqual("libredmm", review.GetSelectedCandidate(MetadataField.Director)?.Source.Name);
-        AssertEqual("本地标题", review.GetCandidates(MetadataField.Title)[0].Value);
+        AssertEqual("local-nfo", review.GetSelectedCandidate(MetadataField.Series)?.Source.Name);
+        AssertEqual(
+            "本地标题",
+            review.GetCandidates(MetadataField.Title)
+                .Single(candidate => candidate.Source.Name == "local-nfo").Value);
 
         review.SetManualValue(MetadataField.Title, "手动修正");
         AssertEqual("manual", review.GetSelectedCandidate(MetadataField.Title)?.Source.Name);

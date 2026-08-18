@@ -67,7 +67,7 @@ public partial class MainWindow : Window
         _uiInitialized = true;
         ApplyMetadata(_metadata, []);
         RefreshTargetLocationUi();
-        AppLog.Info("JavMetaLite v0.7.0-rc1 启动");
+        AppLog.Info("JavMetaLite v0.7.0-rc2 启动");
     }
 
     private async void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -134,7 +134,7 @@ public partial class MainWindow : Window
                 AppLog.Info(
                     $"metadata 搜索成功 sources={successfulSources} failedSources={failedSources} id={result.Id} " +
                     $"contentId={result.ContentId} screenshots={result.ScreenshotUrls.Count} " +
-                    $"reviewSources={outcome.Sources.Count} localDefault={_localSourceMetadata is not null}");
+                    $"reviewSources={outcome.Sources.Count} onlineDefault=true localCandidate={_localSourceMetadata is not null}");
                 var artworkLoaded = await LoadSelectedArtworkPreviewAsync();
                 var sourceName = string.Join(
                     " + ",
@@ -147,7 +147,7 @@ public partial class MainWindow : Window
                     : "，没有独立样张";
                 var localPrefix = _localSourceMetadata is null
                     ? $"已从 {sourceName} 读取 {result.Id}"
-                    : $"已加入 {sourceName} 在线候选，当前保留本地 NFO";
+                    : $"已从 {sourceName} 读取新资料；可逐字段切回本地 NFO";
                 SetStatus(
                     artworkLoaded.Poster
                         ? $"{localPrefix}{imageSummary}{(artworkLoaded.Fanart ? string.Empty : "；fanart 预览未加载")}{degradedNote}"
@@ -617,11 +617,11 @@ public partial class MainWindow : Window
                     CurrentOperationToken);
                 ApplyOnlineSources(result, [result]);
                 var artworkLoaded = await LoadSelectedArtworkPreviewAsync();
-                var localNote = _localSourceMetadata is null ? string.Empty : "，当前保留本地 NFO";
+                var localNote = _localSourceMetadata is null ? string.Empty : "；可逐字段切回本地 NFO";
                 SetStatus(
                     artworkLoaded.Poster
-                        ? $"已加入浏览器资料候选 {result.Id}{localNote}"
-                        : $"已加入浏览器资料候选 {result.Id}{localNote}；封面预览未加载，不影响资料编辑",
+                        ? $"已读取浏览器中的新资料 {result.Id}{localNote}"
+                        : $"已读取浏览器中的新资料 {result.Id}{localNote}；封面预览未加载，不影响资料编辑",
                     true);
             });
         }
@@ -631,9 +631,10 @@ public partial class MainWindow : Window
         MovieMetadata preferredOnlineMetadata,
         IReadOnlyList<MovieMetadata> onlineSources)
     {
+        var retainedManualCandidates = CaptureManualCandidates();
         if (_localSourceMetadata is null)
         {
-            ApplyMetadata(preferredOnlineMetadata, onlineSources);
+            ApplyMetadataCore(preferredOnlineMetadata, onlineSources, retainedManualCandidates);
             return _metadata;
         }
 
@@ -643,11 +644,25 @@ public partial class MainWindow : Window
             localForMerge,
             preferredOnlineMetadata,
             onlineSources);
-        ApplyMetadata(composition.Metadata, composition.Sources);
+        ApplyMetadataCore(composition.Metadata, composition.Sources, retainedManualCandidates);
         return _metadata;
     }
 
-    private void ApplyMetadata(MovieMetadata result, IReadOnlyList<MovieMetadata> sourceResults)
+    private MetadataFieldCandidate[] CaptureManualCandidates() =>
+        _metadataReview is null
+            ? []
+            : Enum.GetValues<MetadataField>()
+                .SelectMany(field => _metadataReview.GetCandidates(field))
+                .Where(candidate => candidate.Source.IsManual)
+                .ToArray();
+
+    private void ApplyMetadata(MovieMetadata result, IReadOnlyList<MovieMetadata> sourceResults) =>
+        ApplyMetadataCore(result, sourceResults, []);
+
+    private void ApplyMetadataCore(
+        MovieMetadata result,
+        IReadOnlyList<MovieMetadata> sourceResults,
+        IReadOnlyList<MetadataFieldCandidate> retainedManualCandidates)
     {
         _metadata.PropertyChanged -= Metadata_PropertyChanged;
         if (_metadataReview is not null)
@@ -662,6 +677,15 @@ public partial class MainWindow : Window
         _currentSourceResults = sourceResults.ToArray();
         _metadataReview = MetadataReviewSession.Create(result, _currentSourceResults.ToArray());
         _metadataReview.SelectionChanged += MetadataReview_SelectionChanged;
+        foreach (var manualCandidate in retainedManualCandidates)
+        {
+            var selectedCandidate = _metadataReview.GetSelectedCandidate(manualCandidate.Field);
+            _metadataReview.SetManualValue(manualCandidate.Field, manualCandidate.Value);
+            if (selectedCandidate is not null)
+            {
+                _metadataReview.SelectCandidate(manualCandidate.Field, selectedCandidate.Source.Name);
+            }
+        }
         RebuildArtworkReview();
         RefreshSourceBadges();
         RefreshTargetLocationPreview();
