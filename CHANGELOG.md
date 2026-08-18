@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.0 — Stable
+
+- Promotes RC3 without functional changes after P01–P03 and movie SHA-256 verification all passed.
+- Adds three explicit destination modes: keep beside the movie, organize into a source-side number folder, or organize beneath a user-selected custom root.
+- Keeps movie renaming independent while previewing every final movie, NFO, artwork, and screenshot path before writing.
+- Uses atomic same-volume moves and verified cross-volume/UNC copies with target-side staging, independent SHA-256 verification, cancellation, late-conflict protection, and rollback.
+- Prefers fresh non-empty online text fields after a successful search while retaining local NFO and manual candidates plus existing local artwork.
+- Shows the unknown-XML preservation notice only when the loaded NFO actually contains extra XML; lossless round-trip behavior remains unchanged.
+- Final acceptance confirmed standard and extended NFO preview wording, unknown XML preservation, and unchanged movie SHA-256.
+
 ## v0.7.0-rc3 — Conditional unknown-XML notice
 
 - Records RC2 C01–C06 and movie SHA-256 verification as passed.

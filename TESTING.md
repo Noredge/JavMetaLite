@@ -67,4 +67,4 @@ The following remain manual because they depend on external state or human visua
 
 These checks complement the automated gate; they are not replaced by it.
 
-The focused v0.7 RC3 preview retest is [`MANUAL-RETEST-v0.7.0-rc3.md`](MANUAL-RETEST-v0.7.0-rc3.md); RC2 source-selection acceptance is recorded in [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md), and the complete cross-drive/Jellyfin RC1 acceptance is in [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md). A real UNC run remains optional when no share is available.
+The focused v0.7 RC3 preview retest passed and is recorded in [`MANUAL-RETEST-v0.7.0-rc3.md`](MANUAL-RETEST-v0.7.0-rc3.md); RC2 source-selection acceptance is recorded in [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md), and the complete cross-drive/Jellyfin RC1 acceptance is in [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md). A real UNC run remains optional when no share is available.

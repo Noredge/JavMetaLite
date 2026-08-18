@@ -33,3 +33,16 @@ P02 PASS/FAIL
 P03 PASS/FAIL
 影片 SHA-256 是否一致：YES/NO
 ```
+
+## 验收结果
+
+2026-08-17：
+
+```text
+P01 PASS
+P02 PASS
+P03 PASS
+影片 SHA-256 是否一致：YES
+```
+
+RC3 集中复测全部通过，可以晋升为 `v0.7.0` 稳定版。

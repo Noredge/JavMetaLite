@@ -557,7 +557,7 @@
                         BorderBrush="#85363D"
                         Visibility="Collapsed" />
                 <Button Grid.Column="3" Content="打开日志" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
-                <TextBlock Grid.Column="4" Text="v0.7.0-rc3 · 发布候选版" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="4" Text="v0.7.0 · 稳定版" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>
