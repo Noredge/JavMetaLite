@@ -12,6 +12,7 @@ public sealed class LocalMetadataBundle
         MovieMetadata metadata,
         XDocument originalDocument,
         string originalNfoSha256,
+        bool hasUnknownXml,
         IEnumerable<string> diagnostics)
     {
         Sidecars = sidecars;
@@ -19,6 +20,7 @@ public sealed class LocalMetadataBundle
         SourceSnapshot = MetadataSourceSnapshot.FromMetadata(metadata);
         _originalDocument = new XDocument(originalDocument);
         OriginalNfoSha256 = originalNfoSha256;
+        HasUnknownXml = hasUnknownXml;
         Diagnostics = new ReadOnlyCollection<string>(
             diagnostics
                 .Where(value => !string.IsNullOrWhiteSpace(value))
@@ -34,6 +36,8 @@ public sealed class LocalMetadataBundle
     public MetadataSourceSnapshot SourceSnapshot { get; }
 
     public string OriginalNfoSha256 { get; }
+
+    public bool HasUnknownXml { get; }
 
     public IReadOnlyList<string> Diagnostics { get; }
 

@@ -293,7 +293,7 @@ internal static class Program
             posterImage.Source is null || fanartImage.Source is null ||
             fanartHintText.Text != "横板封套：1×1" ||
             !saveButton.IsEnabled ||
-            saveButton.ToolTip?.ToString()?.Contains("保留未知 XML", StringComparison.Ordinal) != true ||
+            saveButton.ToolTip?.ToString()?.Contains("保留检测到的未知 XML", StringComparison.Ordinal) != true ||
             !statusText.Text.Contains("可安全更新", StringComparison.Ordinal))
         {
             throw new InvalidOperationException("本地 NFO 与现有图片没有以明确来源载入界面。 ");

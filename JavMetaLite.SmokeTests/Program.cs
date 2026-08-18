@@ -1054,6 +1054,7 @@ static async Task TestNfoReader()
         AssertEqual("https://example.test/SNOS-255", bundle.Metadata.SourceUrl);
         AssertEqual("local-nfo", bundle.Metadata.SourceName);
         AssertEqual("本地 NFO", bundle.Metadata.SourceDisplayName);
+        AssertEqual("True", bundle.HasUnknownXml.ToString());
         AssertEqual("示例标题", bundle.SourceSnapshot.GetValue(MetadataField.Title));
         AssertEqual("https://example.test/a.jpg", bundle.SourceSnapshot.Actors[0].ImageUrl);
         AssertEqual("0", bundle.Diagnostics.Count.ToString());
@@ -1075,10 +1076,26 @@ static async Task TestNfoReader()
             AssertEqual(Convert.ToHexString(bytes), Convert.ToHexString(after[path]));
         }
 
+        await File.WriteAllTextAsync(nfoPath, """
+            <movie>
+              <title>标准 NFO</title>
+              <id>SNOS-255</id>
+              <uniqueid type="jav" default="true">snos00255</uniqueid>
+              <premiered>2026-06-23</premiered>
+              <actor><name>演员甲</name><thumb>https://example.test/a.jpg</thumb></actor>
+              <tag>Label: S1</tag>
+              <thumb aspect="poster">SNOS-255-poster.jpg</thumb>
+              <fanart><thumb>SNOS-255-fanart.jpg</thumb></fanart>
+            </movie>
+            """);
+        var standard = await NfoReader.ReadAsync(LocalSidecarLocator.Locate(videoPath));
+        AssertEqual("False", standard.HasUnknownXml.ToString());
+
         await File.WriteAllTextAsync(nfoPath, "<movie><title>Only title</title><custom /></movie>");
         var incomplete = await NfoReader.ReadAsync(LocalSidecarLocator.Locate(videoPath));
         AssertEqual("Only title", incomplete.Metadata.Title);
         AssertEqual("1", incomplete.Diagnostics.Count.ToString());
+        AssertEqual("True", incomplete.HasUnknownXml.ToString());
 
         await File.WriteAllTextAsync(nfoPath, "<tvshow><title>Wrong root</title></tvshow>");
         await AssertThrowsAsync<InvalidDataException>(() =>

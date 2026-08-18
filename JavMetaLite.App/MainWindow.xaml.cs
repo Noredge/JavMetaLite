@@ -67,7 +67,7 @@ public partial class MainWindow : Window
         _uiInitialized = true;
         ApplyMetadata(_metadata, []);
         RefreshTargetLocationUi();
-        AppLog.Info("JavMetaLite v0.7.0-rc2 启动");
+        AppLog.Info("JavMetaLite v0.7.0-rc3 启动");
     }
 
     private async void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -462,7 +462,9 @@ public partial class MainWindow : Window
             : _targetConfigurationError is not null
                 ? _targetConfigurationError
                 : _localMetadataBundle is not null
-                    ? "保存时只更新受管理字段，并保留未知 XML"
+                    ? _localMetadataBundle.HasUnknownXml
+                        ? "保存时只更新受管理字段，并保留检测到的未知 XML"
+                        : "保存时只更新受管理字段"
                     : null;
     }
 

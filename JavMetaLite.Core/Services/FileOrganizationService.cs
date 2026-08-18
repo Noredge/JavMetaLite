@@ -148,7 +148,9 @@ public sealed class FileOrganizationService
                     : PlannedChangeKind.CreateFile;
             changes.Add(new PlannedFileChange(
                 kind,
-                localBundle is null ? (targetExists ? "覆盖 NFO" : "生成 NFO") : "更新 NFO（保留未知 XML）",
+                localBundle is null
+                    ? targetExists ? "覆盖 NFO" : "生成 NFO"
+                    : localBundle.HasUnknownXml ? "更新 NFO（保留未知 XML）" : "更新 NFO",
                 targetNfoPath,
                 localNfoPath,
                 targetExists));

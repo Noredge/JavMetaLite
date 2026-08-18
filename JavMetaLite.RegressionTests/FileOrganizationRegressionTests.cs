@@ -27,6 +27,7 @@ internal static class FileOrganizationRegressionTests
         new("transfer", "目标提交后来源锁定会回滚目标", TestVerifiedCopyLateSourceFailure),
         new("overwrite", "预览模式拒绝覆盖，直接模式允许覆盖", TestOverwritePolicy),
         new("roundtrip", "生成变更预览后取消保持全部文件零写入", TestPreviewCancellationIsPure),
+        new("roundtrip", "NFO 预览只在实际存在未知 XML 时提示保留", TestConditionalUnknownXmlPreview),
         new("roundtrip", "已有 NFO 无变化零写入，修改后保留未知 XML", TestRoundTripUpdate),
         new("roundtrip", "整理时迁移并重命名已知 sidecar", TestRoundTripOrganization),
         new("conflict", "载入后的 NFO 被外部修改时拒绝保存", TestRoundTripExternalChange),
@@ -585,6 +586,37 @@ internal static class FileOrganizationRegressionTests
         await organizer.ExecuteAsync(directPlan, changedMetadata, true);
         AssertEx.Equal("新标题", XDocument.Load(nfoPath).Root?.Element("title")?.Value);
         workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestConditionalUnknownXmlPreview()
+    {
+        using var workspace = new TestWorkspace("conditional-unknown-xml");
+
+        async Task<string> BuildDescriptionAsync(string directoryName, string nfoXml)
+        {
+            var sourcePath = workspace.WriteFile($"{directoryName}/IPX-123.mp4", VideoBytes);
+            await File.WriteAllTextAsync(workspace.PathOf($"{directoryName}/IPX-123.nfo"), nfoXml);
+            var bundle = await NfoReader.ReadAsync(LocalSidecarLocator.Locate(sourcePath));
+            var editable = LocalMetadataReviewComposer.CreateLocal(bundle.Metadata).Metadata;
+            editable.Title = "更新后的标题";
+            var plan = FileOrganizationService.BuildPlan(
+                sourcePath,
+                editable,
+                new SaveOptions(true, false, false, false, false),
+                new OrganizationOptions(false, false),
+                new LocalSaveContext(bundle, null, null));
+            return plan.Changes.Single(change => change.Kind == PlannedChangeKind.UpdateFile).Description;
+        }
+
+        var standardDescription = await BuildDescriptionAsync(
+            "standard",
+            "<movie><title>旧标题</title><id>IPX-123</id><uniqueid type=\"jav\" default=\"true\">ipx00123</uniqueid></movie>");
+        AssertEx.Equal("更新 NFO", standardDescription);
+
+        var extendedDescription = await BuildDescriptionAsync(
+            "extended",
+            "<movie><title>旧标题</title><id>IPX-123</id><my_custom_field owner=\"test\">保留</my_custom_field></movie>");
+        AssertEx.Equal("更新 NFO（保留未知 XML）", extendedDescription);
     }
 
     private static async Task TestRoundTripUpdate()

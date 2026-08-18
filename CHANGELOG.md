@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.7.0-rc3 — Conditional unknown-XML notice
+
+- Records RC2 C01–C06 and movie SHA-256 verification as passed.
+- Detects whether a loaded NFO actually contains XML outside the recognized Jellyfin/Kodi structure, including custom elements, attributes, comments, or processing instructions.
+- Shows `更新 NFO` for a standard document and adds `（保留未知 XML）` only when such content was detected.
+- Applies the same condition to the Save-button tooltip while keeping the existing lossless round-trip behavior unchanged.
+- Adds standard/extended NFO reader coverage and a file-plan regression for both preview descriptions.
+- Leaves online-after-search defaults, local artwork, file organization, cross-volume verification, and rollback unchanged.
+
 ## v0.7.0-rc2 — Online defaults after search
 
 - Records the complete RC1 R01–R06 acceptance as passed before making this focused behavior correction.

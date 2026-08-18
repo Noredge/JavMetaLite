@@ -41,7 +41,7 @@ Available categories are `layout`, `target`, `transfer`, `overwrite`, `roundtrip
 - Test movies contain only synthetic bytes; real media files are never used.
 - HTTP image responses are local in-memory fixtures; the automated gate performs no website requests.
 - Multi-source orchestration uses fake providers to cover two-source success, partial and total failure, ID mismatch, per-source call counts, and diagnostics without live requests.
-- Local NFO fixtures cover valid and partial metadata, unknown-node preservation, malformed XML, wrong roots, oversized files, and DTD/external-entity rejection without touching a real media folder.
+- Local NFO fixtures cover valid and partial metadata, standard-versus-unknown XML detection, unknown-node preservation, malformed XML, wrong roots, oversized files, and DTD/external-entity rejection without touching a real media folder.
 - Synthetic local-image fixtures verify independent poster/fanart discovery, missing-counterpart behavior, invalid-image isolation, decoded dimensions, manual full-cover poster/fanart generation, and unchanged movie/source bytes.
 - Round-trip fixtures verify a pure/cancelled preview, unchanged-NFO zero writes, selective field updates, unknown XML retention, known-sidecar migration, external NFO changes, byte-exact rollback, and unchanged movie hashes.
 - Target fixtures verify all three destination modes, independent movie renaming, no duplicate number folder, absolute-root validation, file-occupied roots, movie conflicts, and correct atomic-move versus verified-copy selection.
@@ -67,4 +67,4 @@ The following remain manual because they depend on external state or human visua
 
 These checks complement the automated gate; they are not replaced by it.
 
-The focused v0.7 RC2 retest is [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md); the complete cross-drive/Jellyfin RC1 acceptance is recorded in [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md). A real UNC run remains optional when no share is available. The passing v0.6 and v0.5 checklists remain in [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md) and [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md).
+The focused v0.7 RC3 preview retest is [`MANUAL-RETEST-v0.7.0-rc3.md`](MANUAL-RETEST-v0.7.0-rc3.md); RC2 source-selection acceptance is recorded in [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md), and the complete cross-drive/Jellyfin RC1 acceptance is in [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md). A real UNC run remains optional when no share is available.
