@@ -253,6 +253,10 @@ internal static class Program
         AppLog.ConfigureDirectory(Path.Combine(localTestRoot, "logs"));
         var selectVideoAsync = typeof(MainWindow).GetMethod("SelectVideoAsync", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("v0.6 本地影片载入入口未找到。 ");
+        var handleStartupVideoRequestAsync = typeof(MainWindow).GetMethod(
+            "HandleStartupVideoRequestAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("v0.8 启动影片载入入口未找到。 ");
         var applyOnlineSources = typeof(MainWindow).GetMethod("ApplyOnlineSources", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("v0.6 在线候选组合入口未找到。 ");
 
@@ -272,8 +276,10 @@ internal static class Program
               <unknown>keep me</unknown>
             </movie>
             """);
-        WaitForTask((Task)(selectVideoAsync.Invoke(window, [localVideoPath])
-            ?? throw new InvalidOperationException("本地影片载入没有返回任务。 ")));
+        WaitForTask((Task)(handleStartupVideoRequestAsync.Invoke(
+            window,
+            [StartupVideoRequest.OpenVideo(localVideoPath)])
+            ?? throw new InvalidOperationException("启动影片载入没有返回任务。 ")));
         window.UpdateLayout();
         var localMetadata = window.DataContext as MovieMetadata
             ?? throw new InvalidOperationException("本地 NFO 没有进入编辑模型。 ");
@@ -294,7 +300,10 @@ internal static class Program
             fanartHintText.Text != "横板封套：1×1" ||
             !saveButton.IsEnabled ||
             saveButton.ToolTip?.ToString()?.Contains("保留检测到的未知 XML", StringComparison.Ordinal) != true ||
-            !statusText.Text.Contains("可安全更新", StringComparison.Ordinal))
+            !statusText.Text.Contains("可安全更新", StringComparison.Ordinal) ||
+            window.FindName("FilePathText") is not TextBlock { Text: var startupVideoText } ||
+            !string.Equals(startupVideoText, localVideoPath, StringComparison.OrdinalIgnoreCase) ||
+            !File.ReadAllText(AppLog.CurrentLogPath).Contains("从启动参数载入影片", StringComparison.Ordinal))
         {
             throw new InvalidOperationException("本地 NFO 与现有图片没有以明确来源载入界面。 ");
         }
@@ -532,7 +541,7 @@ internal static class Program
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True");
         window.Close();
         application.Shutdown();
     }

@@ -6,16 +6,19 @@ namespace JavMetaLite.App;
 
 public partial class App : Application
 {
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         AppLog.Info("应用启动流程开始");
 
         try
         {
+            var startupRequest = StartupVideoRequestResolver.Resolve(e.Args);
+            AppLog.Info($"启动参数 count={e.Args.Length} kind={startupRequest.Kind}");
             var window = new MainWindow();
             MainWindow = window;
             window.Show();
+            await window.HandleStartupVideoRequestAsync(startupRequest);
         }
         catch (Exception exception)
         {

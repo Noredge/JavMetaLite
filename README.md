@@ -2,6 +2,16 @@
 
 一个只处理单个影片的轻量 Windows metadata 工具。它不会扫描整个媒体库；文件整理和直接保存都默认关闭，用户可以先预览所有变更，也可以明确选择跳过预览并直接覆盖 metadata。
 
+## v0.8.0-dev1 启动载入
+
+`v0.8.0-dev1` 允许 Windows 在启动 JavMetaLite 时传入一个影片路径。命令行与“打开方式”都会复用现有的影片选择流程，直接识别番号并读取本地 NFO、poster 与 fanart；启动本身不会自动联网搜索，也不会写入或移动影片及 metadata。空路径、多个参数、文件夹、不存在路径及不支持格式会明确提示，关闭提示后仍可继续使用主窗口。
+
+```powershell
+& '.\JavMetaLite.exe' 'D:\Movies\SNOS-255.mp4'
+```
+
+dev1 不自动注册 Windows 文件关联。完整 v0.8 路线见 [`ROADMAP-v0.8.0.md`](ROADMAP-v0.8.0.md)，人工检查见 [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md)。
+
 ## v0.7.0 稳定版
 
 `v0.7.0` 已通过完整自动化门禁、RC1 跨盘与 Jellyfin 验收、RC2 在线来源优先复测，以及 RC3 条件提示复测。它加入三种明确的目标位置，在保持影片重命名独立可选的同时，安全支持同卷移动及经过 SHA-256 双重校验的跨卷或 UNC 复制事务。搜索后优先显示新的在线非空文字资料，但仍保留本地 NFO、手动值和本地图片作为可选来源。普通标准 NFO 更新只显示“更新 NFO”；只有实际读取到额外 XML 时才提示保留未知 XML。
@@ -70,6 +80,8 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
 ```
 
 完整自动化测试分层、回归范围和手动检查边界见 [`TESTING.md`](TESTING.md)。
+
+v0.8.0 dev1 的启动载入检查见 [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md)。
 
 v0.7.0 RC3 的全部通过记录见 [`MANUAL-RETEST-v0.7.0-rc3.md`](MANUAL-RETEST-v0.7.0-rc3.md)，RC2 的通过记录见 [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md)，RC1 的完整通过记录见 [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md)。v0.6.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md)，v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。
 

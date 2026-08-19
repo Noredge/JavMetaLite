@@ -27,11 +27,6 @@ public partial class MainWindow : Window
             new(result.Metadata, result.Sources, result.Attempts);
     }
 
-    private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".mp4", ".m4v", ".mkv", ".avi", ".wmv", ".mov", ".webm", ".ts", ".m2ts"
-    };
-
     private readonly JavLibraryClient _javLibraryClient = new();
     private readonly LibreDmmClient _libreDmmClient = new();
     private readonly R18DevClient _r18DevClient = new();
@@ -67,7 +62,7 @@ public partial class MainWindow : Window
         _uiInitialized = true;
         ApplyMetadata(_metadata, []);
         RefreshTargetLocationUi();
-        AppLog.Info("JavMetaLite v0.7.0 启动");
+        AppLog.Info("JavMetaLite v0.8.0-dev1 启动");
     }
 
     private async void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -75,7 +70,7 @@ public partial class MainWindow : Window
         var dialog = new OpenFileDialog
         {
             Title = "选择一个影片",
-            Filter = "影片文件|*.mp4;*.m4v;*.mkv;*.avi;*.wmv;*.mov;*.webm;*.ts;*.m2ts|所有文件|*.*",
+            Filter = VideoFileSupport.OpenFileDialogFilter,
             Multiselect = false,
             CheckFileExists = true
         };
@@ -322,6 +317,33 @@ public partial class MainWindow : Window
     private Task SelectVideoAsync(string path) =>
         RunBusyAsync("正在检查影片旁的本地 metadata…", () => SelectVideoCoreAsync(path));
 
+    internal async Task HandleStartupVideoRequestAsync(StartupVideoRequest request)
+    {
+        if (request.Kind == StartupVideoRequestKind.None)
+        {
+            return;
+        }
+
+        if (request.Kind == StartupVideoRequestKind.Invalid)
+        {
+            var message = request.ErrorMessage ?? "无法读取启动参数中的影片路径。";
+            AppLog.Warning($"启动影片参数被拒绝 reason={message}");
+            ShowError(message);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.VideoPath))
+        {
+            const string message = "启动参数没有提供可读取的影片路径。";
+            AppLog.Warning(message);
+            ShowError(message);
+            return;
+        }
+
+        AppLog.Info($"从启动参数载入影片 path={request.VideoPath}");
+        await SelectVideoAsync(request.VideoPath);
+    }
+
     private void TargetMode_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (_uiInitialized)
@@ -470,7 +492,7 @@ public partial class MainWindow : Window
 
     private async Task SelectVideoCoreAsync(string path)
     {
-        if (!File.Exists(path) || !SupportedExtensions.Contains(Path.GetExtension(path)))
+        if (!VideoFileSupport.IsSupportedExistingFile(path))
         {
             ShowError("请选择受支持的影片文件。 ");
             return;
@@ -1388,7 +1410,7 @@ public partial class MainWindow : Window
         }
 
         path = files[0];
-        return File.Exists(path) && SupportedExtensions.Contains(Path.GetExtension(path));
+        return VideoFileSupport.IsSupportedExistingFile(path);
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)

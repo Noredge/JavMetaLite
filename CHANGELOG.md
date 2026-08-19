@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.8.0-dev1 — Open one movie at startup
+
+- Accepts exactly one movie path from the process command line, including the path supplied by Windows Open with.
+- Reuses the existing movie-selection pipeline for ID parsing, local NFO/artwork discovery, review candidates, and target-path refresh without automatic network access or writes to the movie and its metadata.
+- Rejects blank or multiple arguments, directories, missing files, and unsupported extensions with a clear warning while leaving the main window usable.
+- Centralizes supported movie extensions and the Windows file-picker filter so startup, drag-and-drop, and manual selection follow one rule.
+- Logs startup argument classification and accepted startup movie paths for diagnostics.
+- Adds Core resolver coverage and WPF smoke coverage for the real startup-movie handling path.
+
 ## v0.7.0 — Stable
 
 - Promotes RC3 without functional changes after P01–P03 and movie SHA-256 verification all passed.

@@ -91,6 +91,7 @@ if (args.Length == 2 && args[0] == "--image")
 var tests = new List<(string Name, Func<Task> Run)>
 {
     ("番号识别", TestMovieIdParser),
+    ("v0.8 启动影片参数解析", TestStartupVideoRequestResolver),
     ("LibreDMM JSON 解析与清理", TestLibreDmmParser),
     ("多来源字段补全", TestMetadataMerge),
     ("v0.5 多来源搜索编排", TestMetadataSearchCoordinator),
@@ -146,6 +147,54 @@ static Task TestMovieIdParser()
     AssertEqual("SSIS-001", MovieIdParser.TryExtract("ssis001_uncensored.mkv"));
     AssertEqual("FC2-PPV-1234567", MovieIdParser.TryExtract("FC2-PPV-1234567.mp4"));
     AssertEqual(null, MovieIdParser.TryExtract("vacation-1080p.mp4"));
+    return Task.CompletedTask;
+}
+
+static Task TestStartupVideoRequestResolver()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.StartupRequestTests.{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    try
+    {
+        var noArguments = StartupVideoRequestResolver.Resolve([]);
+        AssertEqual(StartupVideoRequestKind.None.ToString(), noArguments.Kind.ToString());
+
+        var multipleArguments = StartupVideoRequestResolver.Resolve(["first.mp4", "second.mp4"]);
+        AssertEqual(StartupVideoRequestKind.Invalid.ToString(), multipleArguments.Kind.ToString());
+        AssertEqual("True", multipleArguments.ErrorMessage?.Contains("一次只能", StringComparison.Ordinal).ToString());
+
+        var emptyArgument = StartupVideoRequestResolver.Resolve(["   "]);
+        AssertEqual(StartupVideoRequestKind.Invalid.ToString(), emptyArgument.Kind.ToString());
+
+        var directoryArgument = StartupVideoRequestResolver.Resolve([root]);
+        AssertEqual(StartupVideoRequestKind.Invalid.ToString(), directoryArgument.Kind.ToString());
+        AssertEqual("True", directoryArgument.ErrorMessage?.Contains("文件夹", StringComparison.Ordinal).ToString());
+
+        var missingPath = Path.Combine(root, "不存在的影片.mp4");
+        var missingArgument = StartupVideoRequestResolver.Resolve([missingPath]);
+        AssertEqual(StartupVideoRequestKind.Invalid.ToString(), missingArgument.Kind.ToString());
+        AssertEqual("True", missingArgument.ErrorMessage?.Contains("不存在", StringComparison.Ordinal).ToString());
+
+        var unsupportedPath = Path.Combine(root, "SNOS-255.txt");
+        File.WriteAllText(unsupportedPath, "not a movie");
+        var unsupportedArgument = StartupVideoRequestResolver.Resolve([unsupportedPath]);
+        AssertEqual(StartupVideoRequestKind.Invalid.ToString(), unsupportedArgument.Kind.ToString());
+        AssertEqual("True", unsupportedArgument.ErrorMessage?.Contains("不支持", StringComparison.Ordinal).ToString());
+
+        var videoPath = Path.Combine(root, "包含 空格", "SNOS-255.MKV");
+        Directory.CreateDirectory(Path.GetDirectoryName(videoPath)!);
+        File.WriteAllBytes(videoPath, [0x01, 0x02, 0x03]);
+        var videoArgument = StartupVideoRequestResolver.Resolve([videoPath]);
+        AssertEqual(StartupVideoRequestKind.Video.ToString(), videoArgument.Kind.ToString());
+        AssertEqual(Path.GetFullPath(videoPath), videoArgument.VideoPath);
+        AssertEqual("True", VideoFileSupport.IsSupportedExistingFile(videoArgument.VideoPath).ToString());
+        AssertEqual("False", VideoFileSupport.HasSupportedExtension(unsupportedPath).ToString());
+    }
+    finally
+    {
+        Directory.Delete(root, true);
+    }
+
     return Task.CompletedTask;
 }
 
