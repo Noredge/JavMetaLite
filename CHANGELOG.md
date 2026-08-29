@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.8.0-rc1 — Release candidate
+
+- Promotes the accepted dev3 build without functional changes and freezes the v0.8 daily-efficiency scope.
+- Combines startup movie loading, explicitly enabled safe-preference persistence, and up to five recent custom target roots.
+- Keeps direct overwrite non-persistent and blocks unavailable custom roots without creating directories or writing files.
+- Carries forward the passed E01–E08, P01–P02, and H01–H03 manual checks plus the complete offline automated gate.
+- Adds one focused RC checklist for packaged startup, restart persistence, unavailable-root isolation, a real custom-target save, local metadata reloading, and final hashes.
+
 ## v0.8.0-dev3 — Recent custom roots
 
 - Keeps up to five recent custom target roots inside the explicitly enabled safe-preference file.

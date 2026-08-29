@@ -72,7 +72,7 @@ public partial class MainWindow : Window
         _uiInitialized = true;
         ApplyMetadata(_metadata, []);
         RefreshTargetLocationUi();
-        AppLog.Info("JavMetaLite v0.8.0-dev3 启动");
+        AppLog.Info("JavMetaLite v0.8.0-rc1 启动");
     }
 
     internal void LoadPreferences()
