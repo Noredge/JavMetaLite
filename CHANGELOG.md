@@ -9,6 +9,7 @@
 - Preserves unsupported future settings before deserializing newer enum values, preventing an older build from erasing a newer configuration.
 - Treats missing, disconnected-drive, and unavailable UNC roots as retained but blocked choices with a visible warning; preview and history management never create the root.
 - Adds offline Core and WPF coverage for normalization, five-entry bounds, deduplication, migration, future-version protection, dark-menu actions, persistent clearing, and unavailable-root zero writes.
+- Passed H01–H03 manual acceptance for recent-root switching, unavailable-root zero creation, individual removal, full clearing, and restart persistence.
 
 ## v0.8.0-dev2 — Safe preference persistence
 
