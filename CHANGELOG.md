@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.8.0 — Stable
+
+- Promotes RC1 without functional changes after R01–R05, movie SHA-256, and no-op sidecar SHA-256 verification all passed.
+- Opens one supported movie directly from the command line or Windows Open with while reusing the existing local-load workflow without automatic network access or writes.
+- Persists only explicitly enabled safe target, rename, and metadata-output preferences; direct overwrite always starts disabled.
+- Keeps up to five recent custom target roots with selection, individual removal, and full clearing in the compact dark menu.
+- Retains unavailable roots without creating them and blocks preview or saving until the selected root is available again.
+- Preserves the lightweight single-movie scope and all existing preview, transaction, rollback, source-selection, local NFO, and artwork safeguards.
+- Final packaged acceptance confirmed startup entry consistency, restart persistence, unavailable-root isolation, a real custom-target save, local reloading, and unchanged hashes.
+
 ## v0.8.0-rc1 — Release candidate
 
 - Promotes the accepted dev3 build without functional changes and freezes the v0.8 daily-efficiency scope.
