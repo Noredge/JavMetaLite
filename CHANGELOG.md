@@ -8,6 +8,7 @@
 - Centralizes supported movie extensions and the Windows file-picker filter so startup, drag-and-drop, and manual selection follow one rule.
 - Logs startup argument classification and accepted startup movie paths for diagnostics.
 - Adds Core resolver coverage and WPF smoke coverage for the real startup-movie handling path.
+- Passed E01–E08 manual acceptance for normal startup, command-line and Windows Open with loading, invalid-argument isolation, existing picker/drop regression, and unchanged movie SHA-256.
 
 ## v0.7.0 — Stable
 

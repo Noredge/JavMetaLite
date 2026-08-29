@@ -73,3 +73,21 @@ E07 PASS/FAIL
 E08 PASS/FAIL
 影片 SHA-256 是否一致：YES/NO
 ```
+
+## 验收结果
+
+2026-08-29：
+
+```text
+E01 PASS
+E02 PASS
+E03 PASS
+E04 PASS
+E05 PASS
+E06 PASS
+E07 PASS
+E08 PASS
+影片 SHA-256 是否一致：YES
+```
+
+dev1 人工检查全部通过。命令行、Windows“打开方式”、无效参数隔离和既有选择入口均符合预期，影片内容保持不变，可以进入 dev2。
