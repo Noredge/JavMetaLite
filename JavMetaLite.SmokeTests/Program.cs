@@ -1,4 +1,5 @@
 using System.IO;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -530,6 +531,20 @@ static async Task TestMetadataSearchCoordinator()
             failedSecondary);
         AssertEqual("LibreDMM", primaryOnly.Metadata.SourceDisplayName);
         AssertEqual("1", primaryOnly.Sources.Count.ToString());
+
+        using var timeoutPrimary = FakeMetadataProvider.Success("libredmm", "LibreDMM", primaryMetadata);
+        using var timeoutSecondary = FakeMetadataProvider.WaitForCancellation("r18dev", "R18.dev");
+        var timeoutStopwatch = Stopwatch.StartNew();
+        var primaryAfterTimeout = await MetadataSearchCoordinator.SearchAllAsync(
+            "IPZZ-850",
+            timeoutPrimary,
+            timeoutSecondary,
+            providerTimeout: TimeSpan.FromMilliseconds(100));
+        timeoutStopwatch.Stop();
+        AssertEqual("LibreDMM", primaryAfterTimeout.Metadata.SourceDisplayName);
+        AssertEqual("1", primaryAfterTimeout.Sources.Count.ToString());
+        AssertEqual("True", (primaryAfterTimeout.Attempts[1].Error is MetadataSourceTimeoutException).ToString());
+        AssertEqual("True", (timeoutStopwatch.Elapsed < TimeSpan.FromSeconds(2)).ToString());
 
         using var firstFailure = FakeMetadataProvider.Failure(
             "libredmm",
@@ -1694,6 +1709,13 @@ internal sealed class FakeMetadataProvider(
 
     public static FakeMetadataProvider Failure(string name, string displayName, Exception exception) =>
         new(name, displayName, (_, _) => Task.FromException<MovieMetadata>(exception));
+
+    public static FakeMetadataProvider WaitForCancellation(string name, string displayName) =>
+        new(name, displayName, async (_, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("等待取消的测试来源意外完成。 ");
+        });
 
     public Task<MovieMetadata> SearchAsync(string rawId, CancellationToken cancellationToken = default)
     {

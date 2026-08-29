@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.9.0-dev1-r1 — Source timeout safeguard
+
+- Caps each metadata source at 10 seconds so an unavailable site cannot keep a search waiting indefinitely.
+- Keeps the successful source in multi-source mode when the other source times out; single-source mode shows a localized timeout message.
+- Preserves user cancellation, source priority, merge rules, metadata fields, artwork selection, and every save/file safeguard.
+- Adds an offline slow-provider regression fixture.
+
 ## v0.9.0-dev1 — Four-language foundation
 
 - Adds immediate UI switching between Simplified Chinese, Traditional Chinese, English, and Japanese.

@@ -72,7 +72,7 @@
     <sys:String x:Key="Main.CancelOperation">取消当前操作</sys:String>
     <sys:String x:Key="Main.StatusReady">准备就绪，请选择或拖入一个影片</sys:String>
     <sys:String x:Key="Status.LanguageChanged">界面语言已切换</sys:String>
-    <sys:String x:Key="Main.Version">v0.9.0-dev1 · 四语言基座</sys:String>
+    <sys:String x:Key="Main.Version">v0.9.0-dev1-r1 · 四语言基座</sys:String>
 
     <sys:String x:Key="Browser.Title">JAVLibrary 浏览器</sys:String>
     <sys:String x:Key="Browser.Instruction">完成验证并打开正确的影片详情页</sys:String>
@@ -224,4 +224,5 @@
     <sys:String x:Key="Error.ImageTooSmall">图片内容太小。</sys:String>
     <sys:String x:Key="Error.PreviewDownload">图片预览下载失败。</sys:String>
     <sys:String x:Key="App.StartFailed">JAV Metadata Lite 启动失败。&#10;&#10;错误记录：{0}&#10;&#10;{1}</sys:String>
+    <sys:String x:Key="Error.SourceTimeout">资料来源 {0} 在 {1:0} 秒内没有响应，请稍后重试或更换来源。</sys:String>
 </ResourceDictionary>

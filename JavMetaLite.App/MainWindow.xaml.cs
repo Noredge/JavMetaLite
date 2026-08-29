@@ -74,7 +74,7 @@ public partial class MainWindow : Window
         _uiInitialized = true;
         ApplyMetadata(_metadata, []);
         RefreshTargetLocationUi();
-        AppLog.Info("JavMetaLite v0.9.0-dev1 启动");
+        AppLog.Info("JavMetaLite v0.9.0-dev1-r1 启动");
     }
 
     internal void LoadPreferences()
@@ -1762,7 +1762,7 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             AppLog.Error(message, exception);
-            ShowError(exception.Message);
+            ShowError(GetLocalizedExceptionMessage(exception));
         }
         finally
         {
@@ -1804,6 +1804,14 @@ public partial class MainWindow : Window
         SetStatus(message.Replace(Environment.NewLine, " "), false);
         MessageBox.Show(this, message, "JAV Metadata Lite", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
+
+    private static string GetLocalizedExceptionMessage(Exception exception) =>
+        exception is MetadataSourceTimeoutException timeout
+            ? LocalizationService.Get(
+                "Error.SourceTimeout",
+                timeout.SourceDisplayName,
+                Math.Ceiling(timeout.Timeout.TotalSeconds))
+            : exception.Message;
 
     private void OpenLogs_Click(object sender, RoutedEventArgs e)
     {
