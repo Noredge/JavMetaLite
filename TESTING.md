@@ -77,6 +77,6 @@ The v0.8 dev3 automated layer validates schema migration, five-entry history beh
 
 The v0.8 RC1 packaged startup, restart persistence, unavailable-root isolation, real custom-target save, local reload, and hash checks all passed and are recorded in [`MANUAL-ACCEPTANCE-v0.8.0-rc1.md`](MANUAL-ACCEPTANCE-v0.8.0-rc1.md). The stable build preserves that accepted behavior without functional changes.
 
-The v0.8.1 dev1 automated layer validates schema-v3 direct-overwrite persistence, v1/v2 migration to disabled, invalid/future configuration isolation, WPF restoration, capture, and safe defaults. Manual testing is limited to three visible restart checks in [`MANUAL-CHECK-v0.8.1-dev1.md`](MANUAL-CHECK-v0.8.1-dev1.md).
+The v0.8.1 automated layer validates schema-v3 direct-overwrite persistence, v1/v2 migration to disabled, invalid/future configuration isolation, WPF restoration, capture, and safe defaults. Its three visible restart checks passed and are recorded in [`MANUAL-CHECK-v0.8.1-dev1.md`](MANUAL-CHECK-v0.8.1-dev1.md); the stable build preserves that accepted behavior.
 
 The focused v0.7 RC3 preview retest passed and is recorded in [`MANUAL-RETEST-v0.7.0-rc3.md`](MANUAL-RETEST-v0.7.0-rc3.md); RC2 source-selection acceptance is recorded in [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md), and the complete cross-drive/Jellyfin RC1 acceptance is in [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md). A real UNC run remains optional when no share is available.

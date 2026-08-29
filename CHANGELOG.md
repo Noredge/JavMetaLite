@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.8.1 — Stable
+
+- Promotes dev1 without functional changes after the complete automated gate and P01–P03 real restart acceptance all passed.
+- Remembers `直接保存并覆盖（跳过预览）` only when the user explicitly enables `记住保存偏好`.
+- Uses preference schema v3 while safely migrating schema-v1 and schema-v2 files with direct overwrite disabled.
+- Keeps direct overwrite disabled for first launch, missing or damaged settings, unsupported future settings, and disabled preference memory.
+- Clearly reports a restored direct-overwrite choice in the status bar and log without changing preview, movie protection, transaction, or rollback behavior.
+
 ## v0.8.1-dev1 — Remember direct overwrite
 
 - Persists `直接保存并覆盖（跳过预览）` when the user explicitly enables `记住保存偏好`, matching the behavior of the other remembered save choices.
