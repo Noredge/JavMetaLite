@@ -33,9 +33,19 @@ public sealed class AppPreferencesStore
         try
         {
             var json = File.ReadAllText(SettingsPath, Encoding.UTF8);
+            using var document = JsonDocument.Parse(json);
+            if (TryReadSchemaVersion(document.RootElement, out var declaredSchemaVersion) &&
+                declaredSchemaVersion > AppPreferences.CurrentSchemaVersion)
+            {
+                return new AppPreferencesLoadResult(
+                    AppPreferences.CreateSafeDefaults(),
+                    $"偏好配置版本 {declaredSchemaVersion} 不受当前程序支持，已使用安全默认值。",
+                    CanOverwrite: false);
+            }
+
             var preferences = JsonSerializer.Deserialize<AppPreferences>(json, JsonOptions)
                 ?? throw new JsonException("配置内容为空。");
-            if (preferences.SchemaVersion != AppPreferences.CurrentSchemaVersion)
+            if (preferences.SchemaVersion > AppPreferences.CurrentSchemaVersion)
             {
                 return new AppPreferencesLoadResult(
                     AppPreferences.CreateSafeDefaults(),
@@ -43,12 +53,21 @@ public sealed class AppPreferencesStore
                     CanOverwrite: false);
             }
 
+            if (preferences.SchemaVersion < 1)
+            {
+                return new AppPreferencesLoadResult(
+                    AppPreferences.CreateSafeDefaults(),
+                    $"偏好配置版本 {preferences.SchemaVersion} 无效，已使用安全默认值。");
+            }
+
             if (!preferences.RememberSavePreferences)
             {
                 return new AppPreferencesLoadResult(AppPreferences.CreateSafeDefaults());
             }
 
-            return new AppPreferencesLoadResult(Normalize(preferences));
+            return new AppPreferencesLoadResult(Normalize(
+                preferences,
+                promoteCurrentRoot: preferences.SchemaVersion == 1));
         }
         catch (Exception exception) when (
             exception is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
@@ -74,7 +93,7 @@ public sealed class AppPreferencesStore
             $".{SettingsFileName}.{Guid.NewGuid():N}.tmp");
         try
         {
-            var normalized = Normalize(preferences) with
+            var normalized = Normalize(preferences, promoteCurrentRoot: false) with
             {
                 SchemaVersion = AppPreferences.CurrentSchemaVersion,
                 RememberSavePreferences = true
@@ -124,16 +143,28 @@ public sealed class AppPreferencesStore
         }
     }
 
-    private static AppPreferences Normalize(AppPreferences preferences) => preferences with
+    private static AppPreferences Normalize(
+        AppPreferences preferences,
+        bool promoteCurrentRoot)
     {
-        SchemaVersion = AppPreferences.CurrentSchemaVersion,
-        TargetMode = Enum.IsDefined(preferences.TargetMode)
-            ? preferences.TargetMode
-            : OrganizationTargetMode.VideoDirectory,
-        CustomRootDirectory = string.IsNullOrWhiteSpace(preferences.CustomRootDirectory)
-            ? null
-            : preferences.CustomRootDirectory.Trim()
-    };
+        var customRoot = CustomRootHistory.TryNormalizePath(
+            preferences.CustomRootDirectory,
+            out var normalizedCustomRoot)
+            ? normalizedCustomRoot
+            : null;
+        var recentRoots = CustomRootHistory.Normalize(
+            preferences.RecentCustomRootDirectories,
+            promoteCurrentRoot ? customRoot : null);
+        return preferences with
+        {
+            SchemaVersion = AppPreferences.CurrentSchemaVersion,
+            TargetMode = Enum.IsDefined(preferences.TargetMode)
+                ? preferences.TargetMode
+                : OrganizationTargetMode.VideoDirectory,
+            CustomRootDirectory = customRoot,
+            RecentCustomRootDirectories = recentRoots.ToArray()
+        };
+    }
 
     private static JsonSerializerOptions CreateJsonOptions()
     {
@@ -144,5 +175,23 @@ public sealed class AppPreferencesStore
         };
         options.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
         return options;
+    }
+
+    private static bool TryReadSchemaVersion(JsonElement root, out int schemaVersion)
+    {
+        if (root.ValueKind is JsonValueKind.Object)
+        {
+            foreach (var property in root.EnumerateObject())
+            {
+                if (property.Name.Equals("SchemaVersion", StringComparison.OrdinalIgnoreCase) &&
+                    property.Value.TryGetInt32(out schemaVersion))
+                {
+                    return true;
+                }
+            }
+        }
+
+        schemaVersion = 0;
+        return false;
     }
 }

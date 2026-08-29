@@ -47,6 +47,8 @@ public partial class MainWindow : Window
     private string? _preferredArtworkSourceName;
     private string? _videoPath;
     private string? _lastValidCustomRootDirectory;
+    private string? _customRootAvailabilityCheckPath;
+    private readonly List<string> _recentCustomRootDirectories = [];
     private string? _targetConfigurationError;
     private bool _localNfoSaveBlocked;
     private bool _busy;
@@ -70,7 +72,7 @@ public partial class MainWindow : Window
         _uiInitialized = true;
         ApplyMetadata(_metadata, []);
         RefreshTargetLocationUi();
-        AppLog.Info("JavMetaLite v0.8.0-dev2 启动");
+        AppLog.Info("JavMetaLite v0.8.0-dev3 启动");
     }
 
     internal void LoadPreferences()
@@ -114,8 +116,17 @@ public partial class MainWindow : Window
         DownloadFanartCheckBox.IsChecked = preferences.DownloadFanart;
         DownloadExtrafanartCheckBox.IsChecked = preferences.DownloadExtrafanart;
         RenameVideoCheckBox.IsChecked = preferences.RenameVideo;
+        _recentCustomRootDirectories.Clear();
+        _recentCustomRootDirectories.AddRange(CustomRootHistory.Normalize(
+            preferences.RecentCustomRootDirectories));
         CustomRootTextBox.Text = preferences.CustomRootDirectory ?? string.Empty;
         _lastValidCustomRootDirectory = preferences.CustomRootDirectory;
+        _customRootAvailabilityCheckPath = CustomRootHistory.TryNormalizePath(
+            preferences.CustomRootDirectory,
+            out var normalizedCustomRoot)
+            ? normalizedCustomRoot
+            : null;
+        RefreshRecentRootsButton();
 
         TargetModeComboBox.SelectedItem = TargetModeComboBox.Items
             .OfType<ComboBoxItem>()
@@ -127,19 +138,23 @@ public partial class MainWindow : Window
         RefreshTargetLocationUi();
     }
 
-    private AppPreferences CapturePreferences() => new()
+    private AppPreferences CapturePreferences()
     {
-        RememberSavePreferences = RememberPreferencesCheckBox.IsChecked == true,
-        TargetMode = GetSelectedTargetMode(),
-        CustomRootDirectory = string.IsNullOrWhiteSpace(CustomRootTextBox.Text)
-            ? _lastValidCustomRootDirectory
-            : CustomRootTextBox.Text,
-        RenameVideo = RenameVideoCheckBox.IsChecked == true,
-        WriteNfo = WriteNfoCheckBox.IsChecked == true,
-        DownloadPoster = DownloadPosterCheckBox.IsChecked == true,
-        DownloadFanart = DownloadFanartCheckBox.IsChecked == true,
-        DownloadExtrafanart = DownloadExtrafanartCheckBox.IsChecked == true
-    };
+        return new AppPreferences
+        {
+            RememberSavePreferences = RememberPreferencesCheckBox.IsChecked == true,
+            TargetMode = GetSelectedTargetMode(),
+            CustomRootDirectory = string.IsNullOrWhiteSpace(CustomRootTextBox.Text)
+                ? _lastValidCustomRootDirectory
+                : CustomRootTextBox.Text,
+            RecentCustomRootDirectories = _recentCustomRootDirectories.ToArray(),
+            RenameVideo = RenameVideoCheckBox.IsChecked == true,
+            WriteNfo = WriteNfoCheckBox.IsChecked == true,
+            DownloadPoster = DownloadPosterCheckBox.IsChecked == true,
+            DownloadFanart = DownloadFanartCheckBox.IsChecked == true,
+            DownloadExtrafanart = DownloadExtrafanartCheckBox.IsChecked == true
+        };
+    }
 
     private void PersistPreferencesOnClose()
     {
@@ -479,6 +494,24 @@ public partial class MainWindow : Window
         }
     }
 
+    private void CustomRootTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        RememberCurrentCustomRoot();
+        RefreshTargetLocationPreview();
+    }
+
+    private void CustomRootTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not Key.Enter)
+        {
+            return;
+        }
+
+        RememberCurrentCustomRoot();
+        RefreshTargetLocationPreview();
+        e.Handled = true;
+    }
+
     private void ChooseTargetFolder_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFolderDialog
@@ -501,10 +534,146 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) == true)
         {
             _lastValidCustomRootDirectory = dialog.FolderName;
+            RememberCustomRoot(dialog.FolderName);
             CustomRootTextBox.Text = dialog.FolderName;
             CustomRootTextBox.CaretIndex = CustomRootTextBox.Text.Length;
             AppLog.Info($"选择自定义目标根目录 path={dialog.FolderName}");
         }
+    }
+
+    private void RecentRoots_Click(object sender, RoutedEventArgs eventArgs)
+    {
+        if (_recentCustomRootDirectories.Count == 0)
+        {
+            return;
+        }
+
+        var menu = new ContextMenu
+        {
+            PlacementTarget = RecentRootsButton,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+            Style = (Style)FindResource("CandidateContextMenu")
+        };
+
+        foreach (var path in _recentCustomRootDirectories)
+        {
+            var pathItem = new MenuItem
+            {
+                Header = new TextBlock
+                {
+                    Text = path,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxWidth = 490
+                },
+                Tag = path,
+                ToolTip = path,
+                Style = (Style)FindResource("CandidateMenuItem")
+            };
+            pathItem.Click += (_, _) => SelectRecentCustomRoot(path);
+            menu.Items.Add(pathItem);
+        }
+
+        var currentCanBeRemoved = CustomRootHistory.TryNormalizePath(
+                                      CustomRootTextBox.Text,
+                                      out var currentRoot) &&
+                                  _recentCustomRootDirectories.Contains(
+                                      currentRoot,
+                                      StringComparer.OrdinalIgnoreCase);
+        var removeItem = new MenuItem
+        {
+            Header = new TextBlock
+            {
+                Text = "移除当前记录",
+                Foreground = new SolidColorBrush(currentCanBeRemoved
+                    ? Color.FromRgb(255, 157, 166)
+                    : Color.FromRgb(112, 128, 148))
+            },
+            Tag = "remove-current",
+            IsEnabled = currentCanBeRemoved,
+            Style = (Style)FindResource("CandidateMenuItem")
+        };
+        removeItem.Click += (_, _) => RemoveCurrentRecentRoot();
+        menu.Items.Add(removeItem);
+
+        var clearItem = new MenuItem
+        {
+            Header = new TextBlock
+            {
+                Text = "清空最近记录",
+                Foreground = new SolidColorBrush(Color.FromRgb(255, 157, 166))
+            },
+            Tag = "clear-all",
+            Style = (Style)FindResource("CandidateMenuItem")
+        };
+        clearItem.Click += (_, _) => ClearRecentRoots();
+        menu.Items.Add(clearItem);
+
+        RecentRootsButton.ContextMenu = menu;
+        menu.IsOpen = true;
+        eventArgs.Handled = true;
+    }
+
+    private void SelectRecentCustomRoot(string path)
+    {
+        RememberCustomRoot(path);
+        _lastValidCustomRootDirectory = path;
+        CustomRootTextBox.Text = path;
+        CustomRootTextBox.CaretIndex = CustomRootTextBox.Text.Length;
+        AppLog.Info($"选择最近自定义目标根目录 available={Directory.Exists(path)} path={path}");
+    }
+
+    private void RemoveCurrentRecentRoot()
+    {
+        if (!CustomRootHistory.TryNormalizePath(CustomRootTextBox.Text, out var currentRoot))
+        {
+            return;
+        }
+
+        _recentCustomRootDirectories.RemoveAll(path =>
+            path.Equals(currentRoot, StringComparison.OrdinalIgnoreCase));
+        RefreshRecentRootsButton();
+        AppLog.Info($"移除最近自定义目标根目录 path={currentRoot}");
+        SetStatus("已移除当前目录的历史记录；当前路径保持不变", true);
+    }
+
+    private void ClearRecentRoots()
+    {
+        _recentCustomRootDirectories.Clear();
+        RefreshRecentRootsButton();
+        AppLog.Info("清空最近自定义目标根目录");
+        SetStatus("已清空最近目标根目录；当前路径保持不变", true);
+    }
+
+    private void RememberCurrentCustomRoot()
+    {
+        if (CustomRootHistory.TryNormalizePath(CustomRootTextBox.Text, out var currentRoot))
+        {
+            RememberCustomRoot(currentRoot);
+        }
+    }
+
+    private void RememberCustomRoot(string path)
+    {
+        var normalized = CustomRootHistory.Normalize(_recentCustomRootDirectories, path);
+        _recentCustomRootDirectories.Clear();
+        _recentCustomRootDirectories.AddRange(normalized);
+        _customRootAvailabilityCheckPath = CustomRootHistory.TryNormalizePath(path, out var normalizedPath)
+            ? normalizedPath
+            : null;
+        RefreshRecentRootsButton();
+    }
+
+    private void RefreshRecentRootsButton()
+    {
+        if (!_uiInitialized)
+        {
+            return;
+        }
+
+        RecentRootsButton.Content = _recentCustomRootDirectories.Count == 0
+            ? "最近目录"
+            : $"最近目录 ({_recentCustomRootDirectories.Count}) ▾";
+        RecentRootsButton.IsEnabled = _recentCustomRootDirectories.Count > 0;
     }
 
     private OrganizationOptions GetOrganizationOptions() =>
@@ -538,10 +707,22 @@ public partial class MainWindow : Window
     private void RefreshTargetLocationPreview()
     {
         _targetConfigurationError = null;
+        var customMode = GetSelectedTargetMode() is OrganizationTargetMode.CustomRootNumberFolder;
+        if (customMode &&
+            !string.IsNullOrWhiteSpace(CustomRootTextBox.Text) &&
+            ShouldCheckCustomRootAvailability(CustomRootTextBox.Text) &&
+            TryGetUnavailableCustomRootMessage(CustomRootTextBox.Text, out var unavailableMessage))
+        {
+            _targetConfigurationError = unavailableMessage;
+            TargetPathHintText.Text = unavailableMessage;
+            TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(255, 157, 166));
+            RefreshSaveAvailability();
+            return;
+        }
+
         if (_videoPath is null)
         {
-            TargetPathHintText.Text = GetSelectedTargetMode() is OrganizationTargetMode.CustomRootNumberFolder &&
-                                      string.IsNullOrWhiteSpace(CustomRootTextBox.Text)
+            TargetPathHintText.Text = customMode && string.IsNullOrWhiteSpace(CustomRootTextBox.Text)
                 ? "请选择自定义目标根目录；选择影片后将显示最终路径"
                 : "选择影片后显示最终路径";
             TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(147, 164, 184));
@@ -581,6 +762,23 @@ public partial class MainWindow : Window
 
         RefreshSaveAvailability();
     }
+
+    private static bool TryGetUnavailableCustomRootMessage(string candidate, out string message)
+    {
+        if (!CustomRootHistory.TryNormalizePath(candidate, out var normalizedPath) ||
+            Directory.Exists(normalizedPath))
+        {
+            message = string.Empty;
+            return false;
+        }
+
+        message = $"自定义目标根目录当前不可用：{normalizedPath}。请重新连接或选择其他目录；程序不会自动创建该根目录。";
+        return true;
+    }
+
+    private bool ShouldCheckCustomRootAvailability(string candidate) =>
+        CustomRootHistory.TryNormalizePath(candidate, out var normalizedPath) &&
+        normalizedPath.Equals(_customRootAvailabilityCheckPath, StringComparison.OrdinalIgnoreCase);
 
     private void RefreshSaveAvailability()
     {

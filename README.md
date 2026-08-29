@@ -2,6 +2,12 @@
 
 一个只处理单个影片的轻量 Windows metadata 工具。它不会扫描整个媒体库；文件整理和直接保存都默认关闭，用户可以先预览所有变更，也可以明确选择跳过预览并直接覆盖 metadata。
 
+## v0.8.0-dev3 最近目标根目录
+
+`v0.8.0-dev3` 在现有自定义路径框旁加入一个紧凑的“最近目录”菜单，最多记住 5 个用户明确使用过的根目录。可以直接切换、移除当前记录或清空历史；删除历史不会清空当前路径。不存在、离线磁盘或暂不可用的 UNC 路径会保留但阻止保存，程序不会自行创建根目录。
+
+最近目录只在启用“记住保存偏好”时跨重启保留。dev2 配置会自动迁移，危险的“直接保存并覆盖”仍然不会持久化。人工检查见 [`MANUAL-CHECK-v0.8.0-dev3.md`](MANUAL-CHECK-v0.8.0-dev3.md)。
+
 ## v0.8.0-dev2 安全偏好
 
 `v0.8.0-dev2` 增加明确的“记住保存偏好”开关。只有勾选后，程序才会在关闭时记住目标位置、自定义根目录、影片重命名与 NFO/图片输出选项；“直接保存并覆盖（跳过预览）”不会被记住，每次启动都保持关闭。配置损坏或来自更高版本时会使用安全默认值，不会影响程序启动、影片或 metadata。
@@ -87,7 +93,7 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
 
 完整自动化测试分层、回归范围和手动检查边界见 [`TESTING.md`](TESTING.md)。
 
-v0.8.0 dev2 的安全偏好检查见 [`MANUAL-CHECK-v0.8.0-dev2.md`](MANUAL-CHECK-v0.8.0-dev2.md)，dev1 的启动载入检查见 [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md)。
+v0.8.0 dev3 的最近目录检查见 [`MANUAL-CHECK-v0.8.0-dev3.md`](MANUAL-CHECK-v0.8.0-dev3.md)，dev2 的安全偏好检查见 [`MANUAL-CHECK-v0.8.0-dev2.md`](MANUAL-CHECK-v0.8.0-dev2.md)，dev1 的启动载入检查见 [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md)。
 
 v0.7.0 RC3 的全部通过记录见 [`MANUAL-RETEST-v0.7.0-rc3.md`](MANUAL-RETEST-v0.7.0-rc3.md)，RC2 的通过记录见 [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md)，RC1 的完整通过记录见 [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md)。v0.6.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md)，v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。
 

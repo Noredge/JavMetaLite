@@ -48,7 +48,8 @@ Available categories are `layout`, `target`, `transfer`, `overwrite`, `roundtrip
 - Transfer fixtures force the verified-copy path inside isolated temporary directories and verify independent SHA-256 checks, progress, cancellation, hash mismatch, late movie conflicts, post-commit rollback, source preservation, target cleanup, and unchanged successful movie bytes.
 - WPF local fixtures verify the visible NFO and artwork sources, editable valid-NFO state, blocked invalid-NFO state, online-after-search composition, preview action labels, manual restoration, invalid-file logging, and complete candidate reset on the next movie.
 - RC2 fixtures verify local values before search, online non-empty text defaults after search, local fallback for missing online fields, identical-value online provenance, retained manual/local candidates, and unchanged local artwork selection.
-- v0.8 preference fixtures verify missing, valid, damaged, and future-version JSON; atomic replacement cleanup; explicit opt-in; allowed field restoration; and permanent exclusion of direct overwrite from the persisted model.
+- v0.8 preference fixtures verify missing, valid, damaged, and future-version JSON; schema-v1 migration; bounded and deduplicated recent roots; persistent history clearing; atomic replacement cleanup; explicit opt-in; allowed field restoration; and permanent exclusion of direct overwrite from the persisted model.
+- v0.8 recent-root UI fixtures verify the compact dark menu, selection, current-entry removal, full clearing, retained current paths, unavailable-root blocking, and zero directory creation.
 - Each test verifies and removes temporary transaction artifacts.
 - A failed test returns a non-zero process exit code and prevents the gate from continuing.
 - A fixed defect should receive a regression case before the fix is considered complete.
@@ -71,5 +72,7 @@ These checks complement the automated gate; they are not replaced by it.
 The v0.8 dev1 automated layer validates no/one/multiple startup arguments, directories, missing files, unsupported extensions, paths with spaces, case-insensitive movie extensions, and the WPF path that loads a startup movie through the existing local metadata workflow. Windows Open with shell handoff and the visible invalid-argument dialogs remain manual checks in [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md).
 
 The v0.8 dev2 automated layer validates the settings schema, same-directory replacement, damaged/future-version fallback, safe defaults, UI mapping, and exclusion of direct overwrite. Manual testing is limited to two visible restart checks in [`MANUAL-CHECK-v0.8.0-dev2.md`](MANUAL-CHECK-v0.8.0-dev2.md).
+
+The v0.8 dev3 automated layer validates schema migration, five-entry history behavior, individual/full removal, future-version preservation, and unavailable-root zero writes. Manual testing is limited to three visible checks in [`MANUAL-CHECK-v0.8.0-dev3.md`](MANUAL-CHECK-v0.8.0-dev3.md).
 
 The focused v0.7 RC3 preview retest passed and is recorded in [`MANUAL-RETEST-v0.7.0-rc3.md`](MANUAL-RETEST-v0.7.0-rc3.md); RC2 source-selection acceptance is recorded in [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md), and the complete cross-drive/Jellyfin RC1 acceptance is in [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md). A real UNC run remains optional when no share is available.

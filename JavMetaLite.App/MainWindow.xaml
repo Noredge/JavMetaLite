@@ -510,6 +510,8 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="8" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="自定义根目录" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                     <TextBox x:Name="CustomRootTextBox"
@@ -517,9 +519,18 @@
                                              Padding="8,5"
                                              FontSize="12"
                                              TextChanged="CustomRootText_Changed"
+                                             LostFocus="CustomRootTextBox_LostFocus"
+                                             KeyDown="CustomRootTextBox_KeyDown"
                                              ToolTip="可直接粘贴本地绝对路径或 UNC 网络共享路径" />
-                                    <Button x:Name="ChooseTargetFolderButton"
+                                    <Button x:Name="RecentRootsButton"
                                             Grid.Column="4"
+                                            Content="最近目录"
+                                            IsEnabled="False"
+                                            Padding="12,6"
+                                            Click="RecentRoots_Click"
+                                            ToolTip="选择或管理最近使用的自定义根目录" />
+                                    <Button x:Name="ChooseTargetFolderButton"
+                                            Grid.Column="6"
                                             Content="选择文件夹"
                                             Padding="12,6"
                                             Click="ChooseTargetFolder_Click" />
@@ -561,7 +572,7 @@
                         BorderBrush="#85363D"
                         Visibility="Collapsed" />
                 <Button Grid.Column="3" Content="打开日志" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
-                <TextBlock Grid.Column="4" Text="v0.8.0-dev2 · 安全偏好" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="4" Text="v0.8.0-dev3 · 最近目录" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>

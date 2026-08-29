@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.8.0-dev3 — Recent custom roots
+
+- Keeps up to five recent custom target roots inside the explicitly enabled safe-preference file.
+- Adds one compact dark `最近目录` menu beside the existing path field for selection, removal of the current history entry, and clearing all history.
+- Keeps the current custom path separate from history, so removing or clearing history does not erase the current selection and does not silently add it back on close.
+- Migrates the v0.8.0-dev2 schema-v1 settings to schema v2 and seeds its prior custom root as the first recent entry.
+- Preserves unsupported future settings before deserializing newer enum values, preventing an older build from erasing a newer configuration.
+- Treats missing, disconnected-drive, and unavailable UNC roots as retained but blocked choices with a visible warning; preview and history management never create the root.
+- Adds offline Core and WPF coverage for normalization, five-entry bounds, deduplication, migration, future-version protection, dark-menu actions, persistent clearing, and unavailable-root zero writes.
+
 ## v0.8.0-dev2 — Safe preference persistence
 
 - Adds an explicit `记住保存偏好` switch; nothing is persisted unless the user enables it.

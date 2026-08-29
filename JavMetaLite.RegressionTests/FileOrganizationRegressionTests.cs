@@ -228,6 +228,22 @@ internal static class FileOrganizationRegressionTests
                 "IPX-888",
                 new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, false, "relative/library")),
             "A relative custom root was accepted.");
+
+        var missingRoot = workspace.PathOf("missing-library");
+        var missingRootPlan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            Metadata("IPX-888", "不可用根目录"),
+            NfoOnly(),
+            new OrganizationOptions(
+                OrganizationTargetMode.CustomRootNumberFolder,
+                false,
+                missingRoot));
+        AssertEx.True(
+            missingRootPlan.BlockingConflicts.Any(conflict =>
+                conflict.Contains("不会自动创建", StringComparison.Ordinal)),
+            "An unavailable custom root was not reported as a blocking conflict.");
+        AssertEx.False(Directory.Exists(missingRoot), "Planning created an unavailable custom root.");
+
         AssertEx.Throws<InvalidOperationException>(
             () => OrganizationPathPlanner.Resolve(
                 sourcePath,

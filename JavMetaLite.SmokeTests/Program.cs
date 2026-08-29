@@ -215,11 +215,22 @@ static Task TestAppPreferencesStore()
         AssertEqual("False", missing.Preferences.DownloadExtrafanart.ToString());
 
         var customRoot = Path.Combine(root, "library");
+        var secondRoot = Path.Combine(root, "library-two");
         store.Save(new AppPreferences
         {
             RememberSavePreferences = true,
             TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
             CustomRootDirectory = $"  {customRoot}  ",
+            RecentCustomRootDirectories =
+            [
+                customRoot,
+                secondRoot,
+                Path.Combine(root, "library-three"),
+                Path.Combine(root, "library-four"),
+                Path.Combine(root, "library-five"),
+                Path.Combine(root, "library-six"),
+                "relative-path"
+            ],
             RenameVideo = true,
             WriteNfo = false,
             DownloadPoster = false,
@@ -229,7 +240,7 @@ static Task TestAppPreferencesStore()
 
         AssertEqual("True", File.Exists(store.SettingsPath).ToString());
         var json = File.ReadAllText(store.SettingsPath);
-        AssertEqual("True", json.Contains("\"SchemaVersion\": 1", StringComparison.Ordinal).ToString());
+        AssertEqual("True", json.Contains("\"SchemaVersion\": 2", StringComparison.Ordinal).ToString());
         AssertEqual("True", json.Contains("\"CustomRootNumberFolder\"", StringComparison.Ordinal).ToString());
         AssertEqual("False", json.Contains("DirectSave", StringComparison.OrdinalIgnoreCase).ToString());
         AssertEqual("0", Directory.EnumerateFiles(root, "*.tmp").Count().ToString());
@@ -239,11 +250,46 @@ static Task TestAppPreferencesStore()
         AssertEqual("True", loaded.CanOverwrite.ToString());
         AssertEqual(OrganizationTargetMode.CustomRootNumberFolder.ToString(), loaded.Preferences.TargetMode.ToString());
         AssertEqual(customRoot, loaded.Preferences.CustomRootDirectory);
+        AssertEqual("5", loaded.Preferences.RecentCustomRootDirectories.Length.ToString());
+        AssertEqual(customRoot, loaded.Preferences.RecentCustomRootDirectories[0]);
+        AssertEqual(secondRoot, loaded.Preferences.RecentCustomRootDirectories[1]);
+        AssertEqual("False", Directory.Exists(customRoot).ToString());
         AssertEqual("True", loaded.Preferences.RenameVideo.ToString());
         AssertEqual("False", loaded.Preferences.WriteNfo.ToString());
         AssertEqual("False", loaded.Preferences.DownloadPoster.ToString());
         AssertEqual("True", loaded.Preferences.DownloadFanart.ToString());
         AssertEqual("True", loaded.Preferences.DownloadExtrafanart.ToString());
+
+        store.Save(new AppPreferences
+        {
+            RememberSavePreferences = true,
+            TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
+            CustomRootDirectory = customRoot,
+            RecentCustomRootDirectories = []
+        });
+        var clearedHistory = store.Load();
+        AssertEqual(customRoot, clearedHistory.Preferences.CustomRootDirectory);
+        AssertEqual("0", clearedHistory.Preferences.RecentCustomRootDirectories.Length.ToString());
+
+        var v1Json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            SchemaVersion = 1,
+            RememberSavePreferences = true,
+            TargetMode = "CustomRootNumberFolder",
+            CustomRootDirectory = secondRoot,
+            RenameVideo = true,
+            WriteNfo = true,
+            DownloadPoster = true,
+            DownloadFanart = true,
+            DownloadExtrafanart = false
+        });
+        File.WriteAllText(store.SettingsPath, v1Json);
+        var migrated = store.Load();
+        AssertEqual(AppPreferences.CurrentSchemaVersion.ToString(), migrated.Preferences.SchemaVersion.ToString());
+        AssertEqual("True", migrated.CanOverwrite.ToString());
+        AssertEqual(secondRoot, migrated.Preferences.CustomRootDirectory);
+        AssertEqual("1", migrated.Preferences.RecentCustomRootDirectories.Length.ToString());
+        AssertEqual(secondRoot, migrated.Preferences.RecentCustomRootDirectories[0]);
 
         File.WriteAllText(store.SettingsPath, "{ invalid json");
         var malformed = store.Load();
@@ -255,7 +301,7 @@ static Task TestAppPreferencesStore()
             {
               "SchemaVersion": 99,
               "RememberSavePreferences": true,
-              "TargetMode": "SourceNumberFolder",
+              "TargetMode": "FutureLibraryProfile",
               "RenameVideo": true,
               "WriteNfo": false
             }

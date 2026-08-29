@@ -90,6 +90,7 @@ internal static class Program
             window.FindName("CustomTargetPanel") is not Grid { Visibility: Visibility.Collapsed } ||
             window.FindName("CustomRootTextBox") is not TextBox ||
             window.FindName("ChooseTargetFolderButton") is not Button ||
+            window.FindName("RecentRootsButton") is not Button { IsEnabled: false, Content: "最近目录" } ||
             window.FindName("TargetPathHintText") is not TextBlock { Text: "选择影片后显示最终路径" } ||
             window.FindName("OrganizeFolderCheckBox") is not null ||
             window.FindName("RenameVideoCheckBox") is not CheckBox renameCheckBox || renameCheckBox.IsChecked == true)
@@ -118,12 +119,14 @@ internal static class Program
             BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("v0.8 偏好采集入口未找到。 ");
         var preferencesRoot = Path.Combine(Path.GetTempPath(), "JavMetaLite remembered library");
+        var secondPreferencesRoot = Path.Combine(Path.GetTempPath(), "JavMetaLite remembered library 2");
         directSaveCheckBox.IsChecked = true;
         applyPreferences.Invoke(window, [new AppPreferences
         {
             RememberSavePreferences = true,
             TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
             CustomRootDirectory = preferencesRoot,
+            RecentCustomRootDirectories = [secondPreferencesRoot, preferencesRoot],
             RenameVideo = true,
             WriteNfo = false,
             DownloadPoster = false,
@@ -133,16 +136,61 @@ internal static class Program
         window.UpdateLayout();
         var remembered = capturePreferences.Invoke(window, null) as AppPreferences
             ?? throw new InvalidOperationException("v0.8 无法采集安全偏好。 ");
+        var recentRootsButton = (Button)window.FindName("RecentRootsButton");
         if (directSaveCheckBox.IsChecked == true ||
             rememberPreferencesCheckBox.IsChecked != true ||
             remembered.TargetMode != OrganizationTargetMode.CustomRootNumberFolder ||
             remembered.CustomRootDirectory != preferencesRoot ||
             !remembered.RenameVideo || remembered.WriteNfo || remembered.DownloadPoster ||
             !remembered.DownloadFanart || !remembered.DownloadExtrafanart ||
+            remembered.RecentCustomRootDirectories.Length != 2 ||
+            recentRootsButton.Content?.ToString() != "最近目录 (2) ▾" ||
+            !recentRootsButton.IsEnabled ||
             window.FindName("CustomTargetPanel") is not Grid { Visibility: Visibility.Visible } ||
             typeof(AppPreferences).GetProperty("DirectSaveOverwrite") is not null)
         {
             throw new InvalidOperationException("v0.8 没有只恢复允许记忆的安全保存偏好。 ");
+        }
+
+        recentRootsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var recentRootsMenu = recentRootsButton.ContextMenu
+            ?? throw new InvalidOperationException("v0.8 最近目录菜单未创建。 ");
+        recentRootsMenu.ApplyTemplate();
+        window.UpdateLayout();
+        if (recentRootsMenu.Items.Count != 4 ||
+            recentRootsMenu.Items.OfType<MenuItem>().Any(item =>
+                item.Style != window.FindResource("CandidateMenuItem")))
+        {
+            throw new InvalidOperationException("v0.8 最近目录菜单没有使用紧凑深色结构。 ");
+        }
+        var secondRootItem = recentRootsMenu.Items.OfType<MenuItem>().First(item =>
+            string.Equals(item.Tag?.ToString(), secondPreferencesRoot, StringComparison.OrdinalIgnoreCase));
+        secondRootItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        var preferenceRootTextBox = (TextBox)window.FindName("CustomRootTextBox");
+        if (!string.Equals(preferenceRootTextBox.Text, secondPreferencesRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("v0.8 无法选择最近目标根目录。 ");
+        }
+
+        recentRootsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var removeCurrentItem = recentRootsButton.ContextMenu?.Items.OfType<MenuItem>().First(item =>
+            item.Tag?.ToString() == "remove-current")
+            ?? throw new InvalidOperationException("v0.8 最近目录菜单缺少单条移除。 ");
+        removeCurrentItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        if (recentRootsButton.Content?.ToString() != "最近目录 (1) ▾" ||
+            preferenceRootTextBox.Text != secondPreferencesRoot)
+        {
+            throw new InvalidOperationException("v0.8 移除单条记录时不应清空当前路径。 ");
+        }
+
+        recentRootsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var clearRootsItem = recentRootsButton.ContextMenu?.Items.OfType<MenuItem>().First(item =>
+            item.Tag?.ToString() == "clear-all")
+            ?? throw new InvalidOperationException("v0.8 最近目录菜单缺少清空入口。 ");
+        clearRootsItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        if (recentRootsButton.IsEnabled || recentRootsButton.Content?.ToString() != "最近目录")
+        {
+            throw new InvalidOperationException("v0.8 清空最近目录后按钮状态不正确。 ");
         }
         applyPreferences.Invoke(window, [AppPreferences.CreateSafeDefaults()]);
         window.UpdateLayout();
@@ -467,9 +515,29 @@ internal static class Program
         var customTargetPanel = (Grid)window.FindName("CustomTargetPanel");
         var customRootTextBox = (TextBox)window.FindName("CustomRootTextBox");
         var targetPathHintText = (TextBlock)window.FindName("TargetPathHintText");
+        var rememberCustomRoot = typeof(MainWindow).GetMethod(
+            "RememberCustomRoot",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("v0.8 最近目录记录入口未找到。 ");
+        var refreshTargetLocationPreview = typeof(MainWindow).GetMethod(
+            "RefreshTargetLocationPreview",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("目标路径预览入口未找到。 ");
+        var unavailableRoot = Path.Combine(localTestRoot, "offline-library");
+        targetModeComboBox.SelectedIndex = 2;
+        customRootTextBox.Text = unavailableRoot;
+        rememberCustomRoot.Invoke(window, [unavailableRoot]);
+        refreshTargetLocationPreview.Invoke(window, null);
+        window.UpdateLayout();
+        if (!targetPathHintText.Text.Contains("当前不可用", StringComparison.Ordinal) ||
+            !targetPathHintText.Text.Contains("不会自动创建", StringComparison.Ordinal) ||
+            saveButton.IsEnabled || Directory.Exists(unavailableRoot))
+        {
+            throw new InvalidOperationException("v0.8 离线最近目录没有保持只提示且零创建。 ");
+        }
+
         var customRoot = Path.Combine(localTestRoot, "library");
         Directory.CreateDirectory(customRoot);
-        targetModeComboBox.SelectedIndex = 2;
         renameCheckBox.IsChecked = true;
         customRootTextBox.Text = customRoot;
         window.UpdateLayout();
@@ -585,7 +653,7 @@ internal static class Program
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True");
         window.Close();
         application.Shutdown();
     }
