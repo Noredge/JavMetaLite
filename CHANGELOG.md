@@ -8,6 +8,7 @@
 - Stores a versioned JSON file below the current user's local application-data folder using a same-directory temporary file and atomic replacement.
 - Falls back to safe defaults when the settings file is absent or damaged, and preserves an unsupported future-version file instead of overwriting it.
 - Adds offline Core and WPF coverage for persistence, cleanup, safe fallback, future-version protection, and the non-persistent overwrite option.
+- Passed P01–P02 manual restart acceptance for remembered safe choices, explicit reset, and permanent direct-overwrite opt-out.
 
 ## v0.8.0-dev1 — Open one movie at startup
 
