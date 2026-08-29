@@ -1,7 +1,7 @@
 <Window x:Class="JavMetaLite.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="JAV Metadata Lite"
+        Title="{DynamicResource App.Title}"
         Width="1120" Height="790" MinWidth="930" MinHeight="650"
         WindowStartupLocation="CenterScreen"
         Background="#0D1117"
@@ -262,6 +262,8 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Border Width="44" Height="44" CornerRadius="12" Background="#244B8F" Margin="0,0,14,0">
                     <TextBlock Text="M" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -270,12 +272,24 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="JAV Metadata Lite" FontSize="20" FontWeight="SemiBold" />
                         <Border Background="#193A2A" CornerRadius="8" Padding="9,3" Margin="12,1,0,0">
-                            <TextBlock Text="单片模式" Foreground="#72E3A6" FontSize="11" FontWeight="SemiBold" />
+                            <TextBlock Text="{DynamicResource Main.ModeBadge}" Foreground="#72E3A6" FontSize="11" FontWeight="SemiBold" />
                         </Border>
                     </StackPanel>
-                    <TextBlock Text="单片编辑，可检查全部变更，并可选择影片与 metadata 的保存位置" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                    <TextBlock Text="{DynamicResource Main.Subtitle}" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,3,0,0" />
                 </StackPanel>
-                <Button Grid.Column="2" Content="选择影片" Click="ChooseFile_Click" VerticalAlignment="Center" />
+                <ComboBox x:Name="LanguageComboBox"
+                          Grid.Column="2"
+                          Width="126"
+                          Style="{StaticResource DarkComboBox}"
+                          ToolTip="{DynamicResource Main.LanguageTooltip}"
+                          SelectionChanged="LanguageComboBox_SelectionChanged"
+                          VerticalAlignment="Center">
+                    <ComboBoxItem Content="简体中文" Tag="zh-Hans" />
+                    <ComboBoxItem Content="繁體中文" Tag="zh-Hant" />
+                    <ComboBoxItem Content="English" Tag="en" />
+                    <ComboBoxItem Content="日本語" Tag="ja" />
+                </ComboBox>
+                <Button Grid.Column="4" Content="{DynamicResource Main.ChooseVideo}" Click="ChooseFile_Click" VerticalAlignment="Center" />
             </Grid>
         </Border>
 
@@ -297,7 +311,7 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid x:Name="ArtworkSourceHeader" Margin="0,0,0,7">
-                        <TextBlock Text="封套 / Fanart" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock Text="{DynamicResource Main.ArtworkHeader}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
                         <Button x:Name="ArtworkSourceButton"
                                 Style="{StaticResource SourceBadgeButton}"
                                 Padding="5,2" Margin="8,0,0,0"
@@ -309,7 +323,7 @@
                             <Image x:Name="PosterImage" Stretch="Uniform" Margin="8" />
                             <StackPanel x:Name="DropHint" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
                                 <TextBlock Text="＋" FontSize="38" Foreground="#5E7CA6" HorizontalAlignment="Center" />
-                                <TextBlock Text="拖入一个影片文件" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,8,0,0" />
+                                <TextBlock Text="{DynamicResource Main.DropVideo}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,8,0,0" />
                                 <TextBlock Text="MP4 · MKV · AVI · WMV" Foreground="{StaticResource MutedBrush}" FontSize="12" HorizontalAlignment="Center" Margin="0,6,0,0" />
                             </StackPanel>
                         </Grid>
@@ -320,8 +334,8 @@
                             <Image x:Name="FanartImage" Stretch="Uniform" Margin="5" />
                         </Grid>
                     </Border>
-                    <TextBlock x:Name="FileNameText" Grid.Row="4" Text="尚未选择影片" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,14,0,0" />
-                    <TextBlock x:Name="FilePathText" Grid.Row="5" Text="影片将保持原位置" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" />
+                    <TextBlock x:Name="FileNameText" Grid.Row="4" Text="{DynamicResource Main.NoVideo}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,14,0,0" />
+                    <TextBlock x:Name="FilePathText" Grid.Row="5" Text="{DynamicResource Main.VideoStaysHere}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" />
                 </Grid>
             </Border>
 
@@ -346,16 +360,16 @@
                                 <ColumnDefinition Width="170" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="番号" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <TextBlock Text="{DynamicResource Main.MovieId}" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
                             <TextBox Grid.Column="1" Text="{Binding Id, UpdateSourceTrigger=PropertyChanged}" />
-                            <Button x:Name="SearchButton" Grid.Column="3" Style="{StaticResource PrimaryButton}" Content="搜索资料" Click="Search_Click" />
-                            <Button Grid.Column="5" Content="网页导入" Click="Browser_Click" ToolTip="从 JAVLibrary 详情页读取" />
+                            <Button x:Name="SearchButton" Grid.Column="3" Style="{StaticResource PrimaryButton}" Content="{DynamicResource Main.Search}" Click="Search_Click" />
+                            <Button Grid.Column="5" Content="{DynamicResource Main.BrowserImport}" Click="Browser_Click" ToolTip="{DynamicResource Main.BrowserImportTooltip}" />
                             <ComboBox x:Name="SourceComboBox" Grid.Column="7" SelectedIndex="0" Style="{StaticResource DarkComboBox}">
-                                <ComboBoxItem Content="多来源搜索（推荐）" Tag="auto" IsSelected="True" />
+                                <ComboBoxItem Content="{DynamicResource Main.Source.Auto}" Tag="auto" IsSelected="True" />
                                 <ComboBoxItem Content="LibreDMM" Tag="libredmm" />
                                 <ComboBoxItem Content="R18.dev" Tag="r18dev" />
                                 <ComboBoxItem Content="JAVLibrary" Tag="javlibrary" />
-                                <ComboBoxItem Content="仅手动填写" Tag="manual" />
+                                <ComboBoxItem Content="{DynamicResource Main.Source.Manual}" Tag="manual" />
                             </ComboBox>
                         </Grid>
                     </Border>
@@ -379,14 +393,14 @@
 
                             <StackPanel Grid.Row="0" Grid.ColumnSpan="3">
                                 <Grid>
-                                    <Label Content="标题" />
+                                    <Label Content="{DynamicResource Field.Title}" />
                                     <Button x:Name="TitleSourceText" Tag="Title" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,13,0,0">
                                 <Grid>
-                                    <Label Content="原始标题" />
+                                    <Label Content="{DynamicResource Field.OriginalTitle}" />
                                     <Button x:Name="OriginalTitleSourceText" Tag="OriginalTitle" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding OriginalTitle, UpdateSourceTrigger=PropertyChanged}" />
@@ -394,14 +408,14 @@
 
                             <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,13,0,0">
                                 <Grid>
-                                    <Label Content="发行日期" />
+                                    <Label Content="{DynamicResource Field.ReleaseDate}" />
                                     <Button x:Name="ReleaseDateSourceText" Tag="ReleaseDate" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding ReleaseDate, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,13,0,0">
                                 <Grid>
-                                    <Label Content="时长（分钟）" />
+                                    <Label Content="{DynamicResource Field.RuntimeMinutes}" />
                                     <Button x:Name="RuntimeSourceText" Tag="RuntimeMinutes" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding RuntimeMinutes, UpdateSourceTrigger=PropertyChanged}" />
@@ -409,14 +423,14 @@
 
                             <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,13,0,0">
                                 <Grid>
-                                    <Label Content="片商" />
+                                    <Label Content="{DynamicResource Field.Maker}" />
                                     <Button x:Name="MakerSourceText" Tag="Maker" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding Maker, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Grid.Row="3" Grid.Column="2" Margin="0,13,0,0">
                                 <Grid>
-                                    <Label Content="导演" />
+                                    <Label Content="{DynamicResource Field.Director}" />
                                     <Button x:Name="DirectorSourceText" Tag="Director" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding Director, UpdateSourceTrigger=PropertyChanged}" />
@@ -424,14 +438,14 @@
 
                             <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,13,0,0">
                                 <Grid>
-                                    <Label Content="标签 / 厂牌" />
+                                    <Label Content="{DynamicResource Field.Label}" />
                                     <Button x:Name="LabelSourceText" Tag="Label" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                             <StackPanel Grid.Row="4" Grid.Column="2" Margin="0,13,0,0">
                                 <Grid>
-                                    <Label Content="系列" />
+                                    <Label Content="{DynamicResource Field.Series}" />
                                     <Button x:Name="SeriesSourceText" Tag="Series" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding Series, UpdateSourceTrigger=PropertyChanged}" />
@@ -439,14 +453,14 @@
 
                             <StackPanel Grid.Row="5" Grid.Column="0" Margin="0,13,0,0">
                                 <Grid>
-                                    <Label Content="演员（逗号分隔）" />
+                                    <Label Content="{DynamicResource Field.Actors}" />
                                     <Button x:Name="ActorsSourceText" Tag="Actors" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding ActorsText, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" MinHeight="42" />
                             </StackPanel>
                             <StackPanel Grid.Row="5" Grid.Column="2" Margin="0,13,0,0">
                                 <Grid>
-                                    <Label Content="类型（逗号分隔）" />
+                                    <Label Content="{DynamicResource Field.Genres}" />
                                     <Button x:Name="GenresSourceText" Tag="Genres" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding GenresText, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" MinHeight="42" />
@@ -454,7 +468,7 @@
 
                             <StackPanel Grid.Row="6" Grid.ColumnSpan="3" Margin="0,13,0,6">
                                 <Grid>
-                                    <Label Content="简介" />
+                                    <Label Content="{DynamicResource Field.Plot}" />
                                     <Button x:Name="PlotSourceText" Tag="Plot" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding Plot, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="92" VerticalScrollBarVisibility="Auto" />
@@ -470,37 +484,37 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel VerticalAlignment="Center">
                                 <WrapPanel>
-                                    <TextBlock Text="输出" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
-                                    <CheckBox x:Name="WriteNfoCheckBox" Content="生成 NFO" IsChecked="True" />
-                                    <CheckBox x:Name="DownloadPosterCheckBox" Content="高清海报" IsChecked="True" ToolTip="从高清原图自动裁出竖版 poster" />
-                                    <CheckBox x:Name="DownloadFanartCheckBox" Content="横版 fanart" IsChecked="True" ToolTip="使用作品的完整横版封套" />
-                                    <CheckBox x:Name="DownloadExtrafanartCheckBox" Content="保存全部剧照" IsChecked="False" ToolTip="把 Sample Images 保存到 extrafanart 文件夹" />
+                                    <TextBlock Text="{DynamicResource Main.Output}" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
+                                    <CheckBox x:Name="WriteNfoCheckBox" Content="{DynamicResource Main.WriteNfo}" IsChecked="True" />
+                                    <CheckBox x:Name="DownloadPosterCheckBox" Content="{DynamicResource Main.DownloadPoster}" IsChecked="True" ToolTip="{DynamicResource Main.DownloadPosterTooltip}" />
+                                    <CheckBox x:Name="DownloadFanartCheckBox" Content="{DynamicResource Main.DownloadFanart}" IsChecked="True" ToolTip="{DynamicResource Main.DownloadFanartTooltip}" />
+                                    <CheckBox x:Name="DownloadExtrafanartCheckBox" Content="{DynamicResource Main.DownloadExtrafanart}" IsChecked="False" ToolTip="{DynamicResource Main.DownloadExtrafanartTooltip}" />
                                 </WrapPanel>
                                 <WrapPanel Margin="0,10,0,0">
-                                    <TextBlock Text="保存方式" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
-                                    <CheckBox x:Name="DirectSaveOverwriteCheckBox" Content="直接保存并覆盖（跳过预览）" IsChecked="False" ToolTip="跳过保存前变更预览；已有 NFO 或图片将直接覆盖。影片文件永远不会被覆盖。" />
+                                    <TextBlock Text="{DynamicResource Main.SaveMode}" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
+                                    <CheckBox x:Name="DirectSaveOverwriteCheckBox" Content="{DynamicResource Main.DirectOverwrite}" IsChecked="False" ToolTip="{DynamicResource Main.DirectOverwriteTooltip}" />
                                     <CheckBox x:Name="RenameVideoCheckBox"
-                                              Content="影片重命名为番号"
+                                              Content="{DynamicResource Main.RenameVideo}"
                                               IsChecked="False"
                                               Checked="TargetOption_Changed"
                                               Unchecked="TargetOption_Changed"
-                                              ToolTip="只改变影片文件名，不改变扩展名" />
+                                              ToolTip="{DynamicResource Main.RenameVideoTooltip}" />
                                     <CheckBox x:Name="RememberPreferencesCheckBox"
-                                              Content="记住保存偏好"
+                                              Content="{DynamicResource Main.RememberPreferences}"
                                               IsChecked="False"
-                                              ToolTip="记住本行保存方式、目标位置和输出选项，包括直接保存并覆盖" />
+                                              ToolTip="{DynamicResource Main.RememberPreferencesTooltip}" />
                                 </WrapPanel>
                                 <WrapPanel Margin="0,10,0,0">
-                                    <TextBlock Text="目标位置" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="{DynamicResource Main.TargetLocation}" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
                                     <ComboBox x:Name="TargetModeComboBox"
                                               Width="245"
                                               SelectedIndex="0"
                                               Style="{StaticResource DarkComboBox}"
                                               SelectionChanged="TargetMode_Changed"
                                               Margin="0,0,18,0">
-                                        <ComboBoxItem Content="影片所在位置（不移动）" Tag="VideoDirectory" IsSelected="True" />
-                                        <ComboBoxItem Content="来源位置的番号文件夹" Tag="SourceNumberFolder" />
-                                        <ComboBoxItem Content="自定义根目录的番号文件夹" Tag="CustomRootNumberFolder" />
+                                        <ComboBoxItem Content="{DynamicResource Main.Target.VideoDirectory}" Tag="VideoDirectory" IsSelected="True" />
+                                        <ComboBoxItem Content="{DynamicResource Main.Target.SourceNumberFolder}" Tag="SourceNumberFolder" />
+                                        <ComboBoxItem Content="{DynamicResource Main.Target.CustomRootNumberFolder}" Tag="CustomRootNumberFolder" />
                                     </ComboBox>
                                 </WrapPanel>
                                 <Grid x:Name="CustomTargetPanel" Margin="0,10,0,0" Visibility="Collapsed">
@@ -513,7 +527,7 @@
                                         <ColumnDefinition Width="8" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="自定义根目录" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <TextBlock Text="{DynamicResource Main.CustomRoot}" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
                                     <TextBox x:Name="CustomRootTextBox"
                                              Grid.Column="2"
                                              Padding="8,5"
@@ -521,28 +535,28 @@
                                              TextChanged="CustomRootText_Changed"
                                              LostFocus="CustomRootTextBox_LostFocus"
                                              KeyDown="CustomRootTextBox_KeyDown"
-                                             ToolTip="可直接粘贴本地绝对路径或 UNC 网络共享路径" />
+                                             ToolTip="{DynamicResource Main.CustomRootTooltip}" />
                                     <Button x:Name="RecentRootsButton"
                                             Grid.Column="4"
-                                            Content="最近目录"
+                                            Content="{DynamicResource Main.RecentRoots}"
                                             IsEnabled="False"
                                             Padding="12,6"
                                             Click="RecentRoots_Click"
-                                            ToolTip="选择或管理最近使用的自定义根目录" />
+                                            ToolTip="{DynamicResource Main.RecentRootsTooltip}" />
                                     <Button x:Name="ChooseTargetFolderButton"
                                             Grid.Column="6"
-                                            Content="选择文件夹"
+                                            Content="{DynamicResource Common.SelectFolder}"
                                             Padding="12,6"
                                             Click="ChooseTargetFolder_Click" />
                                 </Grid>
                                 <TextBlock x:Name="TargetPathHintText"
-                                           Text="选择影片后显示最终路径"
+                                           Text="{DynamicResource Main.TargetHint}"
                                            Foreground="{StaticResource MutedBrush}"
                                            FontSize="11"
                                            TextWrapping="Wrap"
                                            Margin="0,8,0,0" />
                             </StackPanel>
-                            <Button x:Name="SaveButton" Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="保存" Click="Save_Click" Margin="28,0,0,0" />
+                            <Button x:Name="SaveButton" Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="{DynamicResource Common.Save}" Click="Save_Click" Margin="28,0,0,0" />
                         </Grid>
                     </Border>
                 </Grid>
@@ -559,10 +573,10 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#72E3A6" VerticalAlignment="Center" Margin="0,0,9,0" />
-                <TextBlock x:Name="StatusText" Grid.Column="1" Text="准备就绪，请选择或拖入一个影片" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+                <TextBlock x:Name="StatusText" Grid.Column="1" Text="{DynamicResource Main.StatusReady}" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
                 <Button x:Name="CancelOperationButton"
                         Grid.Column="2"
-                        Content="取消当前操作"
+                        Content="{DynamicResource Main.CancelOperation}"
                         Click="CancelOperation_Click"
                         Padding="10,4"
                         Margin="12,0,0,0"
@@ -571,8 +585,8 @@
                         Background="#4A2025"
                         BorderBrush="#85363D"
                         Visibility="Collapsed" />
-                <Button Grid.Column="3" Content="打开日志" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
-                <TextBlock Grid.Column="4" Text="v0.8.1 · 稳定版" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <Button Grid.Column="3" Content="{DynamicResource Common.OpenLogs}" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
+                <TextBlock Grid.Column="4" Text="{DynamicResource Main.Version}" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>

@@ -2,9 +2,11 @@ namespace JavMetaLite.Core.Models;
 
 public sealed record AppPreferences
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
+
+    public string UiLanguage { get; init; } = UiLanguageCodes.System;
 
     public bool RememberSavePreferences { get; init; }
 
@@ -27,6 +29,37 @@ public sealed record AppPreferences
     public bool DownloadExtrafanart { get; init; }
 
     public static AppPreferences CreateSafeDefaults() => new();
+}
+
+public static class UiLanguageCodes
+{
+    public const string System = "system";
+    public const string SimplifiedChinese = "zh-Hans";
+    public const string TraditionalChinese = "zh-Hant";
+    public const string English = "en";
+    public const string Japanese = "ja";
+
+    public static IReadOnlyList<string> Supported { get; } =
+    [
+        SimplifiedChinese,
+        TraditionalChinese,
+        English,
+        Japanese
+    ];
+
+    public static string Normalize(string? languageCode, string fallback = System)
+    {
+        if (string.IsNullOrWhiteSpace(languageCode))
+        {
+            return fallback;
+        }
+
+        return Supported.FirstOrDefault(code =>
+                   string.Equals(code, languageCode.Trim(), StringComparison.OrdinalIgnoreCase))
+               ?? (string.Equals(languageCode.Trim(), System, StringComparison.OrdinalIgnoreCase)
+                   ? System
+                   : fallback);
+    }
 }
 
 public sealed record AppPreferencesLoadResult(

@@ -38,6 +38,52 @@ internal static class Program
 
         var sourceComboBox = window.FindName("SourceComboBox") as ComboBox
             ?? throw new InvalidOperationException("没有找到来源选择框。 ");
+        var languageComboBox = window.FindName("LanguageComboBox") as ComboBox
+            ?? throw new InvalidOperationException("没有找到语言选择框。 ");
+        var searchButton = window.FindName("SearchButton") as Button
+            ?? throw new InvalidOperationException("没有找到搜索按钮。 ");
+        var languageExpectations = new[]
+        {
+            (Code: UiLanguageCodes.SimplifiedChinese, Search: "搜索资料", Save: "保存"),
+            (Code: UiLanguageCodes.TraditionalChinese, Search: "搜尋資料", Save: "儲存"),
+            (Code: UiLanguageCodes.English, Search: "Search", Save: "Save"),
+            (Code: UiLanguageCodes.Japanese, Search: "検索", Save: "保存")
+        };
+        if (languageComboBox.Items.Count != languageExpectations.Length)
+        {
+            throw new InvalidOperationException("v0.9 语言选择框没有提供四种语言。 ");
+        }
+        HashSet<object>? baselineLocalizationKeys = null;
+        foreach (var expectation in languageExpectations)
+        {
+            var dictionary = new ResourceDictionary
+            {
+                Source = new Uri(
+                    $"/JavMetaLite;component/Resources/Strings.{expectation.Code}.xaml",
+                    UriKind.Relative)
+            };
+            var keys = dictionary.Keys.Cast<object>().ToHashSet();
+            baselineLocalizationKeys ??= keys;
+            if (!baselineLocalizationKeys.SetEquals(keys))
+            {
+                throw new InvalidOperationException($"v0.9 {expectation.Code} 语言资源键不完整。 ");
+            }
+
+            languageComboBox.SelectedItem = languageComboBox.Items
+                .OfType<ComboBoxItem>()
+                .Single(item => item.Tag?.ToString() == expectation.Code);
+            window.UpdateLayout();
+            if (searchButton.Content?.ToString() != expectation.Search ||
+                window.FindName("SaveButton") is not Button languageSaveButton ||
+                languageSaveButton.Content?.ToString() != expectation.Save)
+            {
+                throw new InvalidOperationException($"v0.9 {expectation.Code} 没有即时更新主要界面文字。 ");
+            }
+        }
+        languageComboBox.SelectedItem = languageComboBox.Items
+            .OfType<ComboBoxItem>()
+            .Single(item => item.Tag?.ToString() == UiLanguageCodes.SimplifiedChinese);
+        window.UpdateLayout();
         sourceComboBox.IsDropDownOpen = true;
         window.UpdateLayout();
         var firstItem = sourceComboBox.Items[0] as ComboBoxItem
@@ -123,6 +169,7 @@ internal static class Program
         directSaveCheckBox.IsChecked = true;
         applyPreferences.Invoke(window, [new AppPreferences
         {
+            UiLanguage = UiLanguageCodes.SimplifiedChinese,
             RememberSavePreferences = true,
             DirectSaveOverwrite = true,
             TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
@@ -146,6 +193,7 @@ internal static class Program
             !remembered.RenameVideo || remembered.WriteNfo || remembered.DownloadPoster ||
             !remembered.DownloadFanart || !remembered.DownloadExtrafanart ||
             remembered.RecentCustomRootDirectories.Length != 2 ||
+            remembered.UiLanguage != UiLanguageCodes.SimplifiedChinese ||
             recentRootsButton.Content?.ToString() != "最近目录 (2) ▾" ||
             !recentRootsButton.IsEnabled ||
             window.FindName("CustomTargetPanel") is not Grid { Visibility: Visibility.Visible } ||
@@ -194,7 +242,10 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.8 清空最近目录后按钮状态不正确。 ");
         }
-        applyPreferences.Invoke(window, [AppPreferences.CreateSafeDefaults()]);
+        applyPreferences.Invoke(window, [AppPreferences.CreateSafeDefaults() with
+        {
+            UiLanguage = UiLanguageCodes.SimplifiedChinese
+        }]);
         window.UpdateLayout();
         if (directSaveCheckBox.IsChecked == true)
         {

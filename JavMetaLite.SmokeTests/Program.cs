@@ -92,7 +92,7 @@ var tests = new List<(string Name, Func<Task> Run)>
 {
     ("番号识别", TestMovieIdParser),
     ("v0.8 启动影片参数解析", TestStartupVideoRequestResolver),
-    ("v0.8.1 保存偏好原子存储", TestAppPreferencesStore),
+    ("v0.9 四语言与保存偏好原子存储", TestAppPreferencesStore),
     ("LibreDMM JSON 解析与清理", TestLibreDmmParser),
     ("多来源字段补全", TestMetadataMerge),
     ("v0.5 多来源搜索编排", TestMetadataSearchCoordinator),
@@ -207,6 +207,7 @@ static Task TestAppPreferencesStore()
     {
         var store = new AppPreferencesStore(root);
         var missing = store.Load();
+        AssertEqual(UiLanguageCodes.System, missing.Preferences.UiLanguage);
         AssertEqual("False", missing.Preferences.RememberSavePreferences.ToString());
         AssertEqual("False", missing.Preferences.DirectSaveOverwrite.ToString());
         AssertEqual(OrganizationTargetMode.VideoDirectory.ToString(), missing.Preferences.TargetMode.ToString());
@@ -219,6 +220,7 @@ static Task TestAppPreferencesStore()
         var secondRoot = Path.Combine(root, "library-two");
         store.Save(new AppPreferences
         {
+            UiLanguage = UiLanguageCodes.Japanese,
             RememberSavePreferences = true,
             DirectSaveOverwrite = true,
             TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
@@ -242,13 +244,15 @@ static Task TestAppPreferencesStore()
 
         AssertEqual("True", File.Exists(store.SettingsPath).ToString());
         var json = File.ReadAllText(store.SettingsPath);
-        AssertEqual("True", json.Contains("\"SchemaVersion\": 3", StringComparison.Ordinal).ToString());
+        AssertEqual("True", json.Contains("\"SchemaVersion\": 4", StringComparison.Ordinal).ToString());
+        AssertEqual("True", json.Contains("\"UiLanguage\": \"ja\"", StringComparison.Ordinal).ToString());
         AssertEqual("True", json.Contains("\"CustomRootNumberFolder\"", StringComparison.Ordinal).ToString());
         AssertEqual("True", json.Contains("\"DirectSaveOverwrite\": true", StringComparison.Ordinal).ToString());
         AssertEqual("0", Directory.EnumerateFiles(root, "*.tmp").Count().ToString());
 
         var loaded = store.Load();
         AssertEqual("True", loaded.Preferences.RememberSavePreferences.ToString());
+        AssertEqual(UiLanguageCodes.Japanese, loaded.Preferences.UiLanguage);
         AssertEqual("True", loaded.Preferences.DirectSaveOverwrite.ToString());
         AssertEqual("True", loaded.CanOverwrite.ToString());
         AssertEqual(OrganizationTargetMode.CustomRootNumberFolder.ToString(), loaded.Preferences.TargetMode.ToString());
@@ -294,6 +298,7 @@ static Task TestAppPreferencesStore()
         AssertEqual("1", migrated.Preferences.RecentCustomRootDirectories.Length.ToString());
         AssertEqual(secondRoot, migrated.Preferences.RecentCustomRootDirectories[0]);
         AssertEqual("False", migrated.Preferences.DirectSaveOverwrite.ToString());
+        AssertEqual(UiLanguageCodes.SimplifiedChinese, migrated.Preferences.UiLanguage);
 
         var v2Json = System.Text.Json.JsonSerializer.Serialize(new
         {
@@ -313,6 +318,20 @@ static Task TestAppPreferencesStore()
         AssertEqual(AppPreferences.CurrentSchemaVersion.ToString(), migratedV2.Preferences.SchemaVersion.ToString());
         AssertEqual("True", migratedV2.CanOverwrite.ToString());
         AssertEqual("False", migratedV2.Preferences.DirectSaveOverwrite.ToString());
+        AssertEqual(UiLanguageCodes.SimplifiedChinese, migratedV2.Preferences.UiLanguage);
+
+        var v3Json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            SchemaVersion = 3,
+            RememberSavePreferences = true,
+            DirectSaveOverwrite = true,
+            TargetMode = "VideoDirectory"
+        });
+        File.WriteAllText(store.SettingsPath, v3Json);
+        var migratedV3 = store.Load();
+        AssertEqual(AppPreferences.CurrentSchemaVersion.ToString(), migratedV3.Preferences.SchemaVersion.ToString());
+        AssertEqual(UiLanguageCodes.SimplifiedChinese, migratedV3.Preferences.UiLanguage);
+        AssertEqual("True", migratedV3.Preferences.DirectSaveOverwrite.ToString());
 
         File.WriteAllText(store.SettingsPath, "{ invalid json");
         var malformed = store.Load();
@@ -339,11 +358,13 @@ static Task TestAppPreferencesStore()
 
         store.Save(new AppPreferences
         {
+            UiLanguage = UiLanguageCodes.English,
             RememberSavePreferences = false,
             DirectSaveOverwrite = true
         });
-        AssertEqual("False", File.Exists(store.SettingsPath).ToString());
+        AssertEqual("True", File.Exists(store.SettingsPath).ToString());
         var disabledMemory = store.Load();
+        AssertEqual(UiLanguageCodes.English, disabledMemory.Preferences.UiLanguage);
         AssertEqual("False", disabledMemory.Preferences.RememberSavePreferences.ToString());
         AssertEqual("False", disabledMemory.Preferences.DirectSaveOverwrite.ToString());
         return Task.CompletedTask;

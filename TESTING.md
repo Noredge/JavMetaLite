@@ -22,7 +22,7 @@ The projects run sequentially because the smoke and UI projects share build outp
 | --- | --- | --- |
 | Core smoke | `JavMetaLite.SmokeTests` | Parsers, metadata merge, v0.5 multi-source orchestration/provenance, unified poster/fanart selection, safe local sidecar/NFO/image reads, XML-preserving round-trip writing, image conversion, versioned preference storage, organization and logs |
 | File regression | `JavMetaLite.RegressionTests` | File layout and target-mode matrices, custom-root validation, same-volume moves, verified cross-volume copies, preview purity, NFO no-op/update, sidecar migration, overwrite/conflict policy, exact rollback, movie hashes and input validation |
-| UI smoke | `JavMetaLite.UiSmokeTests` | WPF construction, source/candidate menus, v0.6 local metadata/artwork loading, v0.7 target-mode controls and live paths, v0.8/v0.8.1 preference mapping, editable valid NFO state, preview action kinds, failure isolation and safe defaults |
+| UI smoke | `JavMetaLite.UiSmokeTests` | WPF construction, source/candidate menus, v0.6 local metadata/artwork loading, v0.7 target-mode controls and live paths, v0.8/v0.8.1 preference mapping, v0.9 four-language switching, editable valid NFO state, preview action kinds, failure isolation and safe defaults |
 
 The regression runner supports discovery and category filters:
 
@@ -50,6 +50,7 @@ Available categories are `layout`, `target`, `transfer`, `overwrite`, `roundtrip
 - RC2 fixtures verify local values before search, online non-empty text defaults after search, local fallback for missing online fields, identical-value online provenance, retained manual/local candidates, and unchanged local artwork selection.
 - v0.8/v0.8.1 preference fixtures verify missing, valid, damaged, and future-version JSON; schema-v1/v2 migration; bounded and deduplicated recent roots; persistent history clearing; atomic replacement cleanup; explicit opt-in; direct-overwrite restoration in schema v3; and safe disabled defaults for legacy or invalid configuration.
 - v0.8 recent-root UI fixtures verify the compact dark menu, selection, current-entry removal, full clearing, retained current paths, unavailable-root blocking, and zero directory creation.
+- v0.9 localization fixtures verify four complete and matching resource dictionaries, immediate switching of primary controls, schema-v4 language persistence, disabled save-memory isolation, and safe migration of schema-v1/v2/v3 users to Simplified Chinese.
 - Each test verifies and removes temporary transaction artifacts.
 - A failed test returns a non-zero process exit code and prevents the gate from continuing.
 - A fixed defect should receive a regression case before the fix is considered complete.
@@ -78,5 +79,7 @@ The v0.8 dev3 automated layer validates schema migration, five-entry history beh
 The v0.8 RC1 packaged startup, restart persistence, unavailable-root isolation, real custom-target save, local reload, and hash checks all passed and are recorded in [`MANUAL-ACCEPTANCE-v0.8.0-rc1.md`](MANUAL-ACCEPTANCE-v0.8.0-rc1.md). The stable build preserves that accepted behavior without functional changes.
 
 The v0.8.1 automated layer validates schema-v3 direct-overwrite persistence, v1/v2 migration to disabled, invalid/future configuration isolation, WPF restoration, capture, and safe defaults. Its three visible restart checks passed and are recorded in [`MANUAL-CHECK-v0.8.1-dev1.md`](MANUAL-CHECK-v0.8.1-dev1.md); the stable build preserves that accepted behavior.
+
+The v0.9 dev1 automated layer validates language-resource parity, immediate four-language switching, schema-v4 persistence, old-settings migration, and preservation of all safe save defaults. Manual testing is limited to visible text, clipping, and real restart checks in [`MANUAL-CHECK-v0.9.0-dev1.md`](MANUAL-CHECK-v0.9.0-dev1.md).
 
 The focused v0.7 RC3 preview retest passed and is recorded in [`MANUAL-RETEST-v0.7.0-rc3.md`](MANUAL-RETEST-v0.7.0-rc3.md); RC2 source-selection acceptance is recorded in [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md), and the complete cross-drive/Jellyfin RC1 acceptance is in [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md). A real UNC run remains optional when no share is available.

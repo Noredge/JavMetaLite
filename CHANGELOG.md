@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.9.0-dev1 — Four-language foundation
+
+- Adds immediate UI switching between Simplified Chinese, Traditional Chinese, English, and Japanese.
+- Localizes the main window, embedded browser, save preview, common status/error messages, artwork/source labels, and file-operation progress without changing metadata behavior.
+- Uses the supported Windows display language on first launch and safely falls back to Simplified Chinese for other locales.
+- Advances preferences to schema v4 so the display language persists independently of save-preference memory; schema-v1/v2/v3 users keep the existing Simplified Chinese interface.
+- Verifies all four resource dictionaries expose the same keys and covers live language switching plus settings migration in the offline automated gate.
+- Leaves search, scraper priority, NFO/image output, target paths, overwrite policy, movie transfer, rollback, and file hashes unchanged.
+
 ## v0.8.1 — Stable
 
 - Promotes dev1 without functional changes after the complete automated gate and P01–P03 real restart acceptance all passed.

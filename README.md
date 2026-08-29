@@ -2,6 +2,12 @@
 
 一个只处理单个影片的轻量 Windows metadata 工具。它不会扫描整个媒体库；文件整理和直接保存都默认关闭，用户可以先预览所有变更，也可以明确选择跳过预览并直接覆盖 metadata。
 
+## v0.9.0-dev1 四语言基座
+
+`v0.9.0-dev1` 提供简体中文、繁體中文、English 与日本語四种界面语言。语言可以在主窗口顶部即时切换，并独立于“记住保存偏好”跨重启保留；首次运行跟随 Windows 支持的语言，其他系统语言安全回退到简体中文，旧版配置继续使用原来的简体中文界面。
+
+主窗口、内置浏览器、保存前预览、常用状态、提示和进度文字均已接入同一套语言资源。四套资源使用完全相同的键，并由自动化测试检查即时切换和配置迁移。本轮不改变搜索、来源选择、NFO、图片、目标路径、覆盖、影片移动或事务逻辑。完整路线见 [`ROADMAP-v0.9.0.md`](ROADMAP-v0.9.0.md)，简短人工检查见 [`MANUAL-CHECK-v0.9.0-dev1.md`](MANUAL-CHECK-v0.9.0-dev1.md)。
+
 ## v0.8.1 稳定版
 
 `v0.8.1` 已通过完整自动化门禁和 P01–P03 真实重启验收。它让“记住保存偏好”完整覆盖用户明确选择的保存方式：如果同时勾选“直接保存并覆盖（跳过预览）”，下次启动也会恢复该状态；如果不启用偏好记忆，则不会保留。
@@ -107,7 +113,7 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
 
 完整自动化测试分层、回归范围和手动检查边界见 [`TESTING.md`](TESTING.md)。
 
-v0.8.1 dev1 的直接覆盖偏好检查见 [`MANUAL-CHECK-v0.8.1-dev1.md`](MANUAL-CHECK-v0.8.1-dev1.md)。v0.8.0 RC1 的最终集成检查见 [`MANUAL-ACCEPTANCE-v0.8.0-rc1.md`](MANUAL-ACCEPTANCE-v0.8.0-rc1.md)，dev3 的最近目录检查见 [`MANUAL-CHECK-v0.8.0-dev3.md`](MANUAL-CHECK-v0.8.0-dev3.md)，dev2 的安全偏好检查见 [`MANUAL-CHECK-v0.8.0-dev2.md`](MANUAL-CHECK-v0.8.0-dev2.md)，dev1 的启动载入检查见 [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md)。
+v0.9.0 dev1 的四语言检查见 [`MANUAL-CHECK-v0.9.0-dev1.md`](MANUAL-CHECK-v0.9.0-dev1.md)。v0.8.1 dev1 的直接覆盖偏好检查见 [`MANUAL-CHECK-v0.8.1-dev1.md`](MANUAL-CHECK-v0.8.1-dev1.md)。v0.8.0 RC1 的最终集成检查见 [`MANUAL-ACCEPTANCE-v0.8.0-rc1.md`](MANUAL-ACCEPTANCE-v0.8.0-rc1.md)，dev3 的最近目录检查见 [`MANUAL-CHECK-v0.8.0-dev3.md`](MANUAL-CHECK-v0.8.0-dev3.md)，dev2 的安全偏好检查见 [`MANUAL-CHECK-v0.8.0-dev2.md`](MANUAL-CHECK-v0.8.0-dev2.md)，dev1 的启动载入检查见 [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md)。
 
 v0.7.0 RC3 的全部通过记录见 [`MANUAL-RETEST-v0.7.0-rc3.md`](MANUAL-RETEST-v0.7.0-rc3.md)，RC2 的通过记录见 [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md)，RC1 的完整通过记录见 [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md)。v0.6.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md)，v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。
 
@@ -133,7 +139,7 @@ dotnet publish .\JavMetaLite.App\JavMetaLite.App.csproj -c Release -r win-x64 --
 
 ## 当前边界
 
-- v0.8 仍然是单片编辑器，不提供媒体库扫描或批量刮削。
+- v0.9 仍然是单片编辑器，不提供媒体库扫描或批量刮削。
 - 整理功能只移动当前选择的影片并生成本次选择的 metadata；不会自动搬运未知的字幕或旧伴随文件。
 - v0.8.0 支持同卷、跨盘符与 UNC 目标；真实 UNC 共享尚未在当前环境实测，网络速度、权限与可用性取决于 Windows 和目标服务器。
 - 软件不会写入 MP4/MKV 容器内部 metadata。
