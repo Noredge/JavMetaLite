@@ -1,5 +1,55 @@
 # Changelog
 
+## v0.8.0 — Stable
+
+- Promotes RC1 without functional changes after R01–R05, movie SHA-256, and no-op sidecar SHA-256 verification all passed.
+- Opens one supported movie directly from the command line or Windows Open with while reusing the existing local-load workflow without automatic network access or writes.
+- Persists only explicitly enabled safe target, rename, and metadata-output preferences; direct overwrite always starts disabled.
+- Keeps up to five recent custom target roots with selection, individual removal, and full clearing in the compact dark menu.
+- Retains unavailable roots without creating them and blocks preview or saving until the selected root is available again.
+- Preserves the lightweight single-movie scope and all existing preview, transaction, rollback, source-selection, local NFO, and artwork safeguards.
+- Final packaged acceptance confirmed startup entry consistency, restart persistence, unavailable-root isolation, a real custom-target save, local reloading, and unchanged hashes.
+
+## v0.8.0-rc1 — Release candidate
+
+- Promotes the accepted dev3 build without functional changes and freezes the v0.8 daily-efficiency scope.
+- Combines startup movie loading, explicitly enabled safe-preference persistence, and up to five recent custom target roots.
+- Keeps direct overwrite non-persistent and blocks unavailable custom roots without creating directories or writing files.
+- Carries forward the passed E01–E08, P01–P02, and H01–H03 manual checks plus the complete offline automated gate.
+- Adds one focused RC checklist for packaged startup, restart persistence, unavailable-root isolation, a real custom-target save, local metadata reloading, and final hashes.
+- Passed R01–R05 final integration acceptance with unchanged movie and no-op sidecar SHA-256 values.
+
+## v0.8.0-dev3 — Recent custom roots
+
+- Keeps up to five recent custom target roots inside the explicitly enabled safe-preference file.
+- Adds one compact dark `最近目录` menu beside the existing path field for selection, removal of the current history entry, and clearing all history.
+- Keeps the current custom path separate from history, so removing or clearing history does not erase the current selection and does not silently add it back on close.
+- Migrates the v0.8.0-dev2 schema-v1 settings to schema v2 and seeds its prior custom root as the first recent entry.
+- Preserves unsupported future settings before deserializing newer enum values, preventing an older build from erasing a newer configuration.
+- Treats missing, disconnected-drive, and unavailable UNC roots as retained but blocked choices with a visible warning; preview and history management never create the root.
+- Adds offline Core and WPF coverage for normalization, five-entry bounds, deduplication, migration, future-version protection, dark-menu actions, persistent clearing, and unavailable-root zero writes.
+- Passed H01–H03 manual acceptance for recent-root switching, unavailable-root zero creation, individual removal, full clearing, and restart persistence.
+
+## v0.8.0-dev2 — Safe preference persistence
+
+- Adds an explicit `记住保存偏好` switch; nothing is persisted unless the user enables it.
+- Remembers only target location, custom root, movie renaming, and NFO/poster/fanart/extrafanart output choices.
+- Never persists `直接保存并覆盖（跳过预览）`; every launch restores that risk-bearing option to off.
+- Stores a versioned JSON file below the current user's local application-data folder using a same-directory temporary file and atomic replacement.
+- Falls back to safe defaults when the settings file is absent or damaged, and preserves an unsupported future-version file instead of overwriting it.
+- Adds offline Core and WPF coverage for persistence, cleanup, safe fallback, future-version protection, and the non-persistent overwrite option.
+- Passed P01–P02 manual restart acceptance for remembered safe choices, explicit reset, and permanent direct-overwrite opt-out.
+
+## v0.8.0-dev1 — Open one movie at startup
+
+- Accepts exactly one movie path from the process command line, including the path supplied by Windows Open with.
+- Reuses the existing movie-selection pipeline for ID parsing, local NFO/artwork discovery, review candidates, and target-path refresh without automatic network access or writes to the movie and its metadata.
+- Rejects blank or multiple arguments, directories, missing files, and unsupported extensions with a clear warning while leaving the main window usable.
+- Centralizes supported movie extensions and the Windows file-picker filter so startup, drag-and-drop, and manual selection follow one rule.
+- Logs startup argument classification and accepted startup movie paths for diagnostics.
+- Adds Core resolver coverage and WPF smoke coverage for the real startup-movie handling path.
+- Passed E01–E08 manual acceptance for normal startup, command-line and Windows Open with loading, invalid-argument isolation, existing picker/drop regression, and unchanged movie SHA-256.
+
 ## v0.7.0 — Stable
 
 - Promotes RC3 without functional changes after P01–P03 and movie SHA-256 verification all passed.

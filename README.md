@@ -2,6 +2,34 @@
 
 一个只处理单个影片的轻量 Windows metadata 工具。它不会扫描整个媒体库；文件整理和直接保存都默认关闭，用户可以先预览所有变更，也可以明确选择跳过预览并直接覆盖 metadata。
 
+## v0.8.0 稳定版
+
+`v0.8.0` 已通过完整自动化门禁、dev1–dev3 分阶段人工检查和 RC1 最终集成验收。它支持从命令行或 Windows“打开方式”直接载入一部影片，并可在用户明确允许后记住安全的目标位置、重命名与 metadata 输出偏好，以及最多 5 条最近自定义根目录。
+
+危险的“直接保存并覆盖”始终不会跨启动保留；不可用根目录只会提示并阻止保存，程序不会自动创建它。最终验收确认启动入口、安全偏好与最近目录、不可用目标隔离、真实自定义目标保存、本地重新载入，以及影片与无变化 sidecar 的 SHA-256 检查全部正常。完整记录见 [`MANUAL-ACCEPTANCE-v0.8.0-rc1.md`](MANUAL-ACCEPTANCE-v0.8.0-rc1.md)。
+
+## v0.8.0-dev3 最近目标根目录
+
+`v0.8.0-dev3` 在现有自定义路径框旁加入一个紧凑的“最近目录”菜单，最多记住 5 个用户明确使用过的根目录。可以直接切换、移除当前记录或清空历史；删除历史不会清空当前路径。不存在、离线磁盘或暂不可用的 UNC 路径会保留但阻止保存，程序不会自行创建根目录。
+
+最近目录只在启用“记住保存偏好”时跨重启保留。dev2 配置会自动迁移，危险的“直接保存并覆盖”仍然不会持久化。人工检查见 [`MANUAL-CHECK-v0.8.0-dev3.md`](MANUAL-CHECK-v0.8.0-dev3.md)。
+
+## v0.8.0-dev2 安全偏好
+
+`v0.8.0-dev2` 增加明确的“记住保存偏好”开关。只有勾选后，程序才会在关闭时记住目标位置、自定义根目录、影片重命名与 NFO/图片输出选项；“直接保存并覆盖（跳过预览）”不会被记住，每次启动都保持关闭。配置损坏或来自更高版本时会使用安全默认值，不会影响程序启动、影片或 metadata。
+
+配置文件位于 `%LOCALAPPDATA%\JavMetaLite\settings.json`，采用带版本号的 JSON 与同目录原子替换。完整 v0.8 路线见 [`ROADMAP-v0.8.0.md`](ROADMAP-v0.8.0.md)，dev2 简短人工检查见 [`MANUAL-CHECK-v0.8.0-dev2.md`](MANUAL-CHECK-v0.8.0-dev2.md)。
+
+## v0.8.0-dev1 启动载入
+
+`v0.8.0-dev1` 允许 Windows 在启动 JavMetaLite 时传入一个影片路径。命令行与“打开方式”都会复用现有的影片选择流程，直接识别番号并读取本地 NFO、poster 与 fanart；启动本身不会自动联网搜索，也不会写入或移动影片及 metadata。空路径、多个参数、文件夹、不存在路径及不支持格式会明确提示，关闭提示后仍可继续使用主窗口。
+
+```powershell
+& '.\JavMetaLite.exe' 'D:\Movies\SNOS-255.mp4'
+```
+
+dev1 不自动注册 Windows 文件关联。完整 v0.8 路线见 [`ROADMAP-v0.8.0.md`](ROADMAP-v0.8.0.md)，人工检查见 [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md)。
+
 ## v0.7.0 稳定版
 
 `v0.7.0` 已通过完整自动化门禁、RC1 跨盘与 Jellyfin 验收、RC2 在线来源优先复测，以及 RC3 条件提示复测。它加入三种明确的目标位置，在保持影片重命名独立可选的同时，安全支持同卷移动及经过 SHA-256 双重校验的跨卷或 UNC 复制事务。搜索后优先显示新的在线非空文字资料，但仍保留本地 NFO、手动值和本地图片作为可选来源。普通标准 NFO 更新只显示“更新 NFO”；只有实际读取到额外 XML 时才提示保留未知 XML。
@@ -71,6 +99,8 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
 
 完整自动化测试分层、回归范围和手动检查边界见 [`TESTING.md`](TESTING.md)。
 
+v0.8.0 RC1 的最终集成检查见 [`MANUAL-ACCEPTANCE-v0.8.0-rc1.md`](MANUAL-ACCEPTANCE-v0.8.0-rc1.md)。dev3 的最近目录检查见 [`MANUAL-CHECK-v0.8.0-dev3.md`](MANUAL-CHECK-v0.8.0-dev3.md)，dev2 的安全偏好检查见 [`MANUAL-CHECK-v0.8.0-dev2.md`](MANUAL-CHECK-v0.8.0-dev2.md)，dev1 的启动载入检查见 [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md)。
+
 v0.7.0 RC3 的全部通过记录见 [`MANUAL-RETEST-v0.7.0-rc3.md`](MANUAL-RETEST-v0.7.0-rc3.md)，RC2 的通过记录见 [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md)，RC1 的完整通过记录见 [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md)。v0.6.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md)，v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。
 
 发布 Windows x64 单文件版本：
@@ -95,9 +125,9 @@ dotnet publish .\JavMetaLite.App\JavMetaLite.App.csproj -c Release -r win-x64 --
 
 ## 当前边界
 
-- v0.7 仍然是单片编辑器，不提供媒体库扫描或批量刮削。
+- v0.8 仍然是单片编辑器，不提供媒体库扫描或批量刮削。
 - 整理功能只移动当前选择的影片并生成本次选择的 metadata；不会自动搬运未知的字幕或旧伴随文件。
-- v0.7.0 已开放同卷、跨盘符与 UNC 目标；真实 UNC 共享尚未在当前环境实测，网络速度、权限与可用性取决于 Windows 和目标服务器。
+- v0.8.0 支持同卷、跨盘符与 UNC 目标；真实 UNC 共享尚未在当前环境实测，网络速度、权限与可用性取决于 Windows 和目标服务器。
 - 软件不会写入 MP4/MKV 容器内部 metadata。
 - `actors/` 暂不生成；演员图片以 NFO 内的远程 `thumb` 提供，`extrafanart/` 是可选输出。
 - 网站结构变化可能需要更新 `JavLibraryClient`。

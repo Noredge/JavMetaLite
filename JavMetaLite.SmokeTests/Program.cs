@@ -91,6 +91,8 @@ if (args.Length == 2 && args[0] == "--image")
 var tests = new List<(string Name, Func<Task> Run)>
 {
     ("番号识别", TestMovieIdParser),
+    ("v0.8 启动影片参数解析", TestStartupVideoRequestResolver),
+    ("v0.8 安全偏好原子存储", TestAppPreferencesStore),
     ("LibreDMM JSON 解析与清理", TestLibreDmmParser),
     ("多来源字段补全", TestMetadataMerge),
     ("v0.5 多来源搜索编排", TestMetadataSearchCoordinator),
@@ -147,6 +149,177 @@ static Task TestMovieIdParser()
     AssertEqual("FC2-PPV-1234567", MovieIdParser.TryExtract("FC2-PPV-1234567.mp4"));
     AssertEqual(null, MovieIdParser.TryExtract("vacation-1080p.mp4"));
     return Task.CompletedTask;
+}
+
+static Task TestStartupVideoRequestResolver()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.StartupRequestTests.{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    try
+    {
+        var noArguments = StartupVideoRequestResolver.Resolve([]);
+        AssertEqual(StartupVideoRequestKind.None.ToString(), noArguments.Kind.ToString());
+
+        var multipleArguments = StartupVideoRequestResolver.Resolve(["first.mp4", "second.mp4"]);
+        AssertEqual(StartupVideoRequestKind.Invalid.ToString(), multipleArguments.Kind.ToString());
+        AssertEqual("True", multipleArguments.ErrorMessage?.Contains("一次只能", StringComparison.Ordinal).ToString());
+
+        var emptyArgument = StartupVideoRequestResolver.Resolve(["   "]);
+        AssertEqual(StartupVideoRequestKind.Invalid.ToString(), emptyArgument.Kind.ToString());
+
+        var directoryArgument = StartupVideoRequestResolver.Resolve([root]);
+        AssertEqual(StartupVideoRequestKind.Invalid.ToString(), directoryArgument.Kind.ToString());
+        AssertEqual("True", directoryArgument.ErrorMessage?.Contains("文件夹", StringComparison.Ordinal).ToString());
+
+        var missingPath = Path.Combine(root, "不存在的影片.mp4");
+        var missingArgument = StartupVideoRequestResolver.Resolve([missingPath]);
+        AssertEqual(StartupVideoRequestKind.Invalid.ToString(), missingArgument.Kind.ToString());
+        AssertEqual("True", missingArgument.ErrorMessage?.Contains("不存在", StringComparison.Ordinal).ToString());
+
+        var unsupportedPath = Path.Combine(root, "SNOS-255.txt");
+        File.WriteAllText(unsupportedPath, "not a movie");
+        var unsupportedArgument = StartupVideoRequestResolver.Resolve([unsupportedPath]);
+        AssertEqual(StartupVideoRequestKind.Invalid.ToString(), unsupportedArgument.Kind.ToString());
+        AssertEqual("True", unsupportedArgument.ErrorMessage?.Contains("不支持", StringComparison.Ordinal).ToString());
+
+        var videoPath = Path.Combine(root, "包含 空格", "SNOS-255.MKV");
+        Directory.CreateDirectory(Path.GetDirectoryName(videoPath)!);
+        File.WriteAllBytes(videoPath, [0x01, 0x02, 0x03]);
+        var videoArgument = StartupVideoRequestResolver.Resolve([videoPath]);
+        AssertEqual(StartupVideoRequestKind.Video.ToString(), videoArgument.Kind.ToString());
+        AssertEqual(Path.GetFullPath(videoPath), videoArgument.VideoPath);
+        AssertEqual("True", VideoFileSupport.IsSupportedExistingFile(videoArgument.VideoPath).ToString());
+        AssertEqual("False", VideoFileSupport.HasSupportedExtension(unsupportedPath).ToString());
+    }
+    finally
+    {
+        Directory.Delete(root, true);
+    }
+
+    return Task.CompletedTask;
+}
+
+static Task TestAppPreferencesStore()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.PreferencesTests.{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    try
+    {
+        var store = new AppPreferencesStore(root);
+        var missing = store.Load();
+        AssertEqual("False", missing.Preferences.RememberSavePreferences.ToString());
+        AssertEqual(OrganizationTargetMode.VideoDirectory.ToString(), missing.Preferences.TargetMode.ToString());
+        AssertEqual("True", missing.Preferences.WriteNfo.ToString());
+        AssertEqual("True", missing.Preferences.DownloadPoster.ToString());
+        AssertEqual("True", missing.Preferences.DownloadFanart.ToString());
+        AssertEqual("False", missing.Preferences.DownloadExtrafanart.ToString());
+
+        var customRoot = Path.Combine(root, "library");
+        var secondRoot = Path.Combine(root, "library-two");
+        store.Save(new AppPreferences
+        {
+            RememberSavePreferences = true,
+            TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
+            CustomRootDirectory = $"  {customRoot}  ",
+            RecentCustomRootDirectories =
+            [
+                customRoot,
+                secondRoot,
+                Path.Combine(root, "library-three"),
+                Path.Combine(root, "library-four"),
+                Path.Combine(root, "library-five"),
+                Path.Combine(root, "library-six"),
+                "relative-path"
+            ],
+            RenameVideo = true,
+            WriteNfo = false,
+            DownloadPoster = false,
+            DownloadFanart = true,
+            DownloadExtrafanart = true
+        });
+
+        AssertEqual("True", File.Exists(store.SettingsPath).ToString());
+        var json = File.ReadAllText(store.SettingsPath);
+        AssertEqual("True", json.Contains("\"SchemaVersion\": 2", StringComparison.Ordinal).ToString());
+        AssertEqual("True", json.Contains("\"CustomRootNumberFolder\"", StringComparison.Ordinal).ToString());
+        AssertEqual("False", json.Contains("DirectSave", StringComparison.OrdinalIgnoreCase).ToString());
+        AssertEqual("0", Directory.EnumerateFiles(root, "*.tmp").Count().ToString());
+
+        var loaded = store.Load();
+        AssertEqual("True", loaded.Preferences.RememberSavePreferences.ToString());
+        AssertEqual("True", loaded.CanOverwrite.ToString());
+        AssertEqual(OrganizationTargetMode.CustomRootNumberFolder.ToString(), loaded.Preferences.TargetMode.ToString());
+        AssertEqual(customRoot, loaded.Preferences.CustomRootDirectory);
+        AssertEqual("5", loaded.Preferences.RecentCustomRootDirectories.Length.ToString());
+        AssertEqual(customRoot, loaded.Preferences.RecentCustomRootDirectories[0]);
+        AssertEqual(secondRoot, loaded.Preferences.RecentCustomRootDirectories[1]);
+        AssertEqual("False", Directory.Exists(customRoot).ToString());
+        AssertEqual("True", loaded.Preferences.RenameVideo.ToString());
+        AssertEqual("False", loaded.Preferences.WriteNfo.ToString());
+        AssertEqual("False", loaded.Preferences.DownloadPoster.ToString());
+        AssertEqual("True", loaded.Preferences.DownloadFanart.ToString());
+        AssertEqual("True", loaded.Preferences.DownloadExtrafanart.ToString());
+
+        store.Save(new AppPreferences
+        {
+            RememberSavePreferences = true,
+            TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
+            CustomRootDirectory = customRoot,
+            RecentCustomRootDirectories = []
+        });
+        var clearedHistory = store.Load();
+        AssertEqual(customRoot, clearedHistory.Preferences.CustomRootDirectory);
+        AssertEqual("0", clearedHistory.Preferences.RecentCustomRootDirectories.Length.ToString());
+
+        var v1Json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            SchemaVersion = 1,
+            RememberSavePreferences = true,
+            TargetMode = "CustomRootNumberFolder",
+            CustomRootDirectory = secondRoot,
+            RenameVideo = true,
+            WriteNfo = true,
+            DownloadPoster = true,
+            DownloadFanart = true,
+            DownloadExtrafanart = false
+        });
+        File.WriteAllText(store.SettingsPath, v1Json);
+        var migrated = store.Load();
+        AssertEqual(AppPreferences.CurrentSchemaVersion.ToString(), migrated.Preferences.SchemaVersion.ToString());
+        AssertEqual("True", migrated.CanOverwrite.ToString());
+        AssertEqual(secondRoot, migrated.Preferences.CustomRootDirectory);
+        AssertEqual("1", migrated.Preferences.RecentCustomRootDirectories.Length.ToString());
+        AssertEqual(secondRoot, migrated.Preferences.RecentCustomRootDirectories[0]);
+
+        File.WriteAllText(store.SettingsPath, "{ invalid json");
+        var malformed = store.Load();
+        AssertEqual("False", malformed.Preferences.RememberSavePreferences.ToString());
+        AssertEqual("True", malformed.CanOverwrite.ToString());
+        AssertEqual("True", (!string.IsNullOrWhiteSpace(malformed.Warning)).ToString());
+
+        const string futureJson = """
+            {
+              "SchemaVersion": 99,
+              "RememberSavePreferences": true,
+              "TargetMode": "FutureLibraryProfile",
+              "RenameVideo": true,
+              "WriteNfo": false
+            }
+            """;
+        File.WriteAllText(store.SettingsPath, futureJson);
+        var future = store.Load();
+        AssertEqual("False", future.Preferences.RememberSavePreferences.ToString());
+        AssertEqual("False", future.CanOverwrite.ToString());
+        AssertEqual("True", File.ReadAllText(store.SettingsPath).Contains("99", StringComparison.Ordinal).ToString());
+
+        store.Clear();
+        AssertEqual("False", File.Exists(store.SettingsPath).ToString());
+        return Task.CompletedTask;
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
 }
 
 static async Task TestHtmlParser()

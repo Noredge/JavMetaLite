@@ -46,6 +46,11 @@ public sealed class FileOrganizationService
         {
             blockingConflicts.Add($"自定义目标根目录路径已被文件占用：{pathPlan.TargetRootDirectory}");
         }
+        else if (pathPlan.UsesCustomRoot && !Directory.Exists(pathPlan.TargetRootDirectory))
+        {
+            blockingConflicts.Add(
+                $"自定义目标根目录当前不可用，程序不会自动创建该根目录：{pathPlan.TargetRootDirectory}");
+        }
         if (File.Exists(targetDirectory))
         {
             blockingConflicts.Add($"目标文件夹路径已被文件占用：{targetDirectory}");
