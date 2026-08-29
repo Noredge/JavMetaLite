@@ -124,6 +124,7 @@ internal static class Program
         applyPreferences.Invoke(window, [new AppPreferences
         {
             RememberSavePreferences = true,
+            DirectSaveOverwrite = true,
             TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
             CustomRootDirectory = preferencesRoot,
             RecentCustomRootDirectories = [secondPreferencesRoot, preferencesRoot],
@@ -135,10 +136,11 @@ internal static class Program
         }]);
         window.UpdateLayout();
         var remembered = capturePreferences.Invoke(window, null) as AppPreferences
-            ?? throw new InvalidOperationException("v0.8 无法采集安全偏好。 ");
+            ?? throw new InvalidOperationException("v0.8.1 无法采集保存偏好。 ");
         var recentRootsButton = (Button)window.FindName("RecentRootsButton");
-        if (directSaveCheckBox.IsChecked == true ||
+        if (directSaveCheckBox.IsChecked != true ||
             rememberPreferencesCheckBox.IsChecked != true ||
+            !remembered.DirectSaveOverwrite ||
             remembered.TargetMode != OrganizationTargetMode.CustomRootNumberFolder ||
             remembered.CustomRootDirectory != preferencesRoot ||
             !remembered.RenameVideo || remembered.WriteNfo || remembered.DownloadPoster ||
@@ -147,9 +149,9 @@ internal static class Program
             recentRootsButton.Content?.ToString() != "最近目录 (2) ▾" ||
             !recentRootsButton.IsEnabled ||
             window.FindName("CustomTargetPanel") is not Grid { Visibility: Visibility.Visible } ||
-            typeof(AppPreferences).GetProperty("DirectSaveOverwrite") is not null)
+            typeof(AppPreferences).GetProperty("DirectSaveOverwrite") is null)
         {
-            throw new InvalidOperationException("v0.8 没有只恢复允许记忆的安全保存偏好。 ");
+            throw new InvalidOperationException("v0.8.1 没有恢复用户明确记住的保存偏好。 ");
         }
 
         recentRootsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -194,6 +196,10 @@ internal static class Program
         }
         applyPreferences.Invoke(window, [AppPreferences.CreateSafeDefaults()]);
         window.UpdateLayout();
+        if (directSaveCheckBox.IsChecked == true)
+        {
+            throw new InvalidOperationException("v0.8.1 安全默认值没有关闭直接保存并覆盖。 ");
+        }
         if (window.FindName("SaveButton") is not Button saveButton || saveButton.Content?.ToString() != "保存")
         {
             throw new InvalidOperationException("v0.4 保存入口未创建。 ");
@@ -653,7 +659,7 @@ internal static class Program
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True directSaveRemembered=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True");
         window.Close();
         application.Shutdown();
     }

@@ -72,7 +72,7 @@ public partial class MainWindow : Window
         _uiInitialized = true;
         ApplyMetadata(_metadata, []);
         RefreshTargetLocationUi();
-        AppLog.Info("JavMetaLite v0.8.0 启动");
+        AppLog.Info("JavMetaLite v0.8.1-dev1 启动");
     }
 
     internal void LoadPreferences()
@@ -101,15 +101,20 @@ public partial class MainWindow : Window
         else if (result.Preferences.RememberSavePreferences)
         {
             AppLog.Info(
-                $"已恢复安全偏好 target={result.Preferences.TargetMode} " +
-                $"rename={result.Preferences.RenameVideo} customRoot={result.Preferences.CustomRootDirectory}");
-            SetStatus("已恢复上次明确记住的安全保存偏好", true);
+                $"已恢复保存偏好 target={result.Preferences.TargetMode} " +
+                $"rename={result.Preferences.RenameVideo} directOverwrite={result.Preferences.DirectSaveOverwrite} " +
+                $"customRoot={result.Preferences.CustomRootDirectory}");
+            SetStatus(
+                result.Preferences.DirectSaveOverwrite
+                    ? "已恢复保存偏好：直接保存并覆盖已开启"
+                    : "已恢复上次明确记住的保存偏好",
+                !result.Preferences.DirectSaveOverwrite);
         }
     }
 
     private void ApplyPreferences(AppPreferences preferences)
     {
-        DirectSaveOverwriteCheckBox.IsChecked = false;
+        DirectSaveOverwriteCheckBox.IsChecked = preferences.DirectSaveOverwrite;
         RememberPreferencesCheckBox.IsChecked = preferences.RememberSavePreferences;
         WriteNfoCheckBox.IsChecked = preferences.WriteNfo;
         DownloadPosterCheckBox.IsChecked = preferences.DownloadPoster;
@@ -143,6 +148,7 @@ public partial class MainWindow : Window
         return new AppPreferences
         {
             RememberSavePreferences = RememberPreferencesCheckBox.IsChecked == true,
+            DirectSaveOverwrite = DirectSaveOverwriteCheckBox.IsChecked == true,
             TargetMode = GetSelectedTargetMode(),
             CustomRootDirectory = string.IsNullOrWhiteSpace(CustomRootTextBox.Text)
                 ? _lastValidCustomRootDirectory
@@ -176,13 +182,13 @@ public partial class MainWindow : Window
             {
                 _preferencesStore.Save(preferences);
                 AppLog.Info(
-                    $"已保存安全偏好 target={preferences.TargetMode} rename={preferences.RenameVideo} " +
-                    $"path={_preferencesStore.SettingsPath}");
+                    $"已保存偏好 target={preferences.TargetMode} rename={preferences.RenameVideo} " +
+                    $"directOverwrite={preferences.DirectSaveOverwrite} path={_preferencesStore.SettingsPath}");
             }
             else
             {
                 _preferencesStore.Clear();
-                AppLog.Info("未启用偏好记忆，已保持安全默认状态");
+                AppLog.Info("未启用偏好记忆，已清除保存的偏好");
             }
         }
         catch (Exception exception)

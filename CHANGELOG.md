@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.8.1-dev1 — Remember direct overwrite
+
+- Persists `直接保存并覆盖（跳过预览）` when the user explicitly enables `记住保存偏好`, matching the behavior of the other remembered save choices.
+- Advances the preference file to schema v3; schema-v1 and schema-v2 files migrate with direct overwrite disabled because they contain no prior opt-in.
+- Keeps direct overwrite disabled for first launch, absent or damaged settings, unsupported future settings, and every session where preference memory is not enabled.
+- Updates restored-preference status and logs to state when direct overwrite has been restored, without adding another confirmation or changing the existing save transaction.
+- Adds Core and WPF coverage for schema-v3 persistence, safe legacy migration, explicit restoration, and safe defaults.
+
 ## v0.8.0 — Stable
 
 - Promotes RC1 without functional changes after R01–R05, movie SHA-256, and no-op sidecar SHA-256 verification all passed.

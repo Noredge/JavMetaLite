@@ -2,11 +2,13 @@ namespace JavMetaLite.Core.Models;
 
 public sealed record AppPreferences
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
     public bool RememberSavePreferences { get; init; }
+
+    public bool DirectSaveOverwrite { get; init; }
 
     public OrganizationTargetMode TargetMode { get; init; } = OrganizationTargetMode.VideoDirectory;
 

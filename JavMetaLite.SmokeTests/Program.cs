@@ -92,7 +92,7 @@ var tests = new List<(string Name, Func<Task> Run)>
 {
     ("番号识别", TestMovieIdParser),
     ("v0.8 启动影片参数解析", TestStartupVideoRequestResolver),
-    ("v0.8 安全偏好原子存储", TestAppPreferencesStore),
+    ("v0.8.1 保存偏好原子存储", TestAppPreferencesStore),
     ("LibreDMM JSON 解析与清理", TestLibreDmmParser),
     ("多来源字段补全", TestMetadataMerge),
     ("v0.5 多来源搜索编排", TestMetadataSearchCoordinator),
@@ -208,6 +208,7 @@ static Task TestAppPreferencesStore()
         var store = new AppPreferencesStore(root);
         var missing = store.Load();
         AssertEqual("False", missing.Preferences.RememberSavePreferences.ToString());
+        AssertEqual("False", missing.Preferences.DirectSaveOverwrite.ToString());
         AssertEqual(OrganizationTargetMode.VideoDirectory.ToString(), missing.Preferences.TargetMode.ToString());
         AssertEqual("True", missing.Preferences.WriteNfo.ToString());
         AssertEqual("True", missing.Preferences.DownloadPoster.ToString());
@@ -219,6 +220,7 @@ static Task TestAppPreferencesStore()
         store.Save(new AppPreferences
         {
             RememberSavePreferences = true,
+            DirectSaveOverwrite = true,
             TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
             CustomRootDirectory = $"  {customRoot}  ",
             RecentCustomRootDirectories =
@@ -240,13 +242,14 @@ static Task TestAppPreferencesStore()
 
         AssertEqual("True", File.Exists(store.SettingsPath).ToString());
         var json = File.ReadAllText(store.SettingsPath);
-        AssertEqual("True", json.Contains("\"SchemaVersion\": 2", StringComparison.Ordinal).ToString());
+        AssertEqual("True", json.Contains("\"SchemaVersion\": 3", StringComparison.Ordinal).ToString());
         AssertEqual("True", json.Contains("\"CustomRootNumberFolder\"", StringComparison.Ordinal).ToString());
-        AssertEqual("False", json.Contains("DirectSave", StringComparison.OrdinalIgnoreCase).ToString());
+        AssertEqual("True", json.Contains("\"DirectSaveOverwrite\": true", StringComparison.Ordinal).ToString());
         AssertEqual("0", Directory.EnumerateFiles(root, "*.tmp").Count().ToString());
 
         var loaded = store.Load();
         AssertEqual("True", loaded.Preferences.RememberSavePreferences.ToString());
+        AssertEqual("True", loaded.Preferences.DirectSaveOverwrite.ToString());
         AssertEqual("True", loaded.CanOverwrite.ToString());
         AssertEqual(OrganizationTargetMode.CustomRootNumberFolder.ToString(), loaded.Preferences.TargetMode.ToString());
         AssertEqual(customRoot, loaded.Preferences.CustomRootDirectory);
@@ -290,10 +293,31 @@ static Task TestAppPreferencesStore()
         AssertEqual(secondRoot, migrated.Preferences.CustomRootDirectory);
         AssertEqual("1", migrated.Preferences.RecentCustomRootDirectories.Length.ToString());
         AssertEqual(secondRoot, migrated.Preferences.RecentCustomRootDirectories[0]);
+        AssertEqual("False", migrated.Preferences.DirectSaveOverwrite.ToString());
+
+        var v2Json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            SchemaVersion = 2,
+            RememberSavePreferences = true,
+            TargetMode = "CustomRootNumberFolder",
+            CustomRootDirectory = customRoot,
+            RecentCustomRootDirectories = new[] { customRoot },
+            RenameVideo = true,
+            WriteNfo = true,
+            DownloadPoster = true,
+            DownloadFanart = true,
+            DownloadExtrafanart = false
+        });
+        File.WriteAllText(store.SettingsPath, v2Json);
+        var migratedV2 = store.Load();
+        AssertEqual(AppPreferences.CurrentSchemaVersion.ToString(), migratedV2.Preferences.SchemaVersion.ToString());
+        AssertEqual("True", migratedV2.CanOverwrite.ToString());
+        AssertEqual("False", migratedV2.Preferences.DirectSaveOverwrite.ToString());
 
         File.WriteAllText(store.SettingsPath, "{ invalid json");
         var malformed = store.Load();
         AssertEqual("False", malformed.Preferences.RememberSavePreferences.ToString());
+        AssertEqual("False", malformed.Preferences.DirectSaveOverwrite.ToString());
         AssertEqual("True", malformed.CanOverwrite.ToString());
         AssertEqual("True", (!string.IsNullOrWhiteSpace(malformed.Warning)).ToString());
 
@@ -309,11 +333,19 @@ static Task TestAppPreferencesStore()
         File.WriteAllText(store.SettingsPath, futureJson);
         var future = store.Load();
         AssertEqual("False", future.Preferences.RememberSavePreferences.ToString());
+        AssertEqual("False", future.Preferences.DirectSaveOverwrite.ToString());
         AssertEqual("False", future.CanOverwrite.ToString());
         AssertEqual("True", File.ReadAllText(store.SettingsPath).Contains("99", StringComparison.Ordinal).ToString());
 
-        store.Clear();
+        store.Save(new AppPreferences
+        {
+            RememberSavePreferences = false,
+            DirectSaveOverwrite = true
+        });
         AssertEqual("False", File.Exists(store.SettingsPath).ToString());
+        var disabledMemory = store.Load();
+        AssertEqual("False", disabledMemory.Preferences.RememberSavePreferences.ToString());
+        AssertEqual("False", disabledMemory.Preferences.DirectSaveOverwrite.ToString());
         return Task.CompletedTask;
     }
     finally
