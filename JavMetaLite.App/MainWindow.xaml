@@ -485,6 +485,10 @@
                                               Checked="TargetOption_Changed"
                                               Unchecked="TargetOption_Changed"
                                               ToolTip="只改变影片文件名，不改变扩展名" />
+                                    <CheckBox x:Name="RememberPreferencesCheckBox"
+                                              Content="记住保存偏好"
+                                              IsChecked="False"
+                                              ToolTip="记住目标位置、影片重命名和输出选项；不会记住直接保存并覆盖" />
                                 </WrapPanel>
                                 <WrapPanel Margin="0,10,0,0">
                                     <TextBlock Text="目标位置" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
@@ -557,7 +561,7 @@
                         BorderBrush="#85363D"
                         Visibility="Collapsed" />
                 <Button Grid.Column="3" Content="打开日志" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
-                <TextBlock Grid.Column="4" Text="v0.8.0-dev1 · 启动载入" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="4" Text="v0.8.0-dev2 · 安全偏好" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>

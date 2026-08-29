@@ -32,6 +32,7 @@ public partial class MainWindow : Window
     private readonly R18DevClient _r18DevClient = new();
     private readonly OutputService _outputService;
     private readonly FileOrganizationService _fileOrganizationService;
+    private readonly AppPreferencesStore _preferencesStore;
     private readonly HttpClient _previewHttpClient = CreatePreviewClient();
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private CancellationTokenSource? _activeOperationCancellation;
@@ -50,19 +51,129 @@ public partial class MainWindow : Window
     private bool _localNfoSaveBlocked;
     private bool _busy;
     private bool _uiInitialized;
+    private bool _preferencesLoaded;
+    private bool _preferencesCanOverwrite = true;
 
     private CancellationToken CurrentOperationToken =>
         _activeOperationCancellation?.Token ?? _lifetimeCancellation.Token;
 
-    public MainWindow()
+    public MainWindow() : this(new AppPreferencesStore())
     {
+    }
+
+    internal MainWindow(AppPreferencesStore preferencesStore)
+    {
+        _preferencesStore = preferencesStore;
         _outputService = new OutputService();
         _fileOrganizationService = new FileOrganizationService(_outputService);
         InitializeComponent();
         _uiInitialized = true;
         ApplyMetadata(_metadata, []);
         RefreshTargetLocationUi();
-        AppLog.Info("JavMetaLite v0.8.0-dev1 启动");
+        AppLog.Info("JavMetaLite v0.8.0-dev2 启动");
+    }
+
+    internal void LoadPreferences()
+    {
+        AppPreferencesLoadResult result;
+        try
+        {
+            result = _preferencesStore.Load();
+        }
+        catch (Exception exception)
+        {
+            AppLog.Warning("偏好配置载入失败，已使用安全默认值", exception);
+            result = new AppPreferencesLoadResult(
+                AppPreferences.CreateSafeDefaults(),
+                $"偏好配置载入失败，已使用安全默认值：{exception.Message}");
+        }
+
+        _preferencesLoaded = true;
+        _preferencesCanOverwrite = result.CanOverwrite;
+        ApplyPreferences(result.Preferences);
+        if (!string.IsNullOrWhiteSpace(result.Warning))
+        {
+            AppLog.Warning(result.Warning);
+            SetStatus(result.Warning, false);
+        }
+        else if (result.Preferences.RememberSavePreferences)
+        {
+            AppLog.Info(
+                $"已恢复安全偏好 target={result.Preferences.TargetMode} " +
+                $"rename={result.Preferences.RenameVideo} customRoot={result.Preferences.CustomRootDirectory}");
+            SetStatus("已恢复上次明确记住的安全保存偏好", true);
+        }
+    }
+
+    private void ApplyPreferences(AppPreferences preferences)
+    {
+        DirectSaveOverwriteCheckBox.IsChecked = false;
+        RememberPreferencesCheckBox.IsChecked = preferences.RememberSavePreferences;
+        WriteNfoCheckBox.IsChecked = preferences.WriteNfo;
+        DownloadPosterCheckBox.IsChecked = preferences.DownloadPoster;
+        DownloadFanartCheckBox.IsChecked = preferences.DownloadFanart;
+        DownloadExtrafanartCheckBox.IsChecked = preferences.DownloadExtrafanart;
+        RenameVideoCheckBox.IsChecked = preferences.RenameVideo;
+        CustomRootTextBox.Text = preferences.CustomRootDirectory ?? string.Empty;
+        _lastValidCustomRootDirectory = preferences.CustomRootDirectory;
+
+        TargetModeComboBox.SelectedItem = TargetModeComboBox.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(item => string.Equals(
+                item.Tag?.ToString(),
+                preferences.TargetMode.ToString(),
+                StringComparison.Ordinal))
+            ?? TargetModeComboBox.Items[0];
+        RefreshTargetLocationUi();
+    }
+
+    private AppPreferences CapturePreferences() => new()
+    {
+        RememberSavePreferences = RememberPreferencesCheckBox.IsChecked == true,
+        TargetMode = GetSelectedTargetMode(),
+        CustomRootDirectory = string.IsNullOrWhiteSpace(CustomRootTextBox.Text)
+            ? _lastValidCustomRootDirectory
+            : CustomRootTextBox.Text,
+        RenameVideo = RenameVideoCheckBox.IsChecked == true,
+        WriteNfo = WriteNfoCheckBox.IsChecked == true,
+        DownloadPoster = DownloadPosterCheckBox.IsChecked == true,
+        DownloadFanart = DownloadFanartCheckBox.IsChecked == true,
+        DownloadExtrafanart = DownloadExtrafanartCheckBox.IsChecked == true
+    };
+
+    private void PersistPreferencesOnClose()
+    {
+        if (!_preferencesLoaded)
+        {
+            return;
+        }
+
+        if (!_preferencesCanOverwrite)
+        {
+            AppLog.Warning("检测到不受支持版本的偏好配置，本次关闭不会覆盖该文件");
+            return;
+        }
+
+        try
+        {
+            var preferences = CapturePreferences();
+            if (preferences.RememberSavePreferences)
+            {
+                _preferencesStore.Save(preferences);
+                AppLog.Info(
+                    $"已保存安全偏好 target={preferences.TargetMode} rename={preferences.RenameVideo} " +
+                    $"path={_preferencesStore.SettingsPath}");
+            }
+            else
+            {
+                _preferencesStore.Clear();
+                AppLog.Info("未启用偏好记忆，已保持安全默认状态");
+            }
+        }
+        catch (Exception exception)
+        {
+            AppLog.Warning("无法保存安全偏好，影片与 metadata 不受影响", exception);
+        }
     }
 
     private async void ChooseFile_Click(object sender, RoutedEventArgs e)
@@ -1416,6 +1527,7 @@ public partial class MainWindow : Window
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
         AppLog.Info("JavMetaLite 关闭");
+        PersistPreferencesOnClose();
         if (_metadataReview is not null)
         {
             _metadataReview.SelectionChanged -= MetadataReview_SelectionChanged;

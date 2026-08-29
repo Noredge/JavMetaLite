@@ -92,6 +92,7 @@ var tests = new List<(string Name, Func<Task> Run)>
 {
     ("番号识别", TestMovieIdParser),
     ("v0.8 启动影片参数解析", TestStartupVideoRequestResolver),
+    ("v0.8 安全偏好原子存储", TestAppPreferencesStore),
     ("LibreDMM JSON 解析与清理", TestLibreDmmParser),
     ("多来源字段补全", TestMetadataMerge),
     ("v0.5 多来源搜索编排", TestMetadataSearchCoordinator),
@@ -196,6 +197,83 @@ static Task TestStartupVideoRequestResolver()
     }
 
     return Task.CompletedTask;
+}
+
+static Task TestAppPreferencesStore()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.PreferencesTests.{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    try
+    {
+        var store = new AppPreferencesStore(root);
+        var missing = store.Load();
+        AssertEqual("False", missing.Preferences.RememberSavePreferences.ToString());
+        AssertEqual(OrganizationTargetMode.VideoDirectory.ToString(), missing.Preferences.TargetMode.ToString());
+        AssertEqual("True", missing.Preferences.WriteNfo.ToString());
+        AssertEqual("True", missing.Preferences.DownloadPoster.ToString());
+        AssertEqual("True", missing.Preferences.DownloadFanart.ToString());
+        AssertEqual("False", missing.Preferences.DownloadExtrafanart.ToString());
+
+        var customRoot = Path.Combine(root, "library");
+        store.Save(new AppPreferences
+        {
+            RememberSavePreferences = true,
+            TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
+            CustomRootDirectory = $"  {customRoot}  ",
+            RenameVideo = true,
+            WriteNfo = false,
+            DownloadPoster = false,
+            DownloadFanart = true,
+            DownloadExtrafanart = true
+        });
+
+        AssertEqual("True", File.Exists(store.SettingsPath).ToString());
+        var json = File.ReadAllText(store.SettingsPath);
+        AssertEqual("True", json.Contains("\"SchemaVersion\": 1", StringComparison.Ordinal).ToString());
+        AssertEqual("True", json.Contains("\"CustomRootNumberFolder\"", StringComparison.Ordinal).ToString());
+        AssertEqual("False", json.Contains("DirectSave", StringComparison.OrdinalIgnoreCase).ToString());
+        AssertEqual("0", Directory.EnumerateFiles(root, "*.tmp").Count().ToString());
+
+        var loaded = store.Load();
+        AssertEqual("True", loaded.Preferences.RememberSavePreferences.ToString());
+        AssertEqual("True", loaded.CanOverwrite.ToString());
+        AssertEqual(OrganizationTargetMode.CustomRootNumberFolder.ToString(), loaded.Preferences.TargetMode.ToString());
+        AssertEqual(customRoot, loaded.Preferences.CustomRootDirectory);
+        AssertEqual("True", loaded.Preferences.RenameVideo.ToString());
+        AssertEqual("False", loaded.Preferences.WriteNfo.ToString());
+        AssertEqual("False", loaded.Preferences.DownloadPoster.ToString());
+        AssertEqual("True", loaded.Preferences.DownloadFanart.ToString());
+        AssertEqual("True", loaded.Preferences.DownloadExtrafanart.ToString());
+
+        File.WriteAllText(store.SettingsPath, "{ invalid json");
+        var malformed = store.Load();
+        AssertEqual("False", malformed.Preferences.RememberSavePreferences.ToString());
+        AssertEqual("True", malformed.CanOverwrite.ToString());
+        AssertEqual("True", (!string.IsNullOrWhiteSpace(malformed.Warning)).ToString());
+
+        const string futureJson = """
+            {
+              "SchemaVersion": 99,
+              "RememberSavePreferences": true,
+              "TargetMode": "SourceNumberFolder",
+              "RenameVideo": true,
+              "WriteNfo": false
+            }
+            """;
+        File.WriteAllText(store.SettingsPath, futureJson);
+        var future = store.Load();
+        AssertEqual("False", future.Preferences.RememberSavePreferences.ToString());
+        AssertEqual("False", future.CanOverwrite.ToString());
+        AssertEqual("True", File.ReadAllText(store.SettingsPath).Contains("99", StringComparison.Ordinal).ToString());
+
+        store.Clear();
+        AssertEqual("False", File.Exists(store.SettingsPath).ToString());
+        return Task.CompletedTask;
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
 }
 
 static async Task TestHtmlParser()

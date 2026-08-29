@@ -102,6 +102,50 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.4 直接保存选项未创建或没有保持安全的默认关闭状态。 ");
         }
+        if (window.FindName("RememberPreferencesCheckBox") is not CheckBox rememberPreferencesCheckBox ||
+            rememberPreferencesCheckBox.IsChecked == true ||
+            rememberPreferencesCheckBox.Content?.ToString() != "记住保存偏好")
+        {
+            throw new InvalidOperationException("v0.8 安全偏好开关未创建或没有保持默认关闭。 ");
+        }
+
+        var applyPreferences = typeof(MainWindow).GetMethod(
+            "ApplyPreferences",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("v0.8 偏好应用入口未找到。 ");
+        var capturePreferences = typeof(MainWindow).GetMethod(
+            "CapturePreferences",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("v0.8 偏好采集入口未找到。 ");
+        var preferencesRoot = Path.Combine(Path.GetTempPath(), "JavMetaLite remembered library");
+        directSaveCheckBox.IsChecked = true;
+        applyPreferences.Invoke(window, [new AppPreferences
+        {
+            RememberSavePreferences = true,
+            TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
+            CustomRootDirectory = preferencesRoot,
+            RenameVideo = true,
+            WriteNfo = false,
+            DownloadPoster = false,
+            DownloadFanart = true,
+            DownloadExtrafanart = true
+        }]);
+        window.UpdateLayout();
+        var remembered = capturePreferences.Invoke(window, null) as AppPreferences
+            ?? throw new InvalidOperationException("v0.8 无法采集安全偏好。 ");
+        if (directSaveCheckBox.IsChecked == true ||
+            rememberPreferencesCheckBox.IsChecked != true ||
+            remembered.TargetMode != OrganizationTargetMode.CustomRootNumberFolder ||
+            remembered.CustomRootDirectory != preferencesRoot ||
+            !remembered.RenameVideo || remembered.WriteNfo || remembered.DownloadPoster ||
+            !remembered.DownloadFanart || !remembered.DownloadExtrafanart ||
+            window.FindName("CustomTargetPanel") is not Grid { Visibility: Visibility.Visible } ||
+            typeof(AppPreferences).GetProperty("DirectSaveOverwrite") is not null)
+        {
+            throw new InvalidOperationException("v0.8 没有只恢复允许记忆的安全保存偏好。 ");
+        }
+        applyPreferences.Invoke(window, [AppPreferences.CreateSafeDefaults()]);
+        window.UpdateLayout();
         if (window.FindName("SaveButton") is not Button saveButton || saveButton.Content?.ToString() != "保存")
         {
             throw new InvalidOperationException("v0.4 保存入口未创建。 ");

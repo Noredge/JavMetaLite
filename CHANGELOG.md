@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.8.0-dev2 — Safe preference persistence
+
+- Adds an explicit `记住保存偏好` switch; nothing is persisted unless the user enables it.
+- Remembers only target location, custom root, movie renaming, and NFO/poster/fanart/extrafanart output choices.
+- Never persists `直接保存并覆盖（跳过预览）`; every launch restores that risk-bearing option to off.
+- Stores a versioned JSON file below the current user's local application-data folder using a same-directory temporary file and atomic replacement.
+- Falls back to safe defaults when the settings file is absent or damaged, and preserves an unsupported future-version file instead of overwriting it.
+- Adds offline Core and WPF coverage for persistence, cleanup, safe fallback, future-version protection, and the non-persistent overwrite option.
+
 ## v0.8.0-dev1 — Open one movie at startup
 
 - Accepts exactly one movie path from the process command line, including the path supplied by Windows Open with.

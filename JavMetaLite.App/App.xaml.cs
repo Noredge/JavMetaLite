@@ -17,6 +17,7 @@ public partial class App : Application
             AppLog.Info($"启动参数 count={e.Args.Length} kind={startupRequest.Kind}");
             var window = new MainWindow();
             MainWindow = window;
+            window.LoadPreferences();
             window.Show();
             await window.HandleStartupVideoRequestAsync(startupRequest);
         }
