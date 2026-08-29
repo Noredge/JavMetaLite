@@ -2,6 +2,14 @@
 
 一个只处理单个影片的轻量 Windows metadata 工具。它不会扫描整个媒体库；文件整理和直接保存都默认关闭，用户可以先预览所有变更，也可以明确选择跳过预览并直接覆盖 metadata。
 
+## v0.8.1 稳定版
+
+`v0.8.1` 已通过完整自动化门禁和 P01–P03 真实重启验收。它让“记住保存偏好”完整覆盖用户明确选择的保存方式：如果同时勾选“直接保存并覆盖（跳过预览）”，下次启动也会恢复该状态；如果不启用偏好记忆，则不会保留。
+
+配置升级为 schema v3。既有 v1/v2 配置没有直接覆盖授权，因此迁移后仍默认关闭；首次运行、损坏配置和不受支持的未来配置也继续使用关闭状态。保存预览、覆盖范围、影片保护和事务回滚均未改变。路线见 [`ROADMAP-v0.8.1.md`](ROADMAP-v0.8.1.md)，简短人工检查见 [`MANUAL-CHECK-v0.8.1-dev1.md`](MANUAL-CHECK-v0.8.1-dev1.md)。
+
+P01–P03 真实重启检查已经全部通过，确认开启、关闭和取消偏好记忆三种路径均符合预期。
+
 ## v0.8.0 稳定版
 
 `v0.8.0` 已通过完整自动化门禁、dev1–dev3 分阶段人工检查和 RC1 最终集成验收。它支持从命令行或 Windows“打开方式”直接载入一部影片，并可在用户明确允许后记住安全的目标位置、重命名与 metadata 输出偏好，以及最多 5 条最近自定义根目录。
@@ -99,7 +107,7 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
 
 完整自动化测试分层、回归范围和手动检查边界见 [`TESTING.md`](TESTING.md)。
 
-v0.8.0 RC1 的最终集成检查见 [`MANUAL-ACCEPTANCE-v0.8.0-rc1.md`](MANUAL-ACCEPTANCE-v0.8.0-rc1.md)。dev3 的最近目录检查见 [`MANUAL-CHECK-v0.8.0-dev3.md`](MANUAL-CHECK-v0.8.0-dev3.md)，dev2 的安全偏好检查见 [`MANUAL-CHECK-v0.8.0-dev2.md`](MANUAL-CHECK-v0.8.0-dev2.md)，dev1 的启动载入检查见 [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md)。
+v0.8.1 dev1 的直接覆盖偏好检查见 [`MANUAL-CHECK-v0.8.1-dev1.md`](MANUAL-CHECK-v0.8.1-dev1.md)。v0.8.0 RC1 的最终集成检查见 [`MANUAL-ACCEPTANCE-v0.8.0-rc1.md`](MANUAL-ACCEPTANCE-v0.8.0-rc1.md)，dev3 的最近目录检查见 [`MANUAL-CHECK-v0.8.0-dev3.md`](MANUAL-CHECK-v0.8.0-dev3.md)，dev2 的安全偏好检查见 [`MANUAL-CHECK-v0.8.0-dev2.md`](MANUAL-CHECK-v0.8.0-dev2.md)，dev1 的启动载入检查见 [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md)。
 
 v0.7.0 RC3 的全部通过记录见 [`MANUAL-RETEST-v0.7.0-rc3.md`](MANUAL-RETEST-v0.7.0-rc3.md)，RC2 的通过记录见 [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md)，RC1 的完整通过记录见 [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md)。v0.6.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md)，v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。
 
