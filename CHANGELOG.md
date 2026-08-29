@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.9.0-dev1-r2 — Localization polish
+
+- Shortens the English multi-source label so it remains fully visible in the fixed-width selector, while a localized tooltip retains the complete recommendation.
+- Refines Japanese interface terminology and punctuation, including native labels for metadata, poster, fanart, complete cover, and sidecar files.
+- Localizes poster and fanart role names in the save preview for every language.
+- Adds four-language UI checks for the source label and tooltip without changing search, metadata, artwork, save, or file behavior.
+
 ## v0.9.0-dev1-r1 — Source timeout safeguard
 
 - Caps each metadata source at 10 seconds so an unavailable site cannot keep a search waiting indefinitely.

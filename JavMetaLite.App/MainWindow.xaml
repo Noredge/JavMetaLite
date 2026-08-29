@@ -365,7 +365,10 @@
                             <Button x:Name="SearchButton" Grid.Column="3" Style="{StaticResource PrimaryButton}" Content="{DynamicResource Main.Search}" Click="Search_Click" />
                             <Button Grid.Column="5" Content="{DynamicResource Main.BrowserImport}" Click="Browser_Click" ToolTip="{DynamicResource Main.BrowserImportTooltip}" />
                             <ComboBox x:Name="SourceComboBox" Grid.Column="7" SelectedIndex="0" Style="{StaticResource DarkComboBox}">
-                                <ComboBoxItem Content="{DynamicResource Main.Source.Auto}" Tag="auto" IsSelected="True" />
+                                <ComboBoxItem Content="{DynamicResource Main.Source.Auto}"
+                                              ToolTip="{DynamicResource Main.Source.AutoTooltip}"
+                                              Tag="auto"
+                                              IsSelected="True" />
                                 <ComboBoxItem Content="LibreDMM" Tag="libredmm" />
                                 <ComboBoxItem Content="R18.dev" Tag="r18dev" />
                                 <ComboBoxItem Content="JAVLibrary" Tag="javlibrary" />

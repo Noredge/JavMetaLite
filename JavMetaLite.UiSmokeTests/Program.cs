@@ -1,4 +1,5 @@
 using System.IO;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -44,10 +45,10 @@ internal static class Program
             ?? throw new InvalidOperationException("没有找到搜索按钮。 ");
         var languageExpectations = new[]
         {
-            (Code: UiLanguageCodes.SimplifiedChinese, Search: "搜索资料", Save: "保存"),
-            (Code: UiLanguageCodes.TraditionalChinese, Search: "搜尋資料", Save: "儲存"),
-            (Code: UiLanguageCodes.English, Search: "Search", Save: "Save"),
-            (Code: UiLanguageCodes.Japanese, Search: "検索", Save: "保存")
+            (Code: UiLanguageCodes.SimplifiedChinese, Search: "搜索资料", Save: "保存", AutoSource: "多来源搜索（推荐）"),
+            (Code: UiLanguageCodes.TraditionalChinese, Search: "搜尋資料", Save: "儲存", AutoSource: "多來源搜尋（建議）"),
+            (Code: UiLanguageCodes.English, Search: "Search", Save: "Save", AutoSource: "Multi-source search"),
+            (Code: UiLanguageCodes.Japanese, Search: "検索", Save: "保存", AutoSource: "複数ソース検索（推奨）")
         };
         if (languageComboBox.Items.Count != languageExpectations.Length)
         {
@@ -75,9 +76,33 @@ internal static class Program
             window.UpdateLayout();
             if (searchButton.Content?.ToString() != expectation.Search ||
                 window.FindName("SaveButton") is not Button languageSaveButton ||
-                languageSaveButton.Content?.ToString() != expectation.Save)
+                languageSaveButton.Content?.ToString() != expectation.Save ||
+                sourceComboBox.Items[0] is not ComboBoxItem languageAutoSource ||
+                languageAutoSource.Content?.ToString() != expectation.AutoSource ||
+                string.IsNullOrWhiteSpace(languageAutoSource.ToolTip?.ToString()))
             {
                 throw new InvalidOperationException($"v0.9 {expectation.Code} 没有即时更新主要界面文字。 ");
+            }
+
+            if (expectation.Code == UiLanguageCodes.English)
+            {
+                var sourceText = new FormattedText(
+                    expectation.AutoSource,
+                    CultureInfo.GetCultureInfo("en-US"),
+                    FlowDirection.LeftToRight,
+                    new Typeface(
+                        sourceComboBox.FontFamily,
+                        sourceComboBox.FontStyle,
+                        sourceComboBox.FontWeight,
+                        sourceComboBox.FontStretch),
+                    sourceComboBox.FontSize,
+                    Brushes.White,
+                    VisualTreeHelper.GetDpi(sourceComboBox).PixelsPerDip);
+                var availableTextWidth = sourceComboBox.ActualWidth - 42;
+                if (sourceText.WidthIncludingTrailingWhitespace > availableTextWidth)
+                {
+                    throw new InvalidOperationException("v0.9 英文来源名称会超出选择框的可见宽度。 ");
+                }
             }
         }
         languageComboBox.SelectedItem = languageComboBox.Items

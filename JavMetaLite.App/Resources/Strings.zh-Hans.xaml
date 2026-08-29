@@ -25,6 +25,7 @@
     <sys:String x:Key="Main.BrowserImport">网页导入</sys:String>
     <sys:String x:Key="Main.BrowserImportTooltip">从 JAVLibrary 详情页读取</sys:String>
     <sys:String x:Key="Main.Source.Auto">多来源搜索（推荐）</sys:String>
+    <sys:String x:Key="Main.Source.AutoTooltip">同时搜索 LibreDMM 与 R18.dev（推荐）</sys:String>
     <sys:String x:Key="Main.Source.Manual">仅手动填写</sys:String>
     <sys:String x:Key="Field.Title">标题</sys:String>
     <sys:String x:Key="Field.OriginalTitle">原始标题</sys:String>
@@ -72,7 +73,7 @@
     <sys:String x:Key="Main.CancelOperation">取消当前操作</sys:String>
     <sys:String x:Key="Main.StatusReady">准备就绪，请选择或拖入一个影片</sys:String>
     <sys:String x:Key="Status.LanguageChanged">界面语言已切换</sys:String>
-    <sys:String x:Key="Main.Version">v0.9.0-dev1-r1 · 四语言基座</sys:String>
+    <sys:String x:Key="Main.Version">v0.9.0-dev1-r2 · 四语言基座</sys:String>
 
     <sys:String x:Key="Browser.Title">JAVLibrary 浏览器</sys:String>
     <sys:String x:Key="Browser.Instruction">完成验证并打开正确的影片详情页</sys:String>
@@ -215,6 +216,8 @@
     <sys:String x:Key="Artwork.SharedCount">poster / fanart 共用 · {0} 个封套地址</sys:String>
     <sys:String x:Key="Artwork.Shared">poster / fanart 共用此完整封套</sys:String>
     <sys:String x:Key="Artwork.ManualSource">手动封套</sys:String>
+    <sys:String x:Key="Artwork.Role.Poster">海报</sys:String>
+    <sys:String x:Key="Artwork.Role.Fanart">fanart</sys:String>
     <sys:String x:Key="Source.Manual">手动编辑</sys:String>
     <sys:String x:Key="Source.LocalNfo">本地 NFO</sys:String>
     <sys:String x:Key="Source.LocalImages">本地图片</sys:String>

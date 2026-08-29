@@ -169,9 +169,11 @@ public partial class SavePreviewWindow : Window
 
         if (artworkRole is not null)
         {
+            var artworkRoleLabel = LocalizationService.Get(
+                artworkRole == "poster" ? "Artwork.Role.Poster" : "Artwork.Role.Fanart");
             if (change.Description.Contains("缺失", StringComparison.Ordinal))
             {
-                return LocalizationService.Get("Preview.Description.MissingArtwork", artworkRole);
+                return LocalizationService.Get("Preview.Description.MissingArtwork", artworkRoleLabel);
             }
 
             var key = change.Kind switch
@@ -190,7 +192,7 @@ public partial class SavePreviewWindow : Window
             };
             return key is null
                 ? change.Description
-                : LocalizationService.Get(key, artworkRole);
+                : LocalizationService.Get(key, artworkRoleLabel);
         }
 
         return change.Description;
