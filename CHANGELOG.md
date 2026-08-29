@@ -7,6 +7,7 @@
 - Keeps direct overwrite disabled for first launch, absent or damaged settings, unsupported future settings, and every session where preference memory is not enabled.
 - Updates restored-preference status and logs to state when direct overwrite has been restored, without adding another confirmation or changing the existing save transaction.
 - Adds Core and WPF coverage for schema-v3 persistence, safe legacy migration, explicit restoration, and safe defaults.
+- Passed P01–P03 real restart acceptance for remembered on, remembered off, and preference-memory removal.
 
 ## v0.8.0 — Stable
 
