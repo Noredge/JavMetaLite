@@ -1,0 +1,88 @@
+name: Bug report
+description: Report a reproducible problem with JavMetaLite
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve JavMetaLite. Do not upload movie files, explicit artwork, account information, or private paths. You can open the local log folder from the app, but review and redact a log before attaching it.
+
+  - type: input
+    id: version
+    attributes:
+      label: JavMetaLite version
+      description: Shown in the lower-right corner of the application.
+      placeholder: v1.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: Metadata source
+      options:
+        - Not related to online search
+        - Multi-source search
+        - LibreDMM
+        - R18.dev
+        - JAVLibrary browser import
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Select a test movie
+        2. Search using ...
+        3. Choose ...
+        4. See ...
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2 x64
+    validations:
+      required: true
+
+  - type: dropdown
+    id: destination
+    attributes:
+      label: Destination type
+      options:
+        - Movie location
+        - ID folder at source location
+        - Custom root on the same drive
+        - Custom root on another drive
+        - UNC network share
+        - Not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Additional details
+      description: Add a redacted log excerpt or non-explicit screenshot if useful. Confirm that the original movie SHA-256 is unchanged when reporting a file-operation problem.
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Privacy and safety
+      options:
+        - label: I removed movie files, explicit artwork, account information, and private paths from this report.
+          required: true

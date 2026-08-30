@@ -4,7 +4,11 @@
 
 [简体中文](README.zh-Hans.md) · **繁體中文** · [English](README.md) · [日本語](README.ja.md)
 
+[![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
+
 一次只整理一部影片的輕量 Windows metadata 編輯器。選擇或拖入影片、搜尋資料、逐項檢查及修改，再於儲存前預覽所有檔案變更。JavMetaLite 不會掃描媒體庫，也不會在使用者確認前寫入或移動影片。
+
+![JavMetaLite v1.0.0 主要介面](docs/images/javmetalite-v1.0.0-main.zh-Hant.png)
 
 ## 主要功能
 

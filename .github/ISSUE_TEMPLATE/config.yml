@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Usage guide
+    url: https://github.com/Noredge/JavMetaLite#quick-start
+    about: Read the quick start, source roles, limits, and safety notes before reporting a bug.
