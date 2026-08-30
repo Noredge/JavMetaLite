@@ -8,7 +8,7 @@ internal static class LocalizationService
 {
     private const string DictionaryMarker = "JavMetaLite.Localization";
 
-    public static string CurrentLanguageCode { get; private set; } = UiLanguageCodes.SimplifiedChinese;
+    public static string CurrentLanguageCode { get; private set; } = UiLanguageCodes.English;
 
     public static string DetectSystemLanguage()
     {
@@ -36,13 +36,13 @@ internal static class LocalizationService
             return UiLanguageCodes.English;
         }
 
-        return UiLanguageCodes.SimplifiedChinese;
+        return UiLanguageCodes.English;
     }
 
     public static string ResolvePreference(string? languageCode) =>
         string.Equals(languageCode, UiLanguageCodes.System, StringComparison.OrdinalIgnoreCase)
             ? DetectSystemLanguage()
-            : UiLanguageCodes.Normalize(languageCode, UiLanguageCodes.SimplifiedChinese);
+            : UiLanguageCodes.Normalize(languageCode, UiLanguageCodes.English);
 
     public static void ApplyLanguage(string? languageCode)
     {

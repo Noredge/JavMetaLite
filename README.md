@@ -1,170 +1,103 @@
-# JAV Metadata Lite
+# JavMetaLite
 
-一个只处理单个影片的轻量 Windows metadata 工具。它不会扫描整个媒体库；文件整理和直接保存都默认关闭，用户可以先预览所有变更，也可以明确选择跳过预览并直接覆盖 metadata。
+<img src="JavMetaLite.App/Resources/Brand/JavMetaLite-64.png" width="64" alt="JavMetaLite icon">
 
-## v0.9.0 稳定版
+[简体中文](README.zh-Hans.md) · [繁體中文](README.zh-Hant.md) · **English** · [日本語](README.ja.md)
 
-`v0.9.0` 已通过完整自动化门禁、dev1–dev3 分阶段人工检查和 RC1 最终验收。它提供简体中文、繁體中文、English、日本語即时切换，并统一主窗口、保存预览和内置浏览器的深色主题；新应用图标、深色滚动条与精确匹配的原生标题栏也已正式接入。
+JavMetaLite is a lightweight Windows metadata editor that handles one movie at a time. Select or drop a movie, search selected sources, review and edit every field, then preview all file changes before saving. JavMetaLite does not scan a media library or write or move a movie before the user confirms the operation.
 
-本版本只改善界面、图标与语言，不改变单片搜索、来源选择、NFO/图片、预览、路径、覆盖、影片传输、回滚或偏好逻辑。最终验收确认 R01–R05 与影片 SHA-256 全部通过，完整记录见 [`MANUAL-ACCEPTANCE-v0.9.0-rc1.md`](MANUAL-ACCEPTANCE-v0.9.0-rc1.md)。
+## Features
 
-## v0.9.0-dev3 图标与视觉收尾
+- Handles only the selected movie, with no batch scraping or library scan.
+- Uses LibreDMM for Japanese metadata, R18.dev for English metadata, and JAVLibrary as a manual browser fallback.
+- Lets the user choose a source for each field after a multi-source search and continue editing manually.
+- Reads and safely updates local NFO, poster, and fanart files while preserving unknown XML.
+- Produces Jellyfin-compatible NFO, poster, fanart, and optional `extrafanart/` files.
+- Keeps the movie in place, creates an ID folder beside it, or organizes it under a custom destination root.
+- Uses safe copy and SHA-256 verification for cross-volume or UNC destinations, with rollback on failure.
+- Shows the actual file changes before saving by default and always blocks conflicting target movies.
+- Ships as a portable, self-contained Windows x64 executable with no .NET Runtime installation required.
 
-`v0.9.0-dev3` 接入新的影片整理图标：影片卡、metadata 卡与文件夹组成中性的单片整理意象。Windows ICO 内含 16–256 px 多尺寸资源，其中 16/24 px 使用专门简化版本；EXE、任务栏、所有窗口标题栏与主窗口品牌区域保持一致。本轮只调整视觉资源，不改变任何功能行为。简短人工检查见 [`MANUAL-CHECK-v0.9.0-dev3.md`](MANUAL-CHECK-v0.9.0-dev3.md)。
+## Quick start
 
-`v0.9.0-dev3-r1` 使用 Windows 原生深色标题栏，并为三个窗口统一深色滚动条；保留系统窗口按钮以及滚轮、箭头、翻页和拖动操作。人工复查见 [`MANUAL-CHECK-v0.9.0-dev3-r1.md`](MANUAL-CHECK-v0.9.0-dev3-r1.md)。
+1. Download `JavMetaLite-v1.0.0-win-x64-portable.zip` from [GitHub Releases](https://github.com/Noredge/JavMetaLite/releases).
+2. Verify the archive against `SHA256SUMS.txt` from the same release, then extract it.
+3. Run `JavMetaLite.exe` and choose or drop one movie.
+4. Verify the detected ID, search for metadata, and choose suitable text and cover sources.
+5. Edit any fields and choose the outputs and destination.
+6. Review the save preview and confirm the operation.
 
-`v0.9.0-dev3-r2` 在受支持的 Windows 上把原生标题栏精确设为软件顶部区域的 `#111821`，同时匹配标题文字与窗口边框；旧版系统继续使用安全的原生深色回退。人工复查见 [`MANUAL-CHECK-v0.9.0-dev3-r2.md`](MANUAL-CHECK-v0.9.0-dev3-r2.md)。
+Windows may show a SmartScreen warning for the unsigned executable on first launch. Download only from this repository's official releases and verify the SHA-256 checksum.
 
-## v0.9.0-dev1 四语言基座
-
-`v0.9.0-dev1` 提供简体中文、繁體中文、English 与日本語四种界面语言。语言可以在主窗口顶部即时切换，并独立于“记住保存偏好”跨重启保留；首次运行跟随 Windows 支持的语言，其他系统语言安全回退到简体中文，旧版配置继续使用原来的简体中文界面。
-
-主窗口、内置浏览器、保存前预览、常用状态、提示和进度文字均已接入同一套语言资源。四套资源使用完全相同的键，并由自动化测试检查即时切换和配置迁移。本轮不改变搜索、来源选择、NFO、图片、目标路径、覆盖、影片移动或事务逻辑。完整路线见 [`ROADMAP-v0.9.0.md`](ROADMAP-v0.9.0.md)，简短人工检查见 [`MANUAL-CHECK-v0.9.0-dev1.md`](MANUAL-CHECK-v0.9.0-dev1.md)。
-
-`v0.9.0-dev1-r1` 修复人工检查时发现的来源长时间无响应：每个资料来源最多等待 10 秒。多来源模式会保留已经成功的来源，单来源模式会显示对应语言的超时提示；用户主动取消、来源优先级与资料合并规则保持不变。
-
-`v0.9.0-dev1-r2` 修正英文来源选择框的截字，并为四种语言补充完整的来源说明提示；同时按日语软件界面的常用表达统一术语与标点。保存预览中的海报与 fanart 名称也会随界面语言切换。本修订不改变任何搜索、资料或文件行为。
-
-`v0.9.0-dev2-r1` 为主窗口、保存预览和内置浏览器建立共用深色主题，统一按钮、输入框、复选框、下拉框和提示框的尺寸与交互状态，并整理最小窗口和长文本布局。r1 进一步修正下拉菜单与选择框、选中项与菜单圆角之间的视觉碰撞。功能位置和操作顺序保持不变；本轮人工复查见 [`MANUAL-CHECK-v0.9.0-dev2-r1.md`](MANUAL-CHECK-v0.9.0-dev2-r1.md)，完整 dev2 检查见 [`MANUAL-CHECK-v0.9.0-dev2.md`](MANUAL-CHECK-v0.9.0-dev2.md)。
-
-## v0.8.1 稳定版
-
-`v0.8.1` 已通过完整自动化门禁和 P01–P03 真实重启验收。它让“记住保存偏好”完整覆盖用户明确选择的保存方式：如果同时勾选“直接保存并覆盖（跳过预览）”，下次启动也会恢复该状态；如果不启用偏好记忆，则不会保留。
-
-配置升级为 schema v3。既有 v1/v2 配置没有直接覆盖授权，因此迁移后仍默认关闭；首次运行、损坏配置和不受支持的未来配置也继续使用关闭状态。保存预览、覆盖范围、影片保护和事务回滚均未改变。路线见 [`ROADMAP-v0.8.1.md`](ROADMAP-v0.8.1.md)，简短人工检查见 [`MANUAL-CHECK-v0.8.1-dev1.md`](MANUAL-CHECK-v0.8.1-dev1.md)。
-
-P01–P03 真实重启检查已经全部通过，确认开启、关闭和取消偏好记忆三种路径均符合预期。
-
-## v0.8.0 稳定版
-
-`v0.8.0` 已通过完整自动化门禁、dev1–dev3 分阶段人工检查和 RC1 最终集成验收。它支持从命令行或 Windows“打开方式”直接载入一部影片，并可在用户明确允许后记住安全的目标位置、重命名与 metadata 输出偏好，以及最多 5 条最近自定义根目录。
-
-危险的“直接保存并覆盖”始终不会跨启动保留；不可用根目录只会提示并阻止保存，程序不会自动创建它。最终验收确认启动入口、安全偏好与最近目录、不可用目标隔离、真实自定义目标保存、本地重新载入，以及影片与无变化 sidecar 的 SHA-256 检查全部正常。完整记录见 [`MANUAL-ACCEPTANCE-v0.8.0-rc1.md`](MANUAL-ACCEPTANCE-v0.8.0-rc1.md)。
-
-## v0.8.0-dev3 最近目标根目录
-
-`v0.8.0-dev3` 在现有自定义路径框旁加入一个紧凑的“最近目录”菜单，最多记住 5 个用户明确使用过的根目录。可以直接切换、移除当前记录或清空历史；删除历史不会清空当前路径。不存在、离线磁盘或暂不可用的 UNC 路径会保留但阻止保存，程序不会自行创建根目录。
-
-最近目录只在启用“记住保存偏好”时跨重启保留。dev2 配置会自动迁移，危险的“直接保存并覆盖”仍然不会持久化。人工检查见 [`MANUAL-CHECK-v0.8.0-dev3.md`](MANUAL-CHECK-v0.8.0-dev3.md)。
-
-## v0.8.0-dev2 安全偏好
-
-`v0.8.0-dev2` 增加明确的“记住保存偏好”开关。只有勾选后，程序才会在关闭时记住目标位置、自定义根目录、影片重命名与 NFO/图片输出选项；“直接保存并覆盖（跳过预览）”不会被记住，每次启动都保持关闭。配置损坏或来自更高版本时会使用安全默认值，不会影响程序启动、影片或 metadata。
-
-配置文件位于 `%LOCALAPPDATA%\JavMetaLite\settings.json`，采用带版本号的 JSON 与同目录原子替换。完整 v0.8 路线见 [`ROADMAP-v0.8.0.md`](ROADMAP-v0.8.0.md)，dev2 简短人工检查见 [`MANUAL-CHECK-v0.8.0-dev2.md`](MANUAL-CHECK-v0.8.0-dev2.md)。
-
-## v0.8.0-dev1 启动载入
-
-`v0.8.0-dev1` 允许 Windows 在启动 JavMetaLite 时传入一个影片路径。命令行与“打开方式”都会复用现有的影片选择流程，直接识别番号并读取本地 NFO、poster 与 fanart；启动本身不会自动联网搜索，也不会写入或移动影片及 metadata。空路径、多个参数、文件夹、不存在路径及不支持格式会明确提示，关闭提示后仍可继续使用主窗口。
-
-```powershell
-& '.\JavMetaLite.exe' 'D:\Movies\SNOS-255.mp4'
-```
-
-dev1 不自动注册 Windows 文件关联。完整 v0.8 路线见 [`ROADMAP-v0.8.0.md`](ROADMAP-v0.8.0.md)，人工检查见 [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md)。
-
-## v0.7.0 稳定版
-
-`v0.7.0` 已通过完整自动化门禁、RC1 跨盘与 Jellyfin 验收、RC2 在线来源优先复测，以及 RC3 条件提示复测。它加入三种明确的目标位置，在保持影片重命名独立可选的同时，安全支持同卷移动及经过 SHA-256 双重校验的跨卷或 UNC 复制事务。搜索后优先显示新的在线非空文字资料，但仍保留本地 NFO、手动值和本地图片作为可选来源。普通标准 NFO 更新只显示“更新 NFO”；只有实际读取到额外 XML 时才提示保留未知 XML。
-
-RC2 已确认搜索后在线非空文字优先、在线空字段回退本地、本地与手动候选可恢复，并保持本地 poster/fanart。RC3 已确认标准与扩展 NFO 的预览文字准确，且不改变 NFO 写入、图片、目标路径或跨卷事务。当前没有真实 UNC 测试环境，真实共享测试继续作为非阻塞可选项。
-
-完整范围与分阶段安排见 [`ROADMAP-v0.7.0.md`](ROADMAP-v0.7.0.md)。
-
-## v0.6.0 稳定版
-
-`v0.6.0` 已通过完整自动化门禁、dev4 B01–B07 和 RC1 R01–R06 最终 Jellyfin 往返验收。它完成单片本地 metadata 再编辑闭环：载入既有 NFO 与 poster/fanart、保留本地默认值、加入在线候选、逐字段或手动修改、预览实际变更，并安全更新或迁移 Jellyfin sidecar。保存只更新已支持的 NFO 字段，未知 XML、未替换图片和影片字节继续受保护；解析失败、外部修改和目标冲突会阻止覆盖。Jellyfin 重扫与 JavMetaLite 二次载入均已验证，影片 SHA-256 保持一致。
-
-## v0.5.0 稳定版
-
-`v0.5.0` 已通过完整自动化门槛与 RC1 六项人工集成验收。“多来源搜索（推荐）”会分别取得 LibreDMM 与 R18.dev 的完整资料，并允许逐字段选择与恢复手动值。左侧封套区域右上方只提供一个紧凑的“封套 / Fanart”来源下拉，poster 与 fanart 始终共用所选来源；完整封套加载后显示“横板封套：尺寸”，不显示等待提示，搜索前后两个预览框保持相同间距。不提供独立剧照来源，也不跨网站合并剧照，继续保持轻量单片编辑器定位。
-
-## v0.4.0 稳定版
-
-- 拖入或选择一个影片文件
-- 从常见文件名中识别番号
-- 来源可选择“自动补全”、LibreDMM、R18.dev、JAVLibrary 或纯手动填写
-- 自动补全以 LibreDMM 为日文主来源，只用 R18.dev 填补空字段
-- LibreDMM 不可用或未找到时自动回退到 R18.dev
-- 优先读取 LibreDMM 影片详情 JSON 的完整日文 Description，并只移除末尾商店配送说明
-- 自动读取 LibreDMM 与 R18.dev 返回的样张列表
-- R18.dev 使用其 Gallery 对应的 DMM 高清封套与 Sample Images 地址
-- R18.dev 以英文标题、片商、导演、演员和类型为主，日文标题保存在 `originaltitle`
-- 将 LibreDMM 演员图片网址写入 NFO 的演员资料（不额外生成 `actors/` 文件夹）
-- JAVLibrary 要求验证时，可使用内置 WebView2 浏览器手动打开详情页并读取
-- 所有字段都可以在保存前修改
-- 默认先显示完整变更预览；勾选“直接保存并覆盖（跳过预览）”后从主窗口直接执行
-- 可选创建标准番号文件夹，并可独立选择是否把影片重命名为番号
-- 标准番号文件夹始终建立在影片当前目录内；若当前目录已经正好以番号命名，则直接使用该目录
-- 影片目标已存在时阻止执行，永远不会覆盖另一个影片
-- 先在临时目录生成完整 metadata，再提交输出并最后移动影片
-- 提交失败时自动删除新输出、恢复被覆盖的 metadata，并尽量保持原影片位置不变
-- 本地记录搜索来源、图片候选失败、保存步骤和恢复结果，界面提供“打开日志”入口
-- 在影片旁边生成同名 `.nfo`
-- 优先使用 DMM/FANZA 高清横版原图，而不是低清 `ps.jpg`
-- 自动截取横版原图右半部分，生成 `<影片名>-poster.jpg`
-- 使用作品完整横版封套生成 `<影片名>-fanart.jpg`
-- 可选把所有有效 Sample Images 保存到 `extrafanart/`
-- NFO 同时写入本地 poster 与 fanart 文件名
-- 左侧同时预览 poster 与真正的横版 fanart
-- 默认拒绝覆盖已有 NFO 或封面
-- 未勾选“直接保存并覆盖（跳过预览）”时，如检测到重复输出，会在预览窗口要求明确确认
-- 勾选“直接保存并覆盖（跳过预览）”后不再弹出变更预览，已有 NFO 或图片会直接覆盖
-- 默认不修改影片本身；“整理到番号文件夹”和“影片重命名为番号”都默认关闭
-- 修复网站验证时内置浏览器没有打开的问题
-- 修复网页导入后远程封面触发 `This Freezable cannot be frozen.` 的问题
-- 修复来源选择框下拉列表过白、文字难以辨认的问题
-
-## 开发构建
-
-需要 .NET 10 SDK：
-
-```powershell
-dotnet build .\JavMetaLite.App\JavMetaLite.App.csproj
-dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
-```
-
-运行完整自动化测试门槛（核心 smoke、文件事务与目标路径回归、WPF UI smoke）：
-
-```powershell
-.\scripts\Test-Automated.ps1
-```
-
-完整自动化测试分层、回归范围和手动检查边界见 [`TESTING.md`](TESTING.md)。
-
-v0.9.0 dev1 的四语言检查见 [`MANUAL-CHECK-v0.9.0-dev1.md`](MANUAL-CHECK-v0.9.0-dev1.md)。v0.8.1 dev1 的直接覆盖偏好检查见 [`MANUAL-CHECK-v0.8.1-dev1.md`](MANUAL-CHECK-v0.8.1-dev1.md)。v0.8.0 RC1 的最终集成检查见 [`MANUAL-ACCEPTANCE-v0.8.0-rc1.md`](MANUAL-ACCEPTANCE-v0.8.0-rc1.md)，dev3 的最近目录检查见 [`MANUAL-CHECK-v0.8.0-dev3.md`](MANUAL-CHECK-v0.8.0-dev3.md)，dev2 的安全偏好检查见 [`MANUAL-CHECK-v0.8.0-dev2.md`](MANUAL-CHECK-v0.8.0-dev2.md)，dev1 的启动载入检查见 [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md)。
-
-v0.7.0 RC3 的全部通过记录见 [`MANUAL-RETEST-v0.7.0-rc3.md`](MANUAL-RETEST-v0.7.0-rc3.md)，RC2 的通过记录见 [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md)，RC1 的完整通过记录见 [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md)。v0.6.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md)，v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。
-
-发布 Windows x64 单文件版本：
-
-```powershell
-dotnet publish .\JavMetaLite.App\JavMetaLite.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
-```
-
-## 输出示例
+## Output example
 
 ```text
-影片当前目录/
-  IPX-123/            # 勾选“整理到番号文件夹”时在原地创建
+Destination root/
+  IPX-123/
     IPX-123.mp4
     IPX-123.nfo
     IPX-123-poster.jpg
     IPX-123-fanart.jpg
-    extrafanart/      # 勾选“保存全部剧照”时生成
+    extrafanart/       # optional
       fanart1.jpg
       fanart2.jpg
 ```
 
-## 当前边界
+## Metadata sources
 
-- v0.9 仍然是单片编辑器，不提供媒体库扫描或批量刮削。
-- 整理功能只移动当前选择的影片并生成本次选择的 metadata；不会自动搬运未知的字幕或旧伴随文件。
-- v0.8.0 支持同卷、跨盘符与 UNC 目标；真实 UNC 共享尚未在当前环境实测，网络速度、权限与可用性取决于 Windows 和目标服务器。
-- 软件不会写入 MP4/MKV 容器内部 metadata。
-- `actors/` 暂不生成；演员图片以 NFO 内的远程 `thumb` 提供，`extrafanart/` 是可选输出。
-- 网站结构变化可能需要更新 `JavLibraryClient`。
-- 内置浏览器依赖 Microsoft Edge WebView2 Runtime；Windows 10/11 通常已经安装。
-- 请遵守资料来源网站的使用条款，仅以合理频率查询。
-- 运行日志默认位于 `%LOCALAPPDATA%\JavMetaLite\Logs`，保留最近 14 天。
+| Source | Primary use | Notes |
+| --- | --- | --- |
+| LibreDMM | Japanese metadata, full cover, sample images | Recommended Japanese source |
+| R18.dev | English metadata, full cover, Gallery | English output and supporting source |
+| JAVLibrary | Manual browser import | Use when verification is required or automatic sources fail |
+
+Source sites can change or become temporarily unavailable. Multi-source search limits how long each source may wait; switch sources or enter data manually if a source fails instead of restarting the application repeatedly.
+
+## Safety model
+
+- Does not move the movie or directly overwrite metadata by default.
+- The preview lists files that will be created, updated, moved, or left unchanged.
+- Never overwrites another movie when the target movie already exists.
+- Verifies file size and SHA-256 before removing the source during cross-volume transfers.
+- Restores overwritten metadata and attempts to preserve the original movie location if a commit fails.
+- Searching sends the detected movie ID to the selected metadata sources. Selecting a movie and reading local NFO data does not automatically write anything online or locally.
+- Manual JAVLibrary import reads only the current movie page; its embedded WebView2 browser may retain cookies used for site verification.
+
+No file organizer replaces a backup. Back up important media and use a test copy the first time you use a custom destination.
+
+## Requirements and limits
+
+- Windows 10/11 x64.
+- On first launch, follows supported Simplified Chinese, Traditional Chinese, English, or Japanese Windows display languages; other system languages fall back to English. Later launches remember the user's selection.
+- The embedded browser requires Microsoft Edge WebView2 Runtime, normally already installed on Windows 10/11.
+- Supports selecting MP4, MKV, AVI, and WMV movies; does not write metadata inside the media container.
+- Does not scan a library, process movies in batches, or automatically move unknown subtitle or companion files.
+- Does not currently create `actors/`; actor images are provided through remote `thumb` entries in the NFO.
+- Network-share speed, permissions, and availability depend on Windows and the destination server.
+- Follow each source site's terms and query only at a reasonable rate.
+- Metadata sources may contain adult material. Use the application only where it is legal and appropriate for your age and location.
+
+Logs are stored in `%LOCALAPPDATA%\JavMetaLite\Logs` and kept for 14 days by default. User preferences are stored in `%LOCALAPPDATA%\JavMetaLite\settings.json`.
+
+## Development and testing
+
+.NET 10 SDK is required:
+
+```powershell
+dotnet build .\JavMetaLite.App\JavMetaLite.App.csproj
+.\scripts\Test-Automated.ps1
+```
+
+Create a clean Windows x64 portable package and SHA-256 checksum:
+
+```powershell
+.\scripts\New-ReleasePackage.ps1
+```
+
+See [TESTING.md](TESTING.md) for the automated test layers and [CHANGELOG.md](CHANGELOG.md) for version history.
+
+## License
+
+JavMetaLite is available under the [MIT License](LICENSE), copyright © 2026 Noredge. Third-party components remain under their respective terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+JavMetaLite is not affiliated with the metadata source sites it reads. The project's MIT License does not relicense data provided by those sites.

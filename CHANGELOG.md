@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.0 — First public stable release
+
+- Establishes the accepted v0.9.0 feature set as the first public, feature-frozen release.
+- Adds the MIT License under `Copyright (c) 2026 Noredge` and preserves separate third-party notices.
+- Replaces the development-history-first README with matching Simplified Chinese, Traditional Chinese, English, and Japanese public guides covering quick start, safety, source roles, limits, and build instructions.
+- Adds a repeatable release script that produces one clean Windows x64 portable ZIP plus a SHA-256 checksum file.
+- Adds compact portable instructions and a durable public testing guide without changing metadata or file-operation behavior.
+- Uses English when a first-run Windows display language is outside the four supported interface languages; saved user choices remain unchanged.
+- Clarifies that searches send the detected ID to selected sources and that the embedded WebView2 browser may retain site-verification cookies.
+
 ## v0.9.0 — Stable
 
 - Promotes RC1 without functional changes after R01–R05 and movie SHA-256 verification all passed.

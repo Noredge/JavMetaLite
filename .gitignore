@@ -14,6 +14,7 @@ TestResults/
 # Published executables stay outside version control
 publish/
 publish-*/
+release/
 *.exe
 *.pdb
 
