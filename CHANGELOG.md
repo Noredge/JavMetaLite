@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.9.0-dev2-r1 — Dropdown clarity
+
+- Add a clear gap between combo boxes and their menus.
+- Inset menu items and round their selection backgrounds so they no longer collide with the popup corners.
+- Keep all behavior and selection logic unchanged.
+
 ## v0.9.0-dev2 — Interface consistency
 
 - Introduces one shared dark theme for the main window, save preview, and embedded browser.

@@ -2,6 +2,7 @@ using System.IO;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -60,6 +61,23 @@ internal static class Program
             searchButton.MinHeight < 36 || idTextBox.MinHeight < 36 || sourceComboBox.MinHeight < 36)
         {
             throw new InvalidOperationException("v0.9 dev2 共用主题或统一控件尺寸未生效。 ");
+        }
+        sourceComboBox.ApplyTemplate();
+        var dropDownPopup = sourceComboBox.Template.FindName("PART_Popup", sourceComboBox) as Popup
+            ?? throw new InvalidOperationException("没有找到来源选择框的下拉菜单。 ");
+        var dropDownBorder = dropDownPopup.Child as Border
+            ?? throw new InvalidOperationException("没有找到下拉菜单边框。 ");
+        var comboItemStyle = window.FindResource("DarkComboBoxItem") as Style
+            ?? throw new InvalidOperationException("没有找到来源选项样式。 ");
+        var comboItemTemplate = comboItemStyle.Setters.OfType<Setter>()
+            .FirstOrDefault(setter => setter.Property == Control.TemplateProperty)?.Value as ControlTemplate
+            ?? throw new InvalidOperationException("没有找到来源选项模板。 ");
+        var sourceItemBorder = comboItemTemplate.LoadContent() as Border
+            ?? throw new InvalidOperationException("没有找到来源选项边框。 ");
+        if (dropDownBorder.Margin.Top < 4 || dropDownBorder.Padding.Left < 3 ||
+            dropDownBorder.CornerRadius.TopLeft < 7 || sourceItemBorder.CornerRadius.TopLeft < 4)
+        {
+            throw new InvalidOperationException("v0.9 dev2-r1 下拉菜单间距或圆角未生效。 ");
         }
         var normalWidth = window.Width;
         var normalHeight = window.Height;
@@ -796,7 +814,7 @@ internal static class Program
         }
         browserWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True directSaveRemembered=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True sharedTheme=True minimumLayout=True browserLayout=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True directSaveRemembered=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True sharedTheme=True minimumLayout=True browserLayout=True dropdownGeometry=True");
         window.Close();
         application.Shutdown();
     }
