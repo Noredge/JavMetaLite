@@ -7,9 +7,10 @@
     <Nullable>enable</Nullable>
     <AssemblyName>JavMetaLite</AssemblyName>
     <RootNamespace>JavMetaLite.App</RootNamespace>
-    <Version>0.8.1</Version>
-    <FileVersion>0.8.1.1</FileVersion>
-    <InformationalVersion>0.8.1</InformationalVersion>
+    <Version>0.9.0</Version>
+    <FileVersion>0.9.0.9</FileVersion>
+    <InformationalVersion>0.9.0</InformationalVersion>
+    <ApplicationIcon>Resources\Brand\JavMetaLite.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
@@ -20,5 +21,10 @@
   <ItemGroup>
     <ProjectReference Include="..\JavMetaLite.Core\JavMetaLite.Core.csproj" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources\Brand\JavMetaLite.ico" />
+    <Resource Include="Resources\Brand\JavMetaLite-64.png" />
   </ItemGroup>
 </Project>

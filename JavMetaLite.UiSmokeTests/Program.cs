@@ -1,10 +1,13 @@
 using System.IO;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using JavMetaLite.App;
 using JavMetaLite.Core.Models;
 using JavMetaLite.Core.Services;
@@ -17,6 +20,10 @@ internal static class Program
     private static void Main()
     {
         var application = new Application();
+        application.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("/JavMetaLite;component/Resources/Theme.xaml", UriKind.Relative)
+        });
         SynchronizationContext.SetSynchronizationContext(
             new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
         var window = new MainWindow();
@@ -26,6 +33,12 @@ internal static class Program
         if (handle == IntPtr.Zero || !window.IsVisible || window.Title != "JAV Metadata Lite")
         {
             throw new InvalidOperationException("主窗口未成功创建。 ");
+        }
+        var nativeCaptionColor = TryReadDwmIntAttribute(handle, 35);
+        if (nativeCaptionColor is not null && nativeCaptionColor != 0x00211811)
+        {
+            throw new InvalidOperationException(
+                $"v0.9 dev3-r2 标题栏颜色不匹配：0x{nativeCaptionColor:X8}。 ");
         }
 
         var onePixelPng = Convert.FromBase64String(
@@ -38,6 +51,138 @@ internal static class Program
 
         var sourceComboBox = window.FindName("SourceComboBox") as ComboBox
             ?? throw new InvalidOperationException("没有找到来源选择框。 ");
+        var languageComboBox = window.FindName("LanguageComboBox") as ComboBox
+            ?? throw new InvalidOperationException("没有找到语言选择框。 ");
+        var searchButton = window.FindName("SearchButton") as Button
+            ?? throw new InvalidOperationException("没有找到搜索按钮。 ");
+        var browserImportButton = window.FindName("BrowserImportButton") as Button
+            ?? throw new InvalidOperationException("没有找到网页导入按钮。 ");
+        var idTextBox = window.FindName("IdTextBox") as TextBox
+            ?? throw new InvalidOperationException("没有找到番号输入框。 ");
+        var searchToolbar = window.FindName("SearchToolbar") as Border
+            ?? throw new InvalidOperationException("没有找到搜索工具栏。 ");
+        var chooseVideoButton = window.FindName("ChooseVideoButton") as Button
+            ?? throw new InvalidOperationException("没有找到选择影片按钮。 ");
+        var brandIconImage = window.FindName("BrandIconImage") as Image
+            ?? throw new InvalidOperationException("没有找到应用品牌图标。 ");
+        if (window.Icon is null || brandIconImage.Source is null)
+        {
+            throw new InvalidOperationException("v0.9 dev3 窗口图标或页眉图标未成功载入。 ");
+        }
+        if (!application.Resources.MergedDictionaries.Any(dictionary =>
+                dictionary.Source?.OriginalString.EndsWith("Resources/Theme.xaml", StringComparison.OrdinalIgnoreCase) == true) ||
+            searchButton.MinHeight < 36 || idTextBox.MinHeight < 36 || sourceComboBox.MinHeight < 36)
+        {
+            throw new InvalidOperationException("v0.9 dev2 共用主题或统一控件尺寸未生效。 ");
+        }
+        var scrollBarStyle = application.TryFindResource(typeof(ScrollBar)) as Style
+            ?? throw new InvalidOperationException("没有找到共用滚动条样式。 ");
+        var themedScrollBar = new ScrollBar { Style = scrollBarStyle };
+        themedScrollBar.ApplyTemplate();
+        if (themedScrollBar.Width > 12 ||
+            themedScrollBar.Template.FindName("PART_Track", themedScrollBar) is not Track)
+        {
+            throw new InvalidOperationException("v0.9 dev3-r1 深色滚动条样式未生效。 ");
+        }
+        sourceComboBox.ApplyTemplate();
+        var dropDownPopup = sourceComboBox.Template.FindName("PART_Popup", sourceComboBox) as Popup
+            ?? throw new InvalidOperationException("没有找到来源选择框的下拉菜单。 ");
+        var dropDownBorder = dropDownPopup.Child as Border
+            ?? throw new InvalidOperationException("没有找到下拉菜单边框。 ");
+        var comboItemStyle = window.FindResource("DarkComboBoxItem") as Style
+            ?? throw new InvalidOperationException("没有找到来源选项样式。 ");
+        var comboItemTemplate = comboItemStyle.Setters.OfType<Setter>()
+            .FirstOrDefault(setter => setter.Property == Control.TemplateProperty)?.Value as ControlTemplate
+            ?? throw new InvalidOperationException("没有找到来源选项模板。 ");
+        var sourceItemBorder = comboItemTemplate.LoadContent() as Border
+            ?? throw new InvalidOperationException("没有找到来源选项边框。 ");
+        if (dropDownBorder.Margin.Top < 4 || dropDownBorder.Padding.Left < 3 ||
+            dropDownBorder.CornerRadius.TopLeft < 7 || sourceItemBorder.CornerRadius.TopLeft < 4)
+        {
+            throw new InvalidOperationException("v0.9 dev2-r1 下拉菜单间距或圆角未生效。 ");
+        }
+        var normalWidth = window.Width;
+        var normalHeight = window.Height;
+        window.Width = window.MinWidth;
+        window.Height = window.MinHeight;
+        window.UpdateLayout();
+        var languageExpectations = new[]
+        {
+            (Code: UiLanguageCodes.SimplifiedChinese, Search: "搜索资料", Save: "保存", AutoSource: "多来源搜索（推荐）", Font: "Segoe UI, Microsoft YaHei UI"),
+            (Code: UiLanguageCodes.TraditionalChinese, Search: "搜尋資料", Save: "儲存", AutoSource: "多來源搜尋（建議）", Font: "Segoe UI, Microsoft JhengHei UI"),
+            (Code: UiLanguageCodes.English, Search: "Search", Save: "Save", AutoSource: "Multi-source search", Font: "Segoe UI"),
+            (Code: UiLanguageCodes.Japanese, Search: "検索", Save: "保存", AutoSource: "複数ソース検索（推奨）", Font: "Segoe UI, Yu Gothic UI")
+        };
+        if (languageComboBox.Items.Count != languageExpectations.Length)
+        {
+            throw new InvalidOperationException("v0.9 语言选择框没有提供四种语言。 ");
+        }
+        HashSet<object>? baselineLocalizationKeys = null;
+        foreach (var expectation in languageExpectations)
+        {
+            var dictionary = new ResourceDictionary
+            {
+                Source = new Uri(
+                    $"/JavMetaLite;component/Resources/Strings.{expectation.Code}.xaml",
+                    UriKind.Relative)
+            };
+            var keys = dictionary.Keys.Cast<object>().ToHashSet();
+            baselineLocalizationKeys ??= keys;
+            if (!baselineLocalizationKeys.SetEquals(keys))
+            {
+                throw new InvalidOperationException($"v0.9 {expectation.Code} 语言资源键不完整。 ");
+            }
+
+            languageComboBox.SelectedItem = languageComboBox.Items
+                .OfType<ComboBoxItem>()
+                .Single(item => item.Tag?.ToString() == expectation.Code);
+            window.UpdateLayout();
+            if (searchButton.Content?.ToString() != expectation.Search ||
+                window.FindName("SaveButton") is not Button languageSaveButton ||
+                languageSaveButton.Content?.ToString() != expectation.Save ||
+                sourceComboBox.Items[0] is not ComboBoxItem languageAutoSource ||
+                languageAutoSource.Content?.ToString() != expectation.AutoSource ||
+                string.IsNullOrWhiteSpace(languageAutoSource.ToolTip?.ToString()) ||
+                searchButton.FontFamily.Source != expectation.Font)
+            {
+                throw new InvalidOperationException($"v0.9 {expectation.Code} 没有即时更新主要界面文字。 ");
+            }
+            if (!FitsInside(idTextBox, searchToolbar) ||
+                !FitsInside(searchButton, searchToolbar) ||
+                !FitsInside(browserImportButton, searchToolbar) ||
+                !FitsInside(sourceComboBox, searchToolbar) ||
+                !FitsInside(chooseVideoButton, window))
+            {
+                throw new InvalidOperationException($"v0.9 dev2 {expectation.Code} 在最小窗口下出现控件越界。 ");
+            }
+
+            if (expectation.Code == UiLanguageCodes.English)
+            {
+                var sourceText = new FormattedText(
+                    expectation.AutoSource,
+                    CultureInfo.GetCultureInfo("en-US"),
+                    FlowDirection.LeftToRight,
+                    new Typeface(
+                        sourceComboBox.FontFamily,
+                        sourceComboBox.FontStyle,
+                        sourceComboBox.FontWeight,
+                        sourceComboBox.FontStretch),
+                    sourceComboBox.FontSize,
+                    Brushes.White,
+                    VisualTreeHelper.GetDpi(sourceComboBox).PixelsPerDip);
+                var availableTextWidth = sourceComboBox.ActualWidth - 42;
+                if (sourceText.WidthIncludingTrailingWhitespace > availableTextWidth)
+                {
+                    throw new InvalidOperationException("v0.9 英文来源名称会超出选择框的可见宽度。 ");
+                }
+            }
+        }
+        window.Width = normalWidth;
+        window.Height = normalHeight;
+        languageComboBox.SelectedItem = languageComboBox.Items
+            .OfType<ComboBoxItem>()
+            .Single(item => item.Tag?.ToString() == UiLanguageCodes.SimplifiedChinese);
+        window.UpdateLayout();
         sourceComboBox.IsDropDownOpen = true;
         window.UpdateLayout();
         var firstItem = sourceComboBox.Items[0] as ComboBoxItem
@@ -123,6 +268,7 @@ internal static class Program
         directSaveCheckBox.IsChecked = true;
         applyPreferences.Invoke(window, [new AppPreferences
         {
+            UiLanguage = UiLanguageCodes.SimplifiedChinese,
             RememberSavePreferences = true,
             DirectSaveOverwrite = true,
             TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
@@ -146,6 +292,7 @@ internal static class Program
             !remembered.RenameVideo || remembered.WriteNfo || remembered.DownloadPoster ||
             !remembered.DownloadFanart || !remembered.DownloadExtrafanart ||
             remembered.RecentCustomRootDirectories.Length != 2 ||
+            remembered.UiLanguage != UiLanguageCodes.SimplifiedChinese ||
             recentRootsButton.Content?.ToString() != "最近目录 (2) ▾" ||
             !recentRootsButton.IsEnabled ||
             window.FindName("CustomTargetPanel") is not Grid { Visibility: Visibility.Visible } ||
@@ -194,7 +341,10 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.8 清空最近目录后按钮状态不正确。 ");
         }
-        applyPreferences.Invoke(window, [AppPreferences.CreateSafeDefaults()]);
+        applyPreferences.Invoke(window, [AppPreferences.CreateSafeDefaults() with
+        {
+            UiLanguage = UiLanguageCodes.SimplifiedChinese
+        }]);
         window.UpdateLayout();
         if (directSaveCheckBox.IsChecked == true)
         {
@@ -638,6 +788,8 @@ internal static class Program
             []);
         var previewWindow = new SavePreviewWindow(previewPlan) { Owner = window };
         previewWindow.Show();
+        previewWindow.Width = previewWindow.MinWidth;
+        previewWindow.Height = previewWindow.MinHeight;
         previewWindow.UpdateLayout();
         if (!previewWindow.IsVisible || previewWindow.FindName("ConfirmButton") is not Button { IsEnabled: true })
         {
@@ -650,6 +802,16 @@ internal static class Program
         }
         var previewChanges = previewWindow.FindName("ChangesList") as ListView
             ?? throw new InvalidOperationException("保存预览变更列表未创建。 ");
+        if (previewWindow.FindName("FooterButtonsPanel") is not StackPanel footerButtonsPanel ||
+            previewWindow.FindName("PreviewPathPanel") is not Border previewPathPanel ||
+            previewWindow.FindName("ChangesPanel") is not Border changesPanel ||
+            !FitsInside(footerButtonsPanel, previewWindow) ||
+            !FitsInside(previewPathPanel, previewWindow) ||
+            !FitsInside(changesPanel, previewWindow) ||
+            footerButtonsPanel.Children.OfType<Button>().Any(button => button.MinHeight < 36))
+        {
+            throw new InvalidOperationException("v0.9 dev2 保存预览在最小窗口下布局不完整。 ");
+        }
         var previewActions = previewChanges.Items.Cast<object>()
             .Select(item => item.GetType().GetProperty("Action")?.GetValue(item)?.ToString())
             .ToArray();
@@ -659,7 +821,22 @@ internal static class Program
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True directSaveRemembered=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True");
+        var browserWindow = new BrowserWindow("https://www.javlibrary.com/cn/main.php");
+        var browserRoot = browserWindow.Content as FrameworkElement
+            ?? throw new InvalidOperationException("内置浏览器根布局未创建。 ");
+        browserRoot.Measure(new Size(browserWindow.MinWidth, browserWindow.MinHeight));
+        browserRoot.Arrange(new Rect(0, 0, browserWindow.MinWidth, browserWindow.MinHeight));
+        browserRoot.UpdateLayout();
+        if (browserWindow.FindName("BrowserToolbar") is not Border browserToolbar ||
+            browserWindow.FindName("ImportButton") is not Button importButton ||
+            !FitsInside(importButton, browserToolbar) ||
+            importButton.MinHeight < 36)
+        {
+            throw new InvalidOperationException("v0.9 dev2 内置浏览器工具栏布局或按钮样式不完整。 ");
+        }
+        browserWindow.Close();
+
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True directSaveRemembered=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True sharedTheme=True minimumLayout=True browserLayout=True dropdownGeometry=True captionColor={(nativeCaptionColor is null ? "unsupported" : "#111821")}");
         window.Close();
         application.Shutdown();
     }
@@ -682,4 +859,43 @@ internal static class Program
         Dispatcher.PushFrame(frame);
         task.GetAwaiter().GetResult();
     }
+
+    private static bool FitsInside(FrameworkElement child, FrameworkElement container, double tolerance = 1.5)
+    {
+        if (child.ActualWidth <= 0 || child.ActualHeight <= 0 ||
+            container.ActualWidth <= 0 || container.ActualHeight <= 0)
+        {
+            return false;
+        }
+
+        var topLeft = child.TranslatePoint(new Point(0, 0), container);
+        return topLeft.X >= -tolerance &&
+               topLeft.Y >= -tolerance &&
+               topLeft.X + child.ActualWidth <= container.ActualWidth + tolerance &&
+               topLeft.Y + child.ActualHeight <= container.ActualHeight + tolerance;
+    }
+
+    private static int? TryReadDwmIntAttribute(IntPtr handle, int attribute)
+    {
+        try
+        {
+            var result = DwmGetWindowAttribute(handle, attribute, out var value, Marshal.SizeOf<int>());
+            return result == 0 ? value : null;
+        }
+        catch (DllNotFoundException)
+        {
+            return null;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmGetWindowAttribute(
+        IntPtr windowHandle,
+        int attribute,
+        out int attributeValue,
+        int attributeSize);
 }

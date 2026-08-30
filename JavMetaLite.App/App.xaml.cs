@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using JavMetaLite.Core.Models;
 using JavMetaLite.Core.Services;
 
 namespace JavMetaLite.App;
@@ -9,6 +10,7 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        LocalizationService.ApplyLanguage(UiLanguageCodes.System);
         AppLog.Info("应用启动流程开始");
 
         try
@@ -27,7 +29,8 @@ public partial class App : Application
             var logPath = AppLog.CurrentLogPath;
 
             MessageBox.Show(
-                $"JAV Metadata Lite 启动失败。\n\n错误记录：{logPath}\n\n{exception.Message}",
+                LocalizationService.Get("App.StartFailed", logPath, exception.Message)
+                    .Replace("\\n", Environment.NewLine),
                 "JAV Metadata Lite",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

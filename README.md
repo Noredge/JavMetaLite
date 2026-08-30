@@ -2,6 +2,32 @@
 
 一个只处理单个影片的轻量 Windows metadata 工具。它不会扫描整个媒体库；文件整理和直接保存都默认关闭，用户可以先预览所有变更，也可以明确选择跳过预览并直接覆盖 metadata。
 
+## v0.9.0 稳定版
+
+`v0.9.0` 已通过完整自动化门禁、dev1–dev3 分阶段人工检查和 RC1 最终验收。它提供简体中文、繁體中文、English、日本語即时切换，并统一主窗口、保存预览和内置浏览器的深色主题；新应用图标、深色滚动条与精确匹配的原生标题栏也已正式接入。
+
+本版本只改善界面、图标与语言，不改变单片搜索、来源选择、NFO/图片、预览、路径、覆盖、影片传输、回滚或偏好逻辑。最终验收确认 R01–R05 与影片 SHA-256 全部通过，完整记录见 [`MANUAL-ACCEPTANCE-v0.9.0-rc1.md`](MANUAL-ACCEPTANCE-v0.9.0-rc1.md)。
+
+## v0.9.0-dev3 图标与视觉收尾
+
+`v0.9.0-dev3` 接入新的影片整理图标：影片卡、metadata 卡与文件夹组成中性的单片整理意象。Windows ICO 内含 16–256 px 多尺寸资源，其中 16/24 px 使用专门简化版本；EXE、任务栏、所有窗口标题栏与主窗口品牌区域保持一致。本轮只调整视觉资源，不改变任何功能行为。简短人工检查见 [`MANUAL-CHECK-v0.9.0-dev3.md`](MANUAL-CHECK-v0.9.0-dev3.md)。
+
+`v0.9.0-dev3-r1` 使用 Windows 原生深色标题栏，并为三个窗口统一深色滚动条；保留系统窗口按钮以及滚轮、箭头、翻页和拖动操作。人工复查见 [`MANUAL-CHECK-v0.9.0-dev3-r1.md`](MANUAL-CHECK-v0.9.0-dev3-r1.md)。
+
+`v0.9.0-dev3-r2` 在受支持的 Windows 上把原生标题栏精确设为软件顶部区域的 `#111821`，同时匹配标题文字与窗口边框；旧版系统继续使用安全的原生深色回退。人工复查见 [`MANUAL-CHECK-v0.9.0-dev3-r2.md`](MANUAL-CHECK-v0.9.0-dev3-r2.md)。
+
+## v0.9.0-dev1 四语言基座
+
+`v0.9.0-dev1` 提供简体中文、繁體中文、English 与日本語四种界面语言。语言可以在主窗口顶部即时切换，并独立于“记住保存偏好”跨重启保留；首次运行跟随 Windows 支持的语言，其他系统语言安全回退到简体中文，旧版配置继续使用原来的简体中文界面。
+
+主窗口、内置浏览器、保存前预览、常用状态、提示和进度文字均已接入同一套语言资源。四套资源使用完全相同的键，并由自动化测试检查即时切换和配置迁移。本轮不改变搜索、来源选择、NFO、图片、目标路径、覆盖、影片移动或事务逻辑。完整路线见 [`ROADMAP-v0.9.0.md`](ROADMAP-v0.9.0.md)，简短人工检查见 [`MANUAL-CHECK-v0.9.0-dev1.md`](MANUAL-CHECK-v0.9.0-dev1.md)。
+
+`v0.9.0-dev1-r1` 修复人工检查时发现的来源长时间无响应：每个资料来源最多等待 10 秒。多来源模式会保留已经成功的来源，单来源模式会显示对应语言的超时提示；用户主动取消、来源优先级与资料合并规则保持不变。
+
+`v0.9.0-dev1-r2` 修正英文来源选择框的截字，并为四种语言补充完整的来源说明提示；同时按日语软件界面的常用表达统一术语与标点。保存预览中的海报与 fanart 名称也会随界面语言切换。本修订不改变任何搜索、资料或文件行为。
+
+`v0.9.0-dev2-r1` 为主窗口、保存预览和内置浏览器建立共用深色主题，统一按钮、输入框、复选框、下拉框和提示框的尺寸与交互状态，并整理最小窗口和长文本布局。r1 进一步修正下拉菜单与选择框、选中项与菜单圆角之间的视觉碰撞。功能位置和操作顺序保持不变；本轮人工复查见 [`MANUAL-CHECK-v0.9.0-dev2-r1.md`](MANUAL-CHECK-v0.9.0-dev2-r1.md)，完整 dev2 检查见 [`MANUAL-CHECK-v0.9.0-dev2.md`](MANUAL-CHECK-v0.9.0-dev2.md)。
+
 ## v0.8.1 稳定版
 
 `v0.8.1` 已通过完整自动化门禁和 P01–P03 真实重启验收。它让“记住保存偏好”完整覆盖用户明确选择的保存方式：如果同时勾选“直接保存并覆盖（跳过预览）”，下次启动也会恢复该状态；如果不启用偏好记忆，则不会保留。
@@ -107,7 +133,7 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj
 
 完整自动化测试分层、回归范围和手动检查边界见 [`TESTING.md`](TESTING.md)。
 
-v0.8.1 dev1 的直接覆盖偏好检查见 [`MANUAL-CHECK-v0.8.1-dev1.md`](MANUAL-CHECK-v0.8.1-dev1.md)。v0.8.0 RC1 的最终集成检查见 [`MANUAL-ACCEPTANCE-v0.8.0-rc1.md`](MANUAL-ACCEPTANCE-v0.8.0-rc1.md)，dev3 的最近目录检查见 [`MANUAL-CHECK-v0.8.0-dev3.md`](MANUAL-CHECK-v0.8.0-dev3.md)，dev2 的安全偏好检查见 [`MANUAL-CHECK-v0.8.0-dev2.md`](MANUAL-CHECK-v0.8.0-dev2.md)，dev1 的启动载入检查见 [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md)。
+v0.9.0 dev1 的四语言检查见 [`MANUAL-CHECK-v0.9.0-dev1.md`](MANUAL-CHECK-v0.9.0-dev1.md)。v0.8.1 dev1 的直接覆盖偏好检查见 [`MANUAL-CHECK-v0.8.1-dev1.md`](MANUAL-CHECK-v0.8.1-dev1.md)。v0.8.0 RC1 的最终集成检查见 [`MANUAL-ACCEPTANCE-v0.8.0-rc1.md`](MANUAL-ACCEPTANCE-v0.8.0-rc1.md)，dev3 的最近目录检查见 [`MANUAL-CHECK-v0.8.0-dev3.md`](MANUAL-CHECK-v0.8.0-dev3.md)，dev2 的安全偏好检查见 [`MANUAL-CHECK-v0.8.0-dev2.md`](MANUAL-CHECK-v0.8.0-dev2.md)，dev1 的启动载入检查见 [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md)。
 
 v0.7.0 RC3 的全部通过记录见 [`MANUAL-RETEST-v0.7.0-rc3.md`](MANUAL-RETEST-v0.7.0-rc3.md)，RC2 的通过记录见 [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md)，RC1 的完整通过记录见 [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md)。v0.6.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.6.0-rc1.md`](MANUAL-ACCEPTANCE-v0.6.0-rc1.md)，v0.5.0 RC1 的最终通过记录见 [`MANUAL-ACCEPTANCE-v0.5.0-rc1.md`](MANUAL-ACCEPTANCE-v0.5.0-rc1.md)。
 
@@ -133,7 +159,7 @@ dotnet publish .\JavMetaLite.App\JavMetaLite.App.csproj -c Release -r win-x64 --
 
 ## 当前边界
 
-- v0.8 仍然是单片编辑器，不提供媒体库扫描或批量刮削。
+- v0.9 仍然是单片编辑器，不提供媒体库扫描或批量刮削。
 - 整理功能只移动当前选择的影片并生成本次选择的 metadata；不会自动搬运未知的字幕或旧伴随文件。
 - v0.8.0 支持同卷、跨盘符与 UNC 目标；真实 UNC 共享尚未在当前环境实测，网络速度、权限与可用性取决于 Windows 和目标服务器。
 - 软件不会写入 MP4/MKV 容器内部 metadata。

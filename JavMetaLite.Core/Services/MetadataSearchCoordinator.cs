@@ -6,14 +6,22 @@ namespace JavMetaLite.Core.Services;
 
 public static class MetadataSearchCoordinator
 {
+    private static readonly TimeSpan DefaultProviderTimeout = TimeSpan.FromSeconds(10);
+
     public static async Task<MetadataSourceSearchAttempt> SearchSingleAsync(
         string rawId,
         IMetadataProvider provider,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        TimeSpan? providerTimeout = null)
     {
         ArgumentNullException.ThrowIfNull(provider);
         var id = MovieIdParser.Normalize(rawId);
-        var attempt = await RunProviderAsync(id, provider, "single", cancellationToken);
+        var attempt = await RunProviderAsync(
+            id,
+            provider,
+            "single",
+            cancellationToken,
+            ValidateTimeout(providerTimeout));
         if (attempt.Success)
         {
             return attempt;
@@ -27,7 +35,8 @@ public static class MetadataSearchCoordinator
         string rawId,
         IMetadataProvider primaryProvider,
         IMetadataProvider secondaryProvider,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        TimeSpan? providerTimeout = null)
     {
         ArgumentNullException.ThrowIfNull(primaryProvider);
         ArgumentNullException.ThrowIfNull(secondaryProvider);
@@ -44,9 +53,10 @@ public static class MetadataSearchCoordinator
             throw new ArgumentException("多来源搜索需要两个不同的资料来源。 ", nameof(secondaryProvider));
         }
 
+        var timeout = ValidateTimeout(providerTimeout);
         var attempts = await Task.WhenAll(
-            RunProviderAsync(id, primaryProvider, "multi", cancellationToken),
-            RunProviderAsync(id, secondaryProvider, "multi", cancellationToken));
+            RunProviderAsync(id, primaryProvider, "multi", cancellationToken, timeout),
+            RunProviderAsync(id, secondaryProvider, "multi", cancellationToken, timeout));
         var successfulMetadata = attempts
             .Where(attempt => attempt.Metadata is not null)
             .Select(attempt => attempt.Metadata!)
@@ -80,12 +90,15 @@ public static class MetadataSearchCoordinator
         string id,
         IMetadataProvider provider,
         string mode,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TimeSpan providerTimeout)
     {
         var stopwatch = Stopwatch.StartNew();
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(providerTimeout);
         try
         {
-            var metadata = await provider.SearchAsync(id, cancellationToken);
+            var metadata = await provider.SearchAsync(id, timeoutSource.Token);
             stopwatch.Stop();
             var fieldCount = CountCandidateFields(metadata);
             AppLog.Info(
@@ -102,6 +115,26 @@ public static class MetadataSearchCoordinator
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (OperationCanceledException exception) when (timeoutSource.IsCancellationRequested)
+        {
+            stopwatch.Stop();
+            var timeoutException = new MetadataSourceTimeoutException(
+                provider.Name,
+                provider.DisplayName,
+                providerTimeout,
+                exception);
+            AppLog.Warning(
+                $"来源搜索超时 mode={mode} source={provider.Name} id={id} " +
+                $"elapsedMs={stopwatch.ElapsedMilliseconds} timeoutMs={providerTimeout.TotalMilliseconds:0}",
+                timeoutException);
+            return new MetadataSourceSearchAttempt(
+                provider.Name,
+                provider.DisplayName,
+                stopwatch.Elapsed,
+                null,
+                timeoutException,
+                0);
         }
         catch (Exception exception)
         {
@@ -122,4 +155,15 @@ public static class MetadataSearchCoordinator
 
     private static int CountCandidateFields(MovieMetadata metadata) =>
         MetadataSourceSnapshot.FromMetadata(metadata).Values.Values.Count(value => !string.IsNullOrWhiteSpace(value));
+
+    private static TimeSpan ValidateTimeout(TimeSpan? providerTimeout)
+    {
+        var timeout = providerTimeout ?? DefaultProviderTimeout;
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(providerTimeout), "资料来源超时必须大于零。 ");
+        }
+
+        return timeout;
+    }
 }

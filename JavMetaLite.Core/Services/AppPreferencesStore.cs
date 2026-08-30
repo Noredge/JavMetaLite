@@ -60,9 +60,17 @@ public sealed class AppPreferencesStore
                     $"偏好配置版本 {preferences.SchemaVersion} 无效，已使用安全默认值。");
             }
 
+            if (preferences.SchemaVersion <= 3)
+            {
+                preferences = preferences with { UiLanguage = UiLanguageCodes.SimplifiedChinese };
+            }
+
             if (!preferences.RememberSavePreferences)
             {
-                return new AppPreferencesLoadResult(AppPreferences.CreateSafeDefaults());
+                return new AppPreferencesLoadResult(AppPreferences.CreateSafeDefaults() with
+                {
+                    UiLanguage = UiLanguageCodes.Normalize(preferences.UiLanguage)
+                });
             }
 
             return new AppPreferencesLoadResult(Normalize(
@@ -81,11 +89,6 @@ public sealed class AppPreferencesStore
     public void Save(AppPreferences preferences)
     {
         ArgumentNullException.ThrowIfNull(preferences);
-        if (!preferences.RememberSavePreferences)
-        {
-            Clear();
-            return;
-        }
 
         Directory.CreateDirectory(_settingsDirectory);
         var temporaryPath = Path.Combine(
@@ -93,10 +96,16 @@ public sealed class AppPreferencesStore
             $".{SettingsFileName}.{Guid.NewGuid():N}.tmp");
         try
         {
-            var normalized = Normalize(preferences, promoteCurrentRoot: false) with
+            var source = preferences.RememberSavePreferences
+                ? preferences
+                : AppPreferences.CreateSafeDefaults() with
+                {
+                    UiLanguage = preferences.UiLanguage
+                };
+            var normalized = Normalize(source, promoteCurrentRoot: false) with
             {
                 SchemaVersion = AppPreferences.CurrentSchemaVersion,
-                RememberSavePreferences = true
+                RememberSavePreferences = preferences.RememberSavePreferences
             };
             var json = JsonSerializer.Serialize(normalized, JsonOptions);
             using (var stream = new FileStream(
@@ -158,6 +167,7 @@ public sealed class AppPreferencesStore
         return preferences with
         {
             SchemaVersion = AppPreferences.CurrentSchemaVersion,
+            UiLanguage = UiLanguageCodes.Normalize(preferences.UiLanguage),
             TargetMode = Enum.IsDefined(preferences.TargetMode)
                 ? preferences.TargetMode
                 : OrganizationTargetMode.VideoDirectory,

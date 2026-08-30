@@ -68,11 +68,14 @@ public partial class MainWindow : Window
         _preferencesStore = preferencesStore;
         _outputService = new OutputService();
         _fileOrganizationService = new FileOrganizationService(_outputService);
+        LocalizationService.ApplyLanguage(LocalizationService.CurrentLanguageCode);
         InitializeComponent();
+        WindowVisualTheme.ApplyDarkTitleBar(this);
+        SelectLanguageItem(LocalizationService.CurrentLanguageCode);
         _uiInitialized = true;
         ApplyMetadata(_metadata, []);
         RefreshTargetLocationUi();
-        AppLog.Info("JavMetaLite v0.8.1 启动");
+        AppLog.Info("JavMetaLite v0.9.0 启动");
     }
 
     internal void LoadPreferences()
@@ -96,7 +99,11 @@ public partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(result.Warning))
         {
             AppLog.Warning(result.Warning);
-            SetStatus(result.Warning, false);
+            SetStatus(
+                LocalizationService.Get(result.CanOverwrite
+                    ? "Status.SettingsFallback"
+                    : "Status.SettingsFuture"),
+                false);
         }
         else if (result.Preferences.RememberSavePreferences)
         {
@@ -106,14 +113,15 @@ public partial class MainWindow : Window
                 $"customRoot={result.Preferences.CustomRootDirectory}");
             SetStatus(
                 result.Preferences.DirectSaveOverwrite
-                    ? "已恢复保存偏好：直接保存并覆盖已开启"
-                    : "已恢复上次明确记住的保存偏好",
+                    ? LocalizationService.Get("Status.PreferencesDirect")
+                    : LocalizationService.Get("Status.PreferencesRestored"),
                 !result.Preferences.DirectSaveOverwrite);
         }
     }
 
     private void ApplyPreferences(AppPreferences preferences)
     {
+        ApplyLanguagePreference(preferences.UiLanguage);
         DirectSaveOverwriteCheckBox.IsChecked = preferences.DirectSaveOverwrite;
         RememberPreferencesCheckBox.IsChecked = preferences.RememberSavePreferences;
         WriteNfoCheckBox.IsChecked = preferences.WriteNfo;
@@ -147,6 +155,7 @@ public partial class MainWindow : Window
     {
         return new AppPreferences
         {
+            UiLanguage = LocalizationService.CurrentLanguageCode,
             RememberSavePreferences = RememberPreferencesCheckBox.IsChecked == true,
             DirectSaveOverwrite = DirectSaveOverwriteCheckBox.IsChecked == true,
             TargetMode = GetSelectedTargetMode(),
@@ -178,17 +187,16 @@ public partial class MainWindow : Window
         try
         {
             var preferences = CapturePreferences();
+            _preferencesStore.Save(preferences);
             if (preferences.RememberSavePreferences)
             {
-                _preferencesStore.Save(preferences);
                 AppLog.Info(
                     $"已保存偏好 target={preferences.TargetMode} rename={preferences.RenameVideo} " +
                     $"directOverwrite={preferences.DirectSaveOverwrite} path={_preferencesStore.SettingsPath}");
             }
             else
             {
-                _preferencesStore.Clear();
-                AppLog.Info("未启用偏好记忆，已清除保存的偏好");
+                AppLog.Info($"未启用保存偏好记忆，仅保留界面语言 language={preferences.UiLanguage}");
             }
         }
         catch (Exception exception)
@@ -197,12 +205,58 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ApplyLanguagePreference(string? languageCode)
+    {
+        LocalizationService.ApplyLanguage(languageCode);
+        SelectLanguageItem(LocalizationService.CurrentLanguageCode);
+        RefreshLocalizedPresentation();
+    }
+
+    private void SelectLanguageItem(string languageCode)
+    {
+        LanguageComboBox.SelectedItem = LanguageComboBox.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(item => string.Equals(
+                item.Tag?.ToString(),
+                languageCode,
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_uiInitialized ||
+            LanguageComboBox.SelectedItem is not ComboBoxItem item ||
+            item.Tag is not string languageCode ||
+            string.Equals(languageCode, LocalizationService.CurrentLanguageCode, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        LocalizationService.ApplyLanguage(languageCode);
+        RefreshLocalizedPresentation();
+        SetStatus(LocalizationService.Get("Status.LanguageChanged"), true);
+        AppLog.Info($"界面语言已切换 language={languageCode}");
+    }
+
+    private void RefreshLocalizedPresentation()
+    {
+        if (!_uiInitialized)
+        {
+            return;
+        }
+
+        RefreshRecentRootsButton();
+        RefreshTargetLocationUi();
+        RefreshSourceBadges();
+        RefreshArtworkSourceBadge();
+    }
+
     private async void ChooseFile_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
         {
-            Title = "选择一个影片",
-            Filter = VideoFileSupport.OpenFileDialogFilter,
+            Title = LocalizationService.Get("Dialog.ChooseVideo"),
+            Filter = LocalizationService.Get("Dialog.VideoFilter"),
             Multiselect = false,
             CheckFileExists = true
         };
@@ -231,21 +285,21 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(_metadata.Id))
         {
-            ShowError("请先输入影片番号。 ");
+            ShowError(LocalizationService.Get("Error.EnterId"));
             return;
         }
 
         var source = (SourceComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "auto";
         if (source == "manual")
         {
-            SetStatus("当前为手动模式，可以直接填写资料并保存", true);
+            SetStatus(LocalizationService.Get("Status.ManualMode"), true);
             return;
         }
 
         string? browserFallbackUrl = null;
         var busyMessage = source == "auto"
-            ? "正在同时获取 LibreDMM 与 R18.dev…"
-            : "正在获取影片资料…";
+            ? LocalizationService.Get("Status.SearchingMulti")
+            : LocalizationService.Get("Status.SearchingSingle");
         await RunBusyAsync(busyMessage, async () =>
         {
             try
@@ -268,23 +322,23 @@ public partial class MainWindow : Window
                     outcome.Sources.Select(GetSourceDisplayName).Distinct(StringComparer.OrdinalIgnoreCase));
                 var degradedNote = string.IsNullOrWhiteSpace(failedSources)
                     ? string.Empty
-                    : $"；{failedSources} 未返回结果";
+                    : LocalizationService.Get("Status.SourceFailed", failedSources);
                 var imageSummary = result.ScreenshotUrls.Count > 0
-                    ? $"，找到 {result.ScreenshotUrls.Count} 张样张"
-                    : "，没有独立样张";
+                    ? LocalizationService.Get("Status.ImagesFound", result.ScreenshotUrls.Count)
+                    : LocalizationService.Get("Status.NoImages");
                 var localPrefix = _localSourceMetadata is null
-                    ? $"已从 {sourceName} 读取 {result.Id}"
-                    : $"已从 {sourceName} 读取新资料；可逐字段切回本地 NFO";
+                    ? LocalizationService.Get("Status.LoadedOnline", sourceName, result.Id)
+                    : LocalizationService.Get("Status.LoadedOnlineWithLocal", sourceName);
                 SetStatus(
                     artworkLoaded.Poster
-                        ? $"{localPrefix}{imageSummary}{(artworkLoaded.Fanart ? string.Empty : "；fanart 预览未加载")}{degradedNote}"
-                        : $"{localPrefix}；封面预览未加载，不影响资料编辑{degradedNote}",
+                        ? $"{localPrefix}{imageSummary}{(artworkLoaded.Fanart ? string.Empty : LocalizationService.Get("Status.FanartPreviewMissing"))}{degradedNote}"
+                        : $"{localPrefix}{LocalizationService.Get("Status.CoverPreviewMissing")}{degradedNote}",
                     string.IsNullOrWhiteSpace(failedSources));
             }
             catch (JavLibraryChallengeException exception)
             {
                 browserFallbackUrl = exception.Url;
-                SetStatus("网站要求浏览器验证，正在打开内置浏览器…", false);
+                SetStatus(LocalizationService.Get("Status.BrowserVerification"), false);
             }
         });
 
@@ -350,13 +404,13 @@ public partial class MainWindow : Window
     {
         if (_videoPath is null)
         {
-            ShowError("请先选择一个影片文件。 ");
+            ShowError(LocalizationService.Get("Error.SelectVideo"));
             return;
         }
 
         if (_localNfoSaveBlocked)
         {
-            ShowError("检测到无法安全读取的本地 NFO。为保护原文件，必须修复或移走该 NFO 后重新选择影片，当前不能保存。");
+            ShowError(LocalizationService.Get("Error.LocalNfoBlocked"));
             return;
         }
 
@@ -396,7 +450,7 @@ public partial class MainWindow : Window
             if (preview.ShowDialog() != true)
             {
                 AppLog.Info("用户在预览阶段取消保存，未更改文件");
-                SetStatus("已取消，影片和 metadata 均未修改", false);
+                SetStatus(LocalizationService.Get("Status.CanceledNoChanges"), false);
                 return;
             }
 
@@ -414,10 +468,10 @@ public partial class MainWindow : Window
             AppLog.Info("用户启用直接保存并覆盖，跳过变更预览");
         }
 
-        await RunBusyAsync("正在安全生成并提交文件…", async () =>
+        await RunBusyAsync(LocalizationService.Get("Status.Saving"), async () =>
         {
             var transactionProgress = new Progress<FileTransactionProgress>(update =>
-                SetStatus(update.Message, null));
+                SetStatus(GetLocalizedTransactionProgress(update), null));
             var result = await _fileOrganizationService.ExecuteAsync(
                 plan,
                 _metadata,
@@ -432,22 +486,26 @@ public partial class MainWindow : Window
                 .ToList();
             if (result.Outputs.ExtrafanartPaths.Count > 0)
             {
-                outputs.Add($"extrafanart（{result.Outputs.ExtrafanartPaths.Count} 张）");
+                outputs.Add(LocalizationService.Get("Status.ExtrafanartCount", result.Outputs.ExtrafanartPaths.Count));
             }
             var fanartNote = result.Outputs.FanartPath is null
                 ? string.Empty
-                : result.Outputs.FanartUsedFullCover ? "；fanart 来自完整封套" : string.Empty;
-            var moveNote = result.VideoMoved ? $"；影片已整理为 {Path.GetFileName(result.VideoPath)}" : string.Empty;
+                : result.Outputs.FanartUsedFullCover ? LocalizationService.Get("Status.FanartFromCover") : string.Empty;
+            var moveNote = result.VideoMoved
+                ? LocalizationService.Get("Status.VideoOrganized", Path.GetFileName(result.VideoPath))
+                : string.Empty;
             await SelectVideoCoreAsync(result.VideoPath);
             var outputSummary = outputs.Count == 0
-                ? plan.HasActualChanges ? "sidecar 已安全迁移" : "没有需要写入的变更"
-                : string.Join("、", outputs);
-            SetStatus($"保存完成：{outputSummary}{fanartNote}{moveNote}", true);
+                ? plan.HasActualChanges
+                    ? LocalizationService.Get("Status.SidecarsMigrated")
+                    : LocalizationService.Get("Status.NoChanges")
+                : string.Join(LocalizationService.Get("Common.ListSeparator"), outputs);
+            SetStatus(LocalizationService.Get("Status.SaveComplete", outputSummary, fanartNote, moveNote), true);
         });
     }
 
     private Task SelectVideoAsync(string path) =>
-        RunBusyAsync("正在检查影片旁的本地 metadata…", () => SelectVideoCoreAsync(path));
+        RunBusyAsync(LocalizationService.Get("Status.InspectingLocal"), () => SelectVideoCoreAsync(path));
 
     internal async Task HandleStartupVideoRequestAsync(StartupVideoRequest request)
     {
@@ -458,7 +516,7 @@ public partial class MainWindow : Window
 
         if (request.Kind == StartupVideoRequestKind.Invalid)
         {
-            var message = request.ErrorMessage ?? "无法读取启动参数中的影片路径。";
+            var message = request.ErrorMessage ?? LocalizationService.Get("Error.StartupUnreadable");
             AppLog.Warning($"启动影片参数被拒绝 reason={message}");
             ShowError(message);
             return;
@@ -466,7 +524,7 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrWhiteSpace(request.VideoPath))
         {
-            const string message = "启动参数没有提供可读取的影片路径。";
+            var message = LocalizationService.Get("Error.StartupNoPath");
             AppLog.Warning(message);
             ShowError(message);
             return;
@@ -522,7 +580,7 @@ public partial class MainWindow : Window
     {
         var dialog = new OpenFolderDialog
         {
-            Title = "选择媒体库根目录",
+            Title = LocalizationService.Get("Dialog.ChooseLibraryRoot"),
             Multiselect = false
         };
         var currentRoot = CustomRootTextBox.Text.Trim();
@@ -589,7 +647,7 @@ public partial class MainWindow : Window
         {
             Header = new TextBlock
             {
-                Text = "移除当前记录",
+                Text = LocalizationService.Get("Menu.RemoveCurrentRoot"),
                 Foreground = new SolidColorBrush(currentCanBeRemoved
                     ? Color.FromRgb(255, 157, 166)
                     : Color.FromRgb(112, 128, 148))
@@ -605,7 +663,7 @@ public partial class MainWindow : Window
         {
             Header = new TextBlock
             {
-                Text = "清空最近记录",
+                Text = LocalizationService.Get("Menu.ClearRecentRoots"),
                 Foreground = new SolidColorBrush(Color.FromRgb(255, 157, 166))
             },
             Tag = "clear-all",
@@ -639,7 +697,7 @@ public partial class MainWindow : Window
             path.Equals(currentRoot, StringComparison.OrdinalIgnoreCase));
         RefreshRecentRootsButton();
         AppLog.Info($"移除最近自定义目标根目录 path={currentRoot}");
-        SetStatus("已移除当前目录的历史记录；当前路径保持不变", true);
+        SetStatus(LocalizationService.Get("Status.RecentRootRemoved"), true);
     }
 
     private void ClearRecentRoots()
@@ -647,7 +705,7 @@ public partial class MainWindow : Window
         _recentCustomRootDirectories.Clear();
         RefreshRecentRootsButton();
         AppLog.Info("清空最近自定义目标根目录");
-        SetStatus("已清空最近目标根目录；当前路径保持不变", true);
+        SetStatus(LocalizationService.Get("Status.RecentRootsCleared"), true);
     }
 
     private void RememberCurrentCustomRoot()
@@ -677,8 +735,8 @@ public partial class MainWindow : Window
         }
 
         RecentRootsButton.Content = _recentCustomRootDirectories.Count == 0
-            ? "最近目录"
-            : $"最近目录 ({_recentCustomRootDirectories.Count}) ▾";
+            ? LocalizationService.Get("Main.RecentRoots")
+            : LocalizationService.Get("Main.RecentRootsCount", _recentCustomRootDirectories.Count);
         RecentRootsButton.IsEnabled = _recentCustomRootDirectories.Count > 0;
     }
 
@@ -729,8 +787,8 @@ public partial class MainWindow : Window
         if (_videoPath is null)
         {
             TargetPathHintText.Text = customMode && string.IsNullOrWhiteSpace(CustomRootTextBox.Text)
-                ? "请选择自定义目标根目录；选择影片后将显示最终路径"
-                : "选择影片后显示最终路径";
+                ? LocalizationService.Get("Main.TargetHintCustom")
+                : LocalizationService.Get("Main.TargetHint");
             TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(147, 164, 184));
             RefreshSaveAvailability();
             return;
@@ -747,11 +805,10 @@ public partial class MainWindow : Window
                 _lastValidCustomRootDirectory = pathPlan.TargetRootDirectory;
             }
 
-            TargetPathHintText.Text = $"最终影片：{pathPlan.TargetVideoPath}";
+            TargetPathHintText.Text = LocalizationService.Get("Main.FinalVideo", pathPlan.TargetVideoPath);
             if (pathPlan.RequiresVerifiedCopy)
             {
-                TargetPathHintText.Text +=
-                    $"{Environment.NewLine}传输方式：安全复制 + SHA-256 校验，成功后移除来源";
+                TargetPathHintText.Text += Environment.NewLine + LocalizationService.Get("Main.SafeCopy");
                 TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(141, 184, 255));
             }
             else
@@ -778,7 +835,7 @@ public partial class MainWindow : Window
             return false;
         }
 
-        message = $"自定义目标根目录当前不可用：{normalizedPath}。请重新连接或选择其他目录；程序不会自动创建该根目录。";
+        message = LocalizationService.Get("Status.CustomRootUnavailable", normalizedPath);
         return true;
     }
 
@@ -795,13 +852,13 @@ public partial class MainWindow : Window
 
         SaveButton.IsEnabled = !_busy && !_localNfoSaveBlocked && _targetConfigurationError is null;
         SaveButton.ToolTip = _localNfoSaveBlocked
-            ? "本地 NFO 无法安全读取；修复或移走后重新选择影片"
+            ? LocalizationService.Get("Status.LocalNfoUnsafe")
             : _targetConfigurationError is not null
                 ? _targetConfigurationError
                 : _localMetadataBundle is not null
                     ? _localMetadataBundle.HasUnknownXml
-                        ? "保存时只更新受管理字段，并保留检测到的未知 XML"
-                        : "保存时只更新受管理字段"
+                        ? LocalizationService.Get("Status.NfoPreserveUnknown")
+                        : LocalizationService.Get("Status.NfoManagedOnly")
                     : null;
     }
 
@@ -809,7 +866,7 @@ public partial class MainWindow : Window
     {
         if (!VideoFileSupport.IsSupportedExistingFile(path))
         {
-            ShowError("请选择受支持的影片文件。 ");
+            ShowError(LocalizationService.Get("Error.UnsupportedVideo"));
             return;
         }
 
@@ -836,7 +893,7 @@ public partial class MainWindow : Window
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             AppLog.Warning($"无法检查本地 sidecar path={path}", exception);
-            SetStatus($"无法检查影片旁的本地文件：{exception.Message}", false);
+            SetStatus(LocalizationService.Get("Status.LocalCheckFailed", exception.Message), false);
             return;
         }
 
@@ -845,8 +902,8 @@ public partial class MainWindow : Window
         if (!sidecars.HasNfo)
         {
             metadataStatus = !string.IsNullOrWhiteSpace(id)
-                ? $"已识别番号 {id}，未找到同名本地 NFO，可以搜索资料"
-                : "没有找到同名本地 NFO，也未从文件名识别到番号，请手动输入";
+                ? LocalizationService.Get("Status.IdRecognized", id)
+                : LocalizationService.Get("Status.NoLocalNfoOrId");
         }
         else
         {
@@ -871,14 +928,19 @@ public partial class MainWindow : Window
                 var diagnosticNote = bundle.Diagnostics.Count == 0
                     ? string.Empty
                     : $"；{string.Join("；", bundle.Diagnostics)}";
-                metadataStatus = $"已从本地 NFO 载入（可安全更新）：{bundle.Sidecars.NfoPath}{diagnosticNote}";
+                metadataStatus = LocalizationService.Get(
+                    "Status.LocalNfoLoaded",
+                    bundle.Sidecars.NfoPath,
+                    diagnosticNote);
                 statusSuccess = true;
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
             {
                 AppLog.Warning($"本地 NFO 读取失败 path={sidecars.NfoPath}", exception);
-                metadataStatus =
-                    $"检测到本地 NFO，但无法安全读取，原文件未修改：{Path.GetFileName(sidecars.NfoPath)}；{exception.Message}";
+                metadataStatus = LocalizationService.Get(
+                    "Status.LocalNfoFailed",
+                    Path.GetFileName(sidecars.NfoPath),
+                    exception.Message);
                 statusSuccess = false;
             }
         }
@@ -886,7 +948,7 @@ public partial class MainWindow : Window
         var artworkDiscovery = await DiscoverLocalArtworkAsync(sidecars);
         if (!string.IsNullOrWhiteSpace(artworkDiscovery.Summary))
         {
-            metadataStatus += $"；{artworkDiscovery.Summary}";
+            metadataStatus += LocalizationService.Get("Common.DetailSeparator") + artworkDiscovery.Summary;
         }
         if (artworkDiscovery.HasErrors)
         {
@@ -912,7 +974,7 @@ public partial class MainWindow : Window
             RebuildArtworkReview();
             var invalidSummary = discovery.Diagnostics.Count == 0
                 ? string.Empty
-                : $"{discovery.Diagnostics.Count} 个无效本地图片已忽略（见日志）";
+                : LocalizationService.Get("Status.InvalidLocalImages", discovery.Diagnostics.Count);
             return (invalidSummary, discovery.Diagnostics.Count > 0);
         }
 
@@ -922,18 +984,18 @@ public partial class MainWindow : Window
         var availability = (_localArtworkCandidate.HasPoster, _localArtworkCandidate.HasFanart) switch
         {
             (true, true) => "poster + fanart",
-            (true, false) => "仅 poster，fanart 缺失",
-            (false, true) => "仅 fanart，poster 缺失",
-            _ => "无可用图片"
+            (true, false) => LocalizationService.Get("Status.OnlyPoster"),
+            (false, true) => LocalizationService.Get("Status.OnlyFanart"),
+            _ => LocalizationService.Get("Status.NoArtwork")
         };
         var diagnosticNote = discovery.Diagnostics.Count == 0
             ? string.Empty
-            : $"；{discovery.Diagnostics.Count} 个无效图片已忽略";
+            : LocalizationService.Get("Status.InvalidImagesSuffix", discovery.Diagnostics.Count);
         var previewNote = loaded.Poster == _localArtworkCandidate.HasPoster &&
                           loaded.Fanart == _localArtworkCandidate.HasFanart
             ? string.Empty
-            : "；预览加载不完整";
-        return ($"本地图片已载入（{availability}）{diagnosticNote}{previewNote}",
+            : LocalizationService.Get("Status.PreviewIncomplete");
+        return (LocalizationService.Get("Status.LocalImagesLoaded", availability, diagnosticNote, previewNote),
             discovery.Diagnostics.Count > 0 || previewNote.Length > 0);
     }
 
@@ -947,7 +1009,7 @@ public partial class MainWindow : Window
         var browser = new BrowserWindow(url) { Owner = this };
         if (browser.ShowDialog() == true && !string.IsNullOrWhiteSpace(browser.PageHtml))
         {
-            await RunBusyAsync("正在读取浏览器中的资料…", async () =>
+            await RunBusyAsync(LocalizationService.Get("Status.ReadingBrowser"), async () =>
             {
                 var result = await _javLibraryClient.ParseDetailPageAsync(
                     browser.PageHtml,
@@ -956,11 +1018,14 @@ public partial class MainWindow : Window
                     CurrentOperationToken);
                 ApplyOnlineSources(result, [result]);
                 var artworkLoaded = await LoadSelectedArtworkPreviewAsync();
-                var localNote = _localSourceMetadata is null ? string.Empty : "；可逐字段切回本地 NFO";
+                var localNote = _localSourceMetadata is null
+                    ? string.Empty
+                    : LocalizationService.Get("Status.LocalCandidateSuffix");
+                var loadedMessage = LocalizationService.Get("Status.BrowserLoaded", result.Id, localNote);
                 SetStatus(
                     artworkLoaded.Poster
-                        ? $"已读取浏览器中的新资料 {result.Id}{localNote}"
-                        : $"已读取浏览器中的新资料 {result.Id}{localNote}；封面预览未加载，不影响资料编辑",
+                        ? loadedMessage
+                        : loadedMessage + LocalizationService.Get("Status.CoverPreviewMissing"),
                     true);
             });
         }
@@ -1079,20 +1144,26 @@ public partial class MainWindow : Window
 
         var candidate = _metadataReview?.GetSelectedCandidate(field);
         var candidates = _metadataReview?.GetCandidates(field) ?? [];
+        var candidateSourceName = candidate is null
+            ? string.Empty
+            : GetCandidateSourceDisplayName(candidate.Source);
         badge.Content = candidate is null
             ? string.Empty
             : candidates.Count > 1
-                ? $"{candidate.Source.DisplayName} ▾"
-                : candidate.Source.DisplayName;
+                ? $"{candidateSourceName} ▾"
+                : candidateSourceName;
         badge.Visibility = candidate is null ? Visibility.Collapsed : Visibility.Visible;
         badge.IsEnabled = candidates.Count > 1;
         badge.ToolTip = candidate is null
             ? null
             : candidates.Count > 1
-                ? $"点击选择“{GetFieldDisplayName(field)}”的资料来源（{candidates.Count} 个候选）"
+                ? LocalizationService.Get(
+                    "Artwork.SourceFieldTooltip",
+                    GetFieldDisplayName(field),
+                    candidates.Count)
                 : string.IsNullOrWhiteSpace(candidate.Source.Url)
-                    ? $"来源：{candidate.Source.DisplayName}"
-                    : $"来源：{candidate.Source.DisplayName}\n{candidate.Source.Url}";
+                    ? LocalizationService.Get("Artwork.Source", candidateSourceName)
+                    : $"{LocalizationService.Get("Artwork.Source", candidateSourceName)}\n{candidate.Source.Url}";
     }
 
     private void SourceBadge_Click(object sender, RoutedEventArgs eventArgs)
@@ -1120,9 +1191,10 @@ public partial class MainWindow : Window
 
         foreach (var candidate in candidates)
         {
+            var candidateSourceName = GetCandidateSourceDisplayName(candidate.Source);
             var sourceText = new TextBlock
             {
-                Text = $"{(candidate == selected ? "✓ " : string.Empty)}{candidate.Source.DisplayName}",
+                Text = $"{(candidate == selected ? "✓ " : string.Empty)}{candidateSourceName}",
                 Foreground = new SolidColorBrush(Color.FromRgb(111, 168, 255)),
                 FontWeight = FontWeights.SemiBold
             };
@@ -1145,7 +1217,7 @@ public partial class MainWindow : Window
                 Tag = candidate,
                 Style = (Style)FindResource("CandidateMenuItem"),
                 ToolTip = string.IsNullOrWhiteSpace(candidate.Source.Url)
-                    ? candidate.Source.DisplayName
+                    ? candidateSourceName
                     : candidate.Source.Url
             };
             menuItem.Click += (_, _) => SelectSourceCandidate(candidate);
@@ -1165,8 +1237,9 @@ public partial class MainWindow : Window
         }
 
         var fieldName = GetFieldDisplayName(candidate.Field);
+        var candidateSourceName = GetCandidateSourceDisplayName(candidate.Source);
         AppLog.Info($"字段来源切换 field={candidate.Field} source={candidate.Source.Name}");
-        SetStatus($"已将“{fieldName}”切换为 {candidate.Source.DisplayName}", true);
+        SetStatus(LocalizationService.Get("Status.FieldSourceChanged", fieldName, candidateSourceName), true);
     }
 
     private void RefreshArtworkSourceBadge()
@@ -1174,15 +1247,15 @@ public partial class MainWindow : Window
         var candidate = _artworkCoverReview?.SelectedCandidate;
         var candidates = _artworkCoverReview?.Candidates ?? [];
         ArtworkSourceButton.Content = candidate is null
-            ? "选择封套…"
-            : $"{candidate.Source.DisplayName} ▾";
+            ? LocalizationService.Get("Artwork.Select")
+            : $"{GetCandidateSourceDisplayName(candidate.Source)} ▾";
         ArtworkSourceButton.Visibility = candidate is null && _videoPath is null
             ? Visibility.Collapsed
             : Visibility.Visible;
         ArtworkSourceButton.IsEnabled = !_busy && (_videoPath is not null || candidate is not null);
         ArtworkSourceButton.ToolTip = candidate is null
-            ? "选择一张本地完整封套，由同一张图生成 poster 与 fanart"
-            : $"点击选择封套来源（{candidates.Count} 个现有候选），或选择本地完整封套";
+            ? LocalizationService.Get("Artwork.SelectTooltip")
+            : LocalizationService.Get("Artwork.SourceTooltip", candidates.Count);
     }
 
     private void ArtworkSourceButton_Click(object sender, RoutedEventArgs eventArgs)
@@ -1203,9 +1276,10 @@ public partial class MainWindow : Window
 
         foreach (var candidate in _artworkCoverReview.Candidates)
         {
+            var candidateSourceName = GetCandidateSourceDisplayName(candidate.Source);
             var sourceText = new TextBlock
             {
-                Text = $"{(candidate == selected ? "✓ " : string.Empty)}{candidate.Source.DisplayName}",
+                Text = $"{(candidate == selected ? "✓ " : string.Empty)}{candidateSourceName}",
                 Foreground = new SolidColorBrush(Color.FromRgb(111, 168, 255)),
                 FontWeight = FontWeights.SemiBold
             };
@@ -1235,13 +1309,13 @@ public partial class MainWindow : Window
         {
             var chooseSourceText = new TextBlock
             {
-                Text = "选择本地完整封套…",
+                Text = LocalizationService.Get("Menu.ChooseLocalCover"),
                 Foreground = new SolidColorBrush(Color.FromRgb(111, 168, 255)),
                 FontWeight = FontWeights.SemiBold
             };
             var chooseValueText = new TextBlock
             {
-                Text = "选择一张图片，统一生成 poster 与 fanart",
+                Text = LocalizationService.Get("Menu.ChooseLocalCoverDescription"),
                 Foreground = new SolidColorBrush(Color.FromRgb(184, 197, 214)),
                 FontSize = 11,
                 Margin = new Thickness(0, 3, 0, 0)
@@ -1254,7 +1328,7 @@ public partial class MainWindow : Window
                 Header = chooseHeader,
                 Tag = "choose-local-cover",
                 Style = (Style)FindResource("CandidateMenuItem"),
-                ToolTip = "支持 JPG、JPEG、PNG 与 WEBP"
+                ToolTip = LocalizationService.Get("Menu.ImageTypesTooltip")
             };
             chooseItem.Click += async (_, _) => await ChooseManualCoverAsync();
             menu.Items.Add(chooseItem);
@@ -1275,14 +1349,15 @@ public partial class MainWindow : Window
         _preferredArtworkSourceName = candidate.Source.Name;
         RefreshArtworkSourceBadge();
         AppLog.Info($"统一封套来源切换 source={candidate.Source.Name} posterFanartLocked=true");
-        await RunBusyAsync($"正在加载 {candidate.Source.DisplayName} 封套…", async () =>
+        var candidateSourceName = GetCandidateSourceDisplayName(candidate.Source);
+        await RunBusyAsync(LocalizationService.Get("Status.LoadingCover", candidateSourceName), async () =>
         {
             var preview = await LoadSelectedArtworkPreviewAsync();
             var loaded = preview.Poster && preview.Fanart;
             SetStatus(
                 loaded
-                    ? $"封套与 fanart 已同时切换为 {candidate.Source.DisplayName}"
-                    : $"{candidate.Source.DisplayName} 封套预览加载不完整，可改选其他来源",
+                    ? LocalizationService.Get("Status.CoverChanged", candidateSourceName)
+                    : LocalizationService.Get("Status.CoverIncomplete", candidateSourceName),
                 loaded);
         });
     }
@@ -1293,18 +1368,18 @@ public partial class MainWindow : Window
         {
             return (candidate.HasPoster, candidate.HasFanart) switch
             {
-                (true, true) => "现有 poster + fanart（成对来源）",
-                (true, false) => "现有 poster；fanart 缺失",
-                (false, true) => "现有 fanart；poster 缺失",
-                _ => "没有可用的本地图片"
+                (true, true) => LocalizationService.Get("Artwork.Pair"),
+                (true, false) => LocalizationService.Get("Artwork.PosterOnly"),
+                (false, true) => LocalizationService.Get("Artwork.FanartOnly"),
+                _ => LocalizationService.Get("Artwork.NoLocal")
             };
         }
 
         return candidate.Source.Name == "manual-cover"
-            ? "本地完整封套 · 统一生成 poster / fanart"
+            ? LocalizationService.Get("Artwork.LocalComplete")
             : candidate.Urls.Count > 1
-                ? $"poster / fanart 共用 · {candidate.Urls.Count} 个封套地址"
-                : "poster / fanart 共用此完整封套";
+                ? LocalizationService.Get("Artwork.SharedCount", candidate.Urls.Count)
+                : LocalizationService.Get("Artwork.Shared");
     }
 
     private async Task ChooseManualCoverAsync()
@@ -1316,8 +1391,8 @@ public partial class MainWindow : Window
 
         var dialog = new OpenFileDialog
         {
-            Title = "选择一张完整封套",
-            Filter = "图片文件|*.jpg;*.jpeg;*.png;*.webp|所有文件|*.*",
+            Title = LocalizationService.Get("Dialog.ChooseCover"),
+            Filter = LocalizationService.Get("Dialog.ImageFilter"),
             CheckFileExists = true,
             Multiselect = false,
             InitialDirectory = Path.GetDirectoryName(_videoPath)
@@ -1329,26 +1404,29 @@ public partial class MainWindow : Window
     }
 
     private Task ApplyManualCoverAsync(string path) =>
-        RunBusyAsync("正在读取本地完整封套…", async () =>
+        RunBusyAsync(LocalizationService.Get("Status.ReadingLocalCover"), async () =>
         {
             var bytes = await ArtworkLocationHelper.ReadLocalImageAsync(
                 path,
                 CurrentOperationToken);
             var dimensions = PosterImageProcessor.GetDimensions(bytes);
             _manualArtworkCandidate = ArtworkCoverCandidate.CreateCompleteCover(
-                new MetadataCandidateSource("manual-cover", "手动封套", Path.GetFullPath(path)),
+                new MetadataCandidateSource(
+                    "manual-cover",
+                    LocalizationService.Get("Artwork.ManualSource"),
+                    Path.GetFullPath(path)),
                 path);
             _preferredArtworkSourceName = _manualArtworkCandidate.Source.Name;
             RebuildArtworkReview();
             var preview = await LoadSelectedArtworkPreviewAsync();
             if (!preview.Poster || !preview.Fanart)
             {
-                throw new InvalidDataException("本地完整封套无法同时生成 poster 与 fanart 预览。");
+                throw new InvalidDataException(LocalizationService.Get("Error.LocalCoverPreview"));
             }
 
             AppLog.Info($"手动完整封套载入成功 path={path} size={dimensions.Width}x{dimensions.Height}");
             SetStatus(
-                $"已选择本地完整封套：{Path.GetFileName(path)}；poster 与 fanart 将由同一来源生成",
+                LocalizationService.Get("Status.LocalCoverSelected", Path.GetFileName(path)),
                 true);
         });
 
@@ -1357,7 +1435,7 @@ public partial class MainWindow : Window
         var normalized = string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         if (normalized.Length == 0)
         {
-            return "（空白）";
+            return LocalizationService.Get("Common.Empty");
         }
 
         const int maximumLength = 100;
@@ -1368,18 +1446,18 @@ public partial class MainWindow : Window
 
     private static string GetFieldDisplayName(MetadataField field) => field switch
     {
-        MetadataField.Title => "标题",
-        MetadataField.OriginalTitle => "原始标题",
-        MetadataField.ReleaseDate => "发行日期",
-        MetadataField.RuntimeMinutes => "时长",
-        MetadataField.Maker => "片商",
-        MetadataField.Director => "导演",
-        MetadataField.Label => "标签 / 厂牌",
-        MetadataField.Series => "系列",
-        MetadataField.Actors => "演员",
-        MetadataField.Genres => "类型",
-        MetadataField.Plot => "简介",
-        MetadataField.Rating => "评分",
+        MetadataField.Title => LocalizationService.Get("Field.Title"),
+        MetadataField.OriginalTitle => LocalizationService.Get("Field.OriginalTitle"),
+        MetadataField.ReleaseDate => LocalizationService.Get("Field.ReleaseDate"),
+        MetadataField.RuntimeMinutes => LocalizationService.Get("Field.Runtime"),
+        MetadataField.Maker => LocalizationService.Get("Field.Maker"),
+        MetadataField.Director => LocalizationService.Get("Field.Director"),
+        MetadataField.Label => LocalizationService.Get("Field.Label"),
+        MetadataField.Series => LocalizationService.Get("Field.Series"),
+        MetadataField.Actors => LocalizationService.Get("Field.ActorsShort"),
+        MetadataField.Genres => LocalizationService.Get("Field.GenresShort"),
+        MetadataField.Plot => LocalizationService.Get("Field.Plot"),
+        MetadataField.Rating => LocalizationService.Get("Field.Rating"),
         _ => field.ToString()
     };
 
@@ -1453,7 +1531,7 @@ public partial class MainWindow : Window
             {
                 var dimensions = PosterImageProcessor.GetDimensions(bytes);
                 FanartImage.Source = PosterBitmapFactory.CreateFrozen(bytes);
-                FanartHintText.Text = $"横板封套：{dimensions.Width}×{dimensions.Height}";
+                FanartHintText.Text = LocalizationService.Get("Artwork.Dimensions", dimensions.Width, dimensions.Height);
             }
             return true;
         }
@@ -1528,7 +1606,7 @@ public partial class MainWindow : Window
                 var imageBytes = await DownloadPreviewImageAsync(candidate);
                 var dimensions = PosterImageProcessor.GetDimensions(imageBytes);
                 FanartImage.Source = PosterBitmapFactory.CreateFrozen(PosterImageProcessor.CreateFanartJpeg(imageBytes));
-                FanartHintText.Text = $"横板封套：{dimensions.Width}×{dimensions.Height}";
+                FanartHintText.Text = LocalizationService.Get("Artwork.Dimensions", dimensions.Width, dimensions.Height);
                 return true;
             }
             catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
@@ -1575,7 +1653,7 @@ public partial class MainWindow : Window
                 var bytes = await response.Content.ReadAsByteArrayAsync(CurrentOperationToken);
                 if (bytes.Length < 128)
                 {
-                    throw new InvalidDataException("图片内容太小。 ");
+                    throw new InvalidDataException(LocalizationService.Get("Error.ImageTooSmall"));
                 }
 
                 _ = PosterImageProcessor.GetDimensions(bytes);
@@ -1592,7 +1670,7 @@ public partial class MainWindow : Window
             }
         }
 
-        throw new InvalidDataException("图片预览下载失败。", lastError);
+        throw new InvalidDataException(LocalizationService.Get("Error.PreviewDownload"), lastError);
     }
 
     private void ClearPosterPreview()
@@ -1608,7 +1686,23 @@ public partial class MainWindow : Window
     }
 
     private static string GetSourceDisplayName(MovieMetadata metadata) =>
-        string.IsNullOrWhiteSpace(metadata.SourceDisplayName) ? metadata.SourceName : metadata.SourceDisplayName;
+        GetLocalizedSourceDisplayName(
+            metadata.SourceName,
+            string.IsNullOrWhiteSpace(metadata.SourceDisplayName) ? metadata.SourceName : metadata.SourceDisplayName);
+
+    private static string GetCandidateSourceDisplayName(MetadataCandidateSource source) =>
+        GetLocalizedSourceDisplayName(source.Name, source.DisplayName);
+
+    private static string GetLocalizedSourceDisplayName(string sourceName, string fallback) =>
+        sourceName.ToLowerInvariant() switch
+        {
+            "manual" => LocalizationService.Get("Source.Manual"),
+            "manual-cover" => LocalizationService.Get("Artwork.ManualSource"),
+            "local-nfo" => LocalizationService.Get("Source.LocalNfo"),
+            "local-images" => LocalizationService.Get("Source.LocalImages"),
+            "unknown" => LocalizationService.Get("Source.Unknown"),
+            _ => fallback
+        };
 
     private static HttpClient CreatePreviewClient()
     {
@@ -1618,6 +1712,22 @@ public partial class MainWindow : Window
         client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("zh-CN,zh;q=0.9,ja;q=0.7,en;q=0.5");
         return client;
     }
+
+    private static string GetLocalizedTransactionProgress(FileTransactionProgress update) =>
+        update.Stage switch
+        {
+            FileTransactionStage.Preparing => LocalizationService.Get("Progress.Preparing"),
+            FileTransactionStage.CopyingMovie when update.TotalBytes > 0 =>
+                LocalizationService.Get("Progress.CopyingPercent", update.Percentage),
+            FileTransactionStage.CopyingMovie => LocalizationService.Get("Progress.Copying"),
+            FileTransactionStage.VerifyingMovie when update.TotalBytes > 0 =>
+                LocalizationService.Get("Progress.VerifyingPercent", update.Percentage),
+            FileTransactionStage.VerifyingMovie => LocalizationService.Get("Progress.Verifying"),
+            FileTransactionStage.Committing => LocalizationService.Get("Progress.Committing"),
+            FileTransactionStage.RetiringSource => LocalizationService.Get("Progress.RetiringSource"),
+            FileTransactionStage.Completed => LocalizationService.Get("Progress.Completed"),
+            _ => update.Message
+        };
 
     private async Task RunBusyAsync(string message, Func<Task> operation)
     {
@@ -1647,13 +1757,13 @@ public partial class MainWindow : Window
             AppLog.Info("当前操作已取消，文件事务已执行安全恢复");
             if (!_lifetimeCancellation.IsCancellationRequested)
             {
-                SetStatus("操作已取消；未完成的文件事务已安全恢复", false);
+                SetStatus(LocalizationService.Get("Status.OperationCanceled"), false);
             }
         }
         catch (Exception exception)
         {
             AppLog.Error(message, exception);
-            ShowError(exception.Message);
+            ShowError(GetLocalizedExceptionMessage(exception));
         }
         finally
         {
@@ -1675,7 +1785,7 @@ public partial class MainWindow : Window
         }
 
         CancelOperationButton.IsEnabled = false;
-        SetStatus("正在取消并恢复文件，请稍候…", null);
+        SetStatus(LocalizationService.Get("Status.Canceling"), null);
         _activeOperationCancellation.Cancel();
     }
 
@@ -1696,6 +1806,14 @@ public partial class MainWindow : Window
         MessageBox.Show(this, message, "JAV Metadata Lite", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
+    private static string GetLocalizedExceptionMessage(Exception exception) =>
+        exception is MetadataSourceTimeoutException timeout
+            ? LocalizationService.Get(
+                "Error.SourceTimeout",
+                timeout.SourceDisplayName,
+                Math.Ceiling(timeout.Timeout.TotalSeconds))
+            : exception.Message;
+
     private void OpenLogs_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -1707,12 +1825,12 @@ public partial class MainWindow : Window
                 Arguments = $"\"{AppLog.LogDirectory}\"",
                 UseShellExecute = true
             });
-            SetStatus($"日志目录：{AppLog.LogDirectory}", true);
+            SetStatus(LocalizationService.Get("Status.LogDirectory", AppLog.LogDirectory), true);
         }
         catch (Exception exception)
         {
             AppLog.Error("无法打开日志目录", exception);
-            ShowError($"无法打开日志目录：{exception.Message}");
+            ShowError(LocalizationService.Get("Error.OpenLogs", exception.Message));
         }
     }
 

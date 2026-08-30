@@ -11,6 +11,7 @@ public partial class BrowserWindow : Window
     public BrowserWindow(string initialUrl)
     {
         InitializeComponent();
+        WindowVisualTheme.ApplyDarkTitleBar(this);
         _initialUrl = initialUrl;
         Loaded += BrowserWindow_Loaded;
     }
@@ -31,7 +32,7 @@ public partial class BrowserWindow : Window
         catch (Exception exception)
         {
             MessageBox.Show(this,
-                $"无法启动内置浏览器：{exception.Message}\n\n请确认 Microsoft Edge WebView2 Runtime 已安装。",
+                LocalizationService.Get("Browser.StartFailed", exception.Message).Replace("\\n", Environment.NewLine),
                 "JAV Metadata Lite",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -54,7 +55,7 @@ public partial class BrowserWindow : Window
         if (!bool.TryParse(hasVideoInfoJson, out var hasVideoInfo) || !hasVideoInfo)
         {
             MessageBox.Show(this,
-                "当前页面不是影片详情页。请先在网页中打开正确影片，再点击读取。",
+                LocalizationService.Get("Browser.NotDetailPage"),
                 "JAV Metadata Lite",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);

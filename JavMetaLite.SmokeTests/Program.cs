@@ -1,4 +1,5 @@
 using System.IO;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -92,7 +93,7 @@ var tests = new List<(string Name, Func<Task> Run)>
 {
     ("番号识别", TestMovieIdParser),
     ("v0.8 启动影片参数解析", TestStartupVideoRequestResolver),
-    ("v0.8.1 保存偏好原子存储", TestAppPreferencesStore),
+    ("v0.9 四语言与保存偏好原子存储", TestAppPreferencesStore),
     ("LibreDMM JSON 解析与清理", TestLibreDmmParser),
     ("多来源字段补全", TestMetadataMerge),
     ("v0.5 多来源搜索编排", TestMetadataSearchCoordinator),
@@ -207,6 +208,7 @@ static Task TestAppPreferencesStore()
     {
         var store = new AppPreferencesStore(root);
         var missing = store.Load();
+        AssertEqual(UiLanguageCodes.System, missing.Preferences.UiLanguage);
         AssertEqual("False", missing.Preferences.RememberSavePreferences.ToString());
         AssertEqual("False", missing.Preferences.DirectSaveOverwrite.ToString());
         AssertEqual(OrganizationTargetMode.VideoDirectory.ToString(), missing.Preferences.TargetMode.ToString());
@@ -219,6 +221,7 @@ static Task TestAppPreferencesStore()
         var secondRoot = Path.Combine(root, "library-two");
         store.Save(new AppPreferences
         {
+            UiLanguage = UiLanguageCodes.Japanese,
             RememberSavePreferences = true,
             DirectSaveOverwrite = true,
             TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
@@ -242,13 +245,15 @@ static Task TestAppPreferencesStore()
 
         AssertEqual("True", File.Exists(store.SettingsPath).ToString());
         var json = File.ReadAllText(store.SettingsPath);
-        AssertEqual("True", json.Contains("\"SchemaVersion\": 3", StringComparison.Ordinal).ToString());
+        AssertEqual("True", json.Contains("\"SchemaVersion\": 4", StringComparison.Ordinal).ToString());
+        AssertEqual("True", json.Contains("\"UiLanguage\": \"ja\"", StringComparison.Ordinal).ToString());
         AssertEqual("True", json.Contains("\"CustomRootNumberFolder\"", StringComparison.Ordinal).ToString());
         AssertEqual("True", json.Contains("\"DirectSaveOverwrite\": true", StringComparison.Ordinal).ToString());
         AssertEqual("0", Directory.EnumerateFiles(root, "*.tmp").Count().ToString());
 
         var loaded = store.Load();
         AssertEqual("True", loaded.Preferences.RememberSavePreferences.ToString());
+        AssertEqual(UiLanguageCodes.Japanese, loaded.Preferences.UiLanguage);
         AssertEqual("True", loaded.Preferences.DirectSaveOverwrite.ToString());
         AssertEqual("True", loaded.CanOverwrite.ToString());
         AssertEqual(OrganizationTargetMode.CustomRootNumberFolder.ToString(), loaded.Preferences.TargetMode.ToString());
@@ -294,6 +299,7 @@ static Task TestAppPreferencesStore()
         AssertEqual("1", migrated.Preferences.RecentCustomRootDirectories.Length.ToString());
         AssertEqual(secondRoot, migrated.Preferences.RecentCustomRootDirectories[0]);
         AssertEqual("False", migrated.Preferences.DirectSaveOverwrite.ToString());
+        AssertEqual(UiLanguageCodes.SimplifiedChinese, migrated.Preferences.UiLanguage);
 
         var v2Json = System.Text.Json.JsonSerializer.Serialize(new
         {
@@ -313,6 +319,20 @@ static Task TestAppPreferencesStore()
         AssertEqual(AppPreferences.CurrentSchemaVersion.ToString(), migratedV2.Preferences.SchemaVersion.ToString());
         AssertEqual("True", migratedV2.CanOverwrite.ToString());
         AssertEqual("False", migratedV2.Preferences.DirectSaveOverwrite.ToString());
+        AssertEqual(UiLanguageCodes.SimplifiedChinese, migratedV2.Preferences.UiLanguage);
+
+        var v3Json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            SchemaVersion = 3,
+            RememberSavePreferences = true,
+            DirectSaveOverwrite = true,
+            TargetMode = "VideoDirectory"
+        });
+        File.WriteAllText(store.SettingsPath, v3Json);
+        var migratedV3 = store.Load();
+        AssertEqual(AppPreferences.CurrentSchemaVersion.ToString(), migratedV3.Preferences.SchemaVersion.ToString());
+        AssertEqual(UiLanguageCodes.SimplifiedChinese, migratedV3.Preferences.UiLanguage);
+        AssertEqual("True", migratedV3.Preferences.DirectSaveOverwrite.ToString());
 
         File.WriteAllText(store.SettingsPath, "{ invalid json");
         var malformed = store.Load();
@@ -339,11 +359,13 @@ static Task TestAppPreferencesStore()
 
         store.Save(new AppPreferences
         {
+            UiLanguage = UiLanguageCodes.English,
             RememberSavePreferences = false,
             DirectSaveOverwrite = true
         });
-        AssertEqual("False", File.Exists(store.SettingsPath).ToString());
+        AssertEqual("True", File.Exists(store.SettingsPath).ToString());
         var disabledMemory = store.Load();
+        AssertEqual(UiLanguageCodes.English, disabledMemory.Preferences.UiLanguage);
         AssertEqual("False", disabledMemory.Preferences.RememberSavePreferences.ToString());
         AssertEqual("False", disabledMemory.Preferences.DirectSaveOverwrite.ToString());
         return Task.CompletedTask;
@@ -509,6 +531,20 @@ static async Task TestMetadataSearchCoordinator()
             failedSecondary);
         AssertEqual("LibreDMM", primaryOnly.Metadata.SourceDisplayName);
         AssertEqual("1", primaryOnly.Sources.Count.ToString());
+
+        using var timeoutPrimary = FakeMetadataProvider.Success("libredmm", "LibreDMM", primaryMetadata);
+        using var timeoutSecondary = FakeMetadataProvider.WaitForCancellation("r18dev", "R18.dev");
+        var timeoutStopwatch = Stopwatch.StartNew();
+        var primaryAfterTimeout = await MetadataSearchCoordinator.SearchAllAsync(
+            "IPZZ-850",
+            timeoutPrimary,
+            timeoutSecondary,
+            providerTimeout: TimeSpan.FromMilliseconds(100));
+        timeoutStopwatch.Stop();
+        AssertEqual("LibreDMM", primaryAfterTimeout.Metadata.SourceDisplayName);
+        AssertEqual("1", primaryAfterTimeout.Sources.Count.ToString());
+        AssertEqual("True", (primaryAfterTimeout.Attempts[1].Error is MetadataSourceTimeoutException).ToString());
+        AssertEqual("True", (timeoutStopwatch.Elapsed < TimeSpan.FromSeconds(2)).ToString());
 
         using var firstFailure = FakeMetadataProvider.Failure(
             "libredmm",
@@ -1673,6 +1709,13 @@ internal sealed class FakeMetadataProvider(
 
     public static FakeMetadataProvider Failure(string name, string displayName, Exception exception) =>
         new(name, displayName, (_, _) => Task.FromException<MovieMetadata>(exception));
+
+    public static FakeMetadataProvider WaitForCancellation(string name, string displayName) =>
+        new(name, displayName, async (_, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("等待取消的测试来源意外完成。 ");
+        });
 
     public Task<MovieMetadata> SearchAsync(string rawId, CancellationToken cancellationToken = default)
     {
