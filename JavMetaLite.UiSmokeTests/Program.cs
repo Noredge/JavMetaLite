@@ -7,6 +7,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using JavMetaLite.App;
 using JavMetaLite.Core.Models;
 using JavMetaLite.Core.Services;
@@ -33,6 +34,12 @@ internal static class Program
         {
             throw new InvalidOperationException("主窗口未成功创建。 ");
         }
+        var nativeCaptionColor = TryReadDwmIntAttribute(handle, 35);
+        if (nativeCaptionColor is not null && nativeCaptionColor != 0x00211811)
+        {
+            throw new InvalidOperationException(
+                $"v0.9 dev3-r2 标题栏颜色不匹配：0x{nativeCaptionColor:X8}。 ");
+        }
 
         var onePixelPng = Convert.FromBase64String(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nQAAAABJRU5ErkJggg==");
@@ -56,11 +63,26 @@ internal static class Program
             ?? throw new InvalidOperationException("没有找到搜索工具栏。 ");
         var chooseVideoButton = window.FindName("ChooseVideoButton") as Button
             ?? throw new InvalidOperationException("没有找到选择影片按钮。 ");
+        var brandIconImage = window.FindName("BrandIconImage") as Image
+            ?? throw new InvalidOperationException("没有找到应用品牌图标。 ");
+        if (window.Icon is null || brandIconImage.Source is null)
+        {
+            throw new InvalidOperationException("v0.9 dev3 窗口图标或页眉图标未成功载入。 ");
+        }
         if (!application.Resources.MergedDictionaries.Any(dictionary =>
                 dictionary.Source?.OriginalString.EndsWith("Resources/Theme.xaml", StringComparison.OrdinalIgnoreCase) == true) ||
             searchButton.MinHeight < 36 || idTextBox.MinHeight < 36 || sourceComboBox.MinHeight < 36)
         {
             throw new InvalidOperationException("v0.9 dev2 共用主题或统一控件尺寸未生效。 ");
+        }
+        var scrollBarStyle = application.TryFindResource(typeof(ScrollBar)) as Style
+            ?? throw new InvalidOperationException("没有找到共用滚动条样式。 ");
+        var themedScrollBar = new ScrollBar { Style = scrollBarStyle };
+        themedScrollBar.ApplyTemplate();
+        if (themedScrollBar.Width > 12 ||
+            themedScrollBar.Template.FindName("PART_Track", themedScrollBar) is not Track)
+        {
+            throw new InvalidOperationException("v0.9 dev3-r1 深色滚动条样式未生效。 ");
         }
         sourceComboBox.ApplyTemplate();
         var dropDownPopup = sourceComboBox.Template.FindName("PART_Popup", sourceComboBox) as Popup
@@ -814,7 +836,7 @@ internal static class Program
         }
         browserWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True directSaveRemembered=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True sharedTheme=True minimumLayout=True browserLayout=True dropdownGeometry=True");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True directSaveRemembered=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True sharedTheme=True minimumLayout=True browserLayout=True dropdownGeometry=True captionColor={(nativeCaptionColor is null ? "unsupported" : "#111821")}");
         window.Close();
         application.Shutdown();
     }
@@ -852,4 +874,28 @@ internal static class Program
                topLeft.X + child.ActualWidth <= container.ActualWidth + tolerance &&
                topLeft.Y + child.ActualHeight <= container.ActualHeight + tolerance;
     }
+
+    private static int? TryReadDwmIntAttribute(IntPtr handle, int attribute)
+    {
+        try
+        {
+            var result = DwmGetWindowAttribute(handle, attribute, out var value, Marshal.SizeOf<int>());
+            return result == 0 ? value : null;
+        }
+        catch (DllNotFoundException)
+        {
+            return null;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmGetWindowAttribute(
+        IntPtr windowHandle,
+        int attribute,
+        out int attributeValue,
+        int attributeSize);
 }

@@ -11,6 +11,7 @@ public partial class BrowserWindow : Window
     public BrowserWindow(string initialUrl)
     {
         InitializeComponent();
+        WindowVisualTheme.ApplyDarkTitleBar(this);
         _initialUrl = initialUrl;
         Loaded += BrowserWindow_Loaded;
     }

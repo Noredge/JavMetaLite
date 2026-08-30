@@ -74,7 +74,7 @@
     <sys:String x:Key="Main.CancelOperation">取消当前操作</sys:String>
     <sys:String x:Key="Main.StatusReady">准备就绪，请选择或拖入一个影片</sys:String>
     <sys:String x:Key="Status.LanguageChanged">界面语言已切换</sys:String>
-    <sys:String x:Key="Main.Version">v0.9.0-dev2-r1 · 下拉菜单修正</sys:String>
+    <sys:String x:Key="Main.Version">v0.9.0 · 稳定版</sys:String>
 
     <sys:String x:Key="Browser.Title">JAVLibrary 浏览器</sys:String>
     <sys:String x:Key="Browser.Instruction">完成验证并打开正确的影片详情页</sys:String>

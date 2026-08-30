@@ -70,11 +70,12 @@ public partial class MainWindow : Window
         _fileOrganizationService = new FileOrganizationService(_outputService);
         LocalizationService.ApplyLanguage(LocalizationService.CurrentLanguageCode);
         InitializeComponent();
+        WindowVisualTheme.ApplyDarkTitleBar(this);
         SelectLanguageItem(LocalizationService.CurrentLanguageCode);
         _uiInitialized = true;
         ApplyMetadata(_metadata, []);
         RefreshTargetLocationUi();
-        AppLog.Info("JavMetaLite v0.9.0-dev2-r1 启动");
+        AppLog.Info("JavMetaLite v0.9.0 启动");
     }
 
     internal void LoadPreferences()

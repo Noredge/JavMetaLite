@@ -12,6 +12,7 @@ public partial class SavePreviewWindow : Window
     public SavePreviewWindow(SavePlan plan)
     {
         InitializeComponent();
+        WindowVisualTheme.ApplyDarkTitleBar(this);
         _plan = plan;
         SourcePathTextBox.Text = plan.SourceVideoPath;
         TargetPathTextBox.Text = plan.TargetVideoPath;

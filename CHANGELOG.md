@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.9.0 — Stable
+
+- Promotes RC1 without functional changes after R01–R05 and movie SHA-256 verification all passed.
+- Adds immediate Simplified Chinese, Traditional Chinese, English, and Japanese interface switching with safe language persistence.
+- Unifies the main window, save preview, and embedded browser under one responsive dark theme.
+- Introduces the final multi-size movie-folder application icon, matched native title bars, and dark scrollbars.
+- Keeps the lightweight single-movie workflow and every existing search, preview, file-transaction, rollback, and preference safeguard unchanged.
+
+## v0.9.0-rc1 — Release candidate
+
+- Freeze the four-language interface, shared dark theme, final application icon, dark scrollbars, and precisely matched native title bar.
+- Carry forward all passed dev1–dev3 manual checks without adding functional scope.
+- Pass the complete offline automated gate before final release acceptance.
+
+## v0.9.0-dev3-r2 — Matched native title bar
+
+- Set the supported Windows native caption to the exact JavMetaLite chrome color instead of inheriting the user's system accent tint.
+- Match native caption text and window-border colors to the existing dark theme while retaining standard system controls.
+- Fall back to the normal native dark-title-bar request when exact DWM colors are unavailable.
+
+## v0.9.0-dev3-r1 — Dark native chrome
+
+- Request the native Windows dark title bar for the main window, save preview, and embedded browser while preserving standard window controls.
+- Replace the remaining light WPF scrollbars with shared dark tracks, muted blue-gray thumbs, and theme-blue dragging feedback.
+- Preserve keyboard, mouse-wheel, arrow, page, and thumb scrolling behavior.
+- Keep every metadata and file behavior unchanged.
+
+## v0.9.0-dev3 — Application icon
+
+- Add a neutral movie-folder icon built from the approved film card, metadata card, and folder composition.
+- Package 16, 24, 32, 48, 64, 128, and 256 px images in the Windows ICO; 16/24 px use a simplified small-size drawing.
+- Apply the icon to the EXE, taskbar, every window title bar, and the main-window brand area.
+- Keep all search, metadata, artwork, save, path, overwrite, transfer, rollback, and preference behavior unchanged.
+
 ## v0.9.0-dev2-r1 — Dropdown clarity
 
 - Add a clear gap between combo boxes and their menus.
