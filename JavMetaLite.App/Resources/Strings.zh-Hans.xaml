@@ -74,12 +74,12 @@
     <sys:String x:Key="Main.CancelOperation">取消当前操作</sys:String>
     <sys:String x:Key="Main.StatusReady">准备就绪，请选择或拖入一个影片</sys:String>
     <sys:String x:Key="Status.LanguageChanged">界面语言已切换</sys:String>
-    <sys:String x:Key="Main.Version">v0.9.0 · 稳定版</sys:String>
+    <sys:String x:Key="Main.Version">v1.0.0 · 稳定版</sys:String>
 
     <sys:String x:Key="Browser.Title">JAVLibrary 浏览器</sys:String>
     <sys:String x:Key="Browser.Instruction">完成验证并打开正确的影片详情页</sys:String>
     <sys:String x:Key="Browser.ReadCurrent">读取当前影片</sys:String>
-    <sys:String x:Key="Browser.Privacy">软件只会读取当前页面的影片资料，不会保存你的浏览记录或账号。</sys:String>
+    <sys:String x:Key="Browser.Privacy">软件只会导入当前页面的影片资料。内置浏览器可能保留网站验证所需的 Cookie。</sys:String>
     <sys:String x:Key="Browser.StartFailed">无法启动内置浏览器：{0}&#10;&#10;请确认 Microsoft Edge WebView2 Runtime 已安装。</sys:String>
     <sys:String x:Key="Browser.NotDetailPage">当前页面不是影片详情页。请先在网页中打开正确影片，再点击读取。</sys:String>
 

@@ -1,6 +1,6 @@
 # Third-party notices
 
-JAV Metadata Lite v0.1 uses the following third-party components:
+JavMetaLite uses the following third-party components:
 
 - AngleSharp 1.5.2 — MIT License — https://github.com/AngleSharp/AngleSharp
 - Microsoft.Web.WebView2 1.0.4078.44 — Microsoft software license terms — https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4078.44

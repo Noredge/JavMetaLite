@@ -70,16 +70,4 @@ The following remain manual because they depend on external state or human visua
 
 These checks complement the automated gate; they are not replaced by it.
 
-The v0.8 dev1 automated layer validates no/one/multiple startup arguments, directories, missing files, unsupported extensions, paths with spaces, case-insensitive movie extensions, and the WPF path that loads a startup movie through the existing local metadata workflow. Windows Open with shell handoff and the visible invalid-argument dialogs remain manual checks in [`MANUAL-CHECK-v0.8.0-dev1.md`](MANUAL-CHECK-v0.8.0-dev1.md).
-
-The v0.8 dev2 automated layer validates the settings schema, same-directory replacement, damaged/future-version fallback, safe defaults, UI mapping, and exclusion of direct overwrite. Manual testing is limited to two visible restart checks in [`MANUAL-CHECK-v0.8.0-dev2.md`](MANUAL-CHECK-v0.8.0-dev2.md).
-
-The v0.8 dev3 automated layer validates schema migration, five-entry history behavior, individual/full removal, future-version preservation, and unavailable-root zero writes. Manual testing is limited to three visible checks in [`MANUAL-CHECK-v0.8.0-dev3.md`](MANUAL-CHECK-v0.8.0-dev3.md).
-
-The v0.8 RC1 packaged startup, restart persistence, unavailable-root isolation, real custom-target save, local reload, and hash checks all passed and are recorded in [`MANUAL-ACCEPTANCE-v0.8.0-rc1.md`](MANUAL-ACCEPTANCE-v0.8.0-rc1.md). The stable build preserves that accepted behavior without functional changes.
-
-The v0.8.1 automated layer validates schema-v3 direct-overwrite persistence, v1/v2 migration to disabled, invalid/future configuration isolation, WPF restoration, capture, and safe defaults. Its three visible restart checks passed and are recorded in [`MANUAL-CHECK-v0.8.1-dev1.md`](MANUAL-CHECK-v0.8.1-dev1.md); the stable build preserves that accepted behavior.
-
-The v0.9 dev1 automated layer validates language-resource parity, immediate four-language switching, schema-v4 persistence, old-settings migration, and preservation of all safe save defaults. Manual testing is limited to visible text, clipping, and real restart checks in [`MANUAL-CHECK-v0.9.0-dev1.md`](MANUAL-CHECK-v0.9.0-dev1.md).
-
-The focused v0.7 RC3 preview retest passed and is recorded in [`MANUAL-RETEST-v0.7.0-rc3.md`](MANUAL-RETEST-v0.7.0-rc3.md); RC2 source-selection acceptance is recorded in [`MANUAL-RETEST-v0.7.0-rc2.md`](MANUAL-RETEST-v0.7.0-rc2.md), and the complete cross-drive/Jellyfin RC1 acceptance is in [`MANUAL-ACCEPTANCE-v0.7.0-rc1.md`](MANUAL-ACCEPTANCE-v0.7.0-rc1.md). A real UNC run remains optional when no share is available.
+Before publishing a release, run the complete automated gate and inspect the packaged executable on Windows. The short release acceptance should cover startup, one live metadata search, save-preview clarity, a real metadata save, unchanged movie SHA-256, language switching, and archive checksum verification. Test a real cross-drive or UNC destination when that environment is available.

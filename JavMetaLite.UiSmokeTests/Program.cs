@@ -19,6 +19,7 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        TestSystemLanguageResolution();
         var application = new Application();
         application.Resources.MergedDictionaries.Add(new ResourceDictionary
         {
@@ -836,9 +837,45 @@ internal static class Program
         }
         browserWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True directSaveRemembered=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True sharedTheme=True minimumLayout=True browserLayout=True dropdownGeometry=True captionColor={(nativeCaptionColor is null ? "unsupported" : "#111821")}");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True directSaveRemembered=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True sharedTheme=True minimumLayout=True browserLayout=True dropdownGeometry=True systemFallbackEnglish=True captionColor={(nativeCaptionColor is null ? "unsupported" : "#111821")}");
         window.Close();
         application.Shutdown();
+    }
+
+    private static void TestSystemLanguageResolution()
+    {
+        var localizationType = typeof(MainWindow).Assembly.GetType("JavMetaLite.App.LocalizationService")
+            ?? throw new InvalidOperationException("没有找到本地化服务。 ");
+        var detectSystemLanguage = localizationType.GetMethod(
+            "DetectSystemLanguage",
+            BindingFlags.Public | BindingFlags.Static)
+            ?? throw new InvalidOperationException("没有找到系统语言检测入口。 ");
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            var expectations = new[]
+            {
+                (Culture: "zh-CN", Expected: UiLanguageCodes.SimplifiedChinese),
+                (Culture: "zh-TW", Expected: UiLanguageCodes.TraditionalChinese),
+                (Culture: "en-US", Expected: UiLanguageCodes.English),
+                (Culture: "ja-JP", Expected: UiLanguageCodes.Japanese),
+                (Culture: "fr-FR", Expected: UiLanguageCodes.English)
+            };
+            foreach (var expectation in expectations)
+            {
+                CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(expectation.Culture);
+                var actual = detectSystemLanguage.Invoke(null, null)?.ToString();
+                if (!string.Equals(actual, expectation.Expected, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"系统语言 {expectation.Culture} 解析为 {actual}，预期为 {expectation.Expected}。 ");
+                }
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
     }
 
     private static void WaitForTask(Task task)
