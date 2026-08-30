@@ -4,7 +4,11 @@
 
 [简体中文](README.zh-Hans.md) · [繁體中文](README.zh-Hant.md) · [English](README.md) · **日本語**
 
+[![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
+
 1本の動画を個別に整理する、Windows向けの軽量メタデータエディターです。動画を選択またはドロップし、情報を検索して各項目を確認・編集した後、保存前にすべてのファイル変更をプレビューできます。JavMetaLiteはメディアライブラリ全体をスキャンせず、ユーザーの確認前に動画を書き換えたり移動したりしません。
+
+![JavMetaLite v1.0.0 メイン画面](docs/images/javmetalite-v1.0.0-main.ja.png)
 
 ## 主な機能
 

@@ -4,7 +4,11 @@
 
 [简体中文](README.zh-Hans.md) · [繁體中文](README.zh-Hant.md) · **English** · [日本語](README.ja.md)
 
+[![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
+
 JavMetaLite is a lightweight Windows metadata editor that handles one movie at a time. Select or drop a movie, search selected sources, review and edit every field, then preview all file changes before saving. JavMetaLite does not scan a media library or write or move a movie before the user confirms the operation.
+
+![JavMetaLite v1.0.0 main window](docs/images/javmetalite-v1.0.0-main.en.png)
 
 ## Features
 
