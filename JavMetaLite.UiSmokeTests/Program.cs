@@ -18,6 +18,10 @@ internal static class Program
     private static void Main()
     {
         var application = new Application();
+        application.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("/JavMetaLite;component/Resources/Theme.xaml", UriKind.Relative)
+        });
         SynchronizationContext.SetSynchronizationContext(
             new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
         var window = new MainWindow();
@@ -43,12 +47,31 @@ internal static class Program
             ?? throw new InvalidOperationException("没有找到语言选择框。 ");
         var searchButton = window.FindName("SearchButton") as Button
             ?? throw new InvalidOperationException("没有找到搜索按钮。 ");
+        var browserImportButton = window.FindName("BrowserImportButton") as Button
+            ?? throw new InvalidOperationException("没有找到网页导入按钮。 ");
+        var idTextBox = window.FindName("IdTextBox") as TextBox
+            ?? throw new InvalidOperationException("没有找到番号输入框。 ");
+        var searchToolbar = window.FindName("SearchToolbar") as Border
+            ?? throw new InvalidOperationException("没有找到搜索工具栏。 ");
+        var chooseVideoButton = window.FindName("ChooseVideoButton") as Button
+            ?? throw new InvalidOperationException("没有找到选择影片按钮。 ");
+        if (!application.Resources.MergedDictionaries.Any(dictionary =>
+                dictionary.Source?.OriginalString.EndsWith("Resources/Theme.xaml", StringComparison.OrdinalIgnoreCase) == true) ||
+            searchButton.MinHeight < 36 || idTextBox.MinHeight < 36 || sourceComboBox.MinHeight < 36)
+        {
+            throw new InvalidOperationException("v0.9 dev2 共用主题或统一控件尺寸未生效。 ");
+        }
+        var normalWidth = window.Width;
+        var normalHeight = window.Height;
+        window.Width = window.MinWidth;
+        window.Height = window.MinHeight;
+        window.UpdateLayout();
         var languageExpectations = new[]
         {
-            (Code: UiLanguageCodes.SimplifiedChinese, Search: "搜索资料", Save: "保存", AutoSource: "多来源搜索（推荐）"),
-            (Code: UiLanguageCodes.TraditionalChinese, Search: "搜尋資料", Save: "儲存", AutoSource: "多來源搜尋（建議）"),
-            (Code: UiLanguageCodes.English, Search: "Search", Save: "Save", AutoSource: "Multi-source search"),
-            (Code: UiLanguageCodes.Japanese, Search: "検索", Save: "保存", AutoSource: "複数ソース検索（推奨）")
+            (Code: UiLanguageCodes.SimplifiedChinese, Search: "搜索资料", Save: "保存", AutoSource: "多来源搜索（推荐）", Font: "Segoe UI, Microsoft YaHei UI"),
+            (Code: UiLanguageCodes.TraditionalChinese, Search: "搜尋資料", Save: "儲存", AutoSource: "多來源搜尋（建議）", Font: "Segoe UI, Microsoft JhengHei UI"),
+            (Code: UiLanguageCodes.English, Search: "Search", Save: "Save", AutoSource: "Multi-source search", Font: "Segoe UI"),
+            (Code: UiLanguageCodes.Japanese, Search: "検索", Save: "保存", AutoSource: "複数ソース検索（推奨）", Font: "Segoe UI, Yu Gothic UI")
         };
         if (languageComboBox.Items.Count != languageExpectations.Length)
         {
@@ -79,9 +102,18 @@ internal static class Program
                 languageSaveButton.Content?.ToString() != expectation.Save ||
                 sourceComboBox.Items[0] is not ComboBoxItem languageAutoSource ||
                 languageAutoSource.Content?.ToString() != expectation.AutoSource ||
-                string.IsNullOrWhiteSpace(languageAutoSource.ToolTip?.ToString()))
+                string.IsNullOrWhiteSpace(languageAutoSource.ToolTip?.ToString()) ||
+                searchButton.FontFamily.Source != expectation.Font)
             {
                 throw new InvalidOperationException($"v0.9 {expectation.Code} 没有即时更新主要界面文字。 ");
+            }
+            if (!FitsInside(idTextBox, searchToolbar) ||
+                !FitsInside(searchButton, searchToolbar) ||
+                !FitsInside(browserImportButton, searchToolbar) ||
+                !FitsInside(sourceComboBox, searchToolbar) ||
+                !FitsInside(chooseVideoButton, window))
+            {
+                throw new InvalidOperationException($"v0.9 dev2 {expectation.Code} 在最小窗口下出现控件越界。 ");
             }
 
             if (expectation.Code == UiLanguageCodes.English)
@@ -105,6 +137,8 @@ internal static class Program
                 }
             }
         }
+        window.Width = normalWidth;
+        window.Height = normalHeight;
         languageComboBox.SelectedItem = languageComboBox.Items
             .OfType<ComboBoxItem>()
             .Single(item => item.Tag?.ToString() == UiLanguageCodes.SimplifiedChinese);
@@ -714,6 +748,8 @@ internal static class Program
             []);
         var previewWindow = new SavePreviewWindow(previewPlan) { Owner = window };
         previewWindow.Show();
+        previewWindow.Width = previewWindow.MinWidth;
+        previewWindow.Height = previewWindow.MinHeight;
         previewWindow.UpdateLayout();
         if (!previewWindow.IsVisible || previewWindow.FindName("ConfirmButton") is not Button { IsEnabled: true })
         {
@@ -726,6 +762,16 @@ internal static class Program
         }
         var previewChanges = previewWindow.FindName("ChangesList") as ListView
             ?? throw new InvalidOperationException("保存预览变更列表未创建。 ");
+        if (previewWindow.FindName("FooterButtonsPanel") is not StackPanel footerButtonsPanel ||
+            previewWindow.FindName("PreviewPathPanel") is not Border previewPathPanel ||
+            previewWindow.FindName("ChangesPanel") is not Border changesPanel ||
+            !FitsInside(footerButtonsPanel, previewWindow) ||
+            !FitsInside(previewPathPanel, previewWindow) ||
+            !FitsInside(changesPanel, previewWindow) ||
+            footerButtonsPanel.Children.OfType<Button>().Any(button => button.MinHeight < 36))
+        {
+            throw new InvalidOperationException("v0.9 dev2 保存预览在最小窗口下布局不完整。 ");
+        }
         var previewActions = previewChanges.Items.Cast<object>()
             .Select(item => item.GetType().GetProperty("Action")?.GetValue(item)?.ToString())
             .ToArray();
@@ -735,7 +781,22 @@ internal static class Program
         }
         previewWindow.Close();
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True directSaveRemembered=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True");
+        var browserWindow = new BrowserWindow("https://www.javlibrary.com/cn/main.php");
+        var browserRoot = browserWindow.Content as FrameworkElement
+            ?? throw new InvalidOperationException("内置浏览器根布局未创建。 ");
+        browserRoot.Measure(new Size(browserWindow.MinWidth, browserWindow.MinHeight));
+        browserRoot.Arrange(new Rect(0, 0, browserWindow.MinWidth, browserWindow.MinHeight));
+        browserRoot.UpdateLayout();
+        if (browserWindow.FindName("BrowserToolbar") is not Border browserToolbar ||
+            browserWindow.FindName("ImportButton") is not Button importButton ||
+            !FitsInside(importButton, browserToolbar) ||
+            importButton.MinHeight < 36)
+        {
+            throw new InvalidOperationException("v0.9 dev2 内置浏览器工具栏布局或按钮样式不完整。 ");
+        }
+        browserWindow.Close();
+
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True multiSourceLabel=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True directSaveDefaultsOff=True directSaveRemembered=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True sharedTheme=True minimumLayout=True browserLayout=True");
         window.Close();
         application.Shutdown();
     }
@@ -757,5 +818,20 @@ internal static class Program
             TaskScheduler.Default);
         Dispatcher.PushFrame(frame);
         task.GetAwaiter().GetResult();
+    }
+
+    private static bool FitsInside(FrameworkElement child, FrameworkElement container, double tolerance = 1.5)
+    {
+        if (child.ActualWidth <= 0 || child.ActualHeight <= 0 ||
+            container.ActualWidth <= 0 || container.ActualHeight <= 0)
+        {
+            return false;
+        }
+
+        var topLeft = child.TranslatePoint(new Point(0, 0), container);
+        return topLeft.X >= -tolerance &&
+               topLeft.Y >= -tolerance &&
+               topLeft.X + child.ActualWidth <= container.ActualWidth + tolerance &&
+               topLeft.Y + child.ActualHeight <= container.ActualHeight + tolerance;
     }
 }

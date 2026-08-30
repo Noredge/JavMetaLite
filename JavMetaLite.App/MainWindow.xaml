@@ -4,29 +4,12 @@
         Title="{DynamicResource App.Title}"
         Width="1120" Height="790" MinWidth="930" MinHeight="650"
         WindowStartupLocation="CenterScreen"
-        Background="#0D1117"
+        Background="{StaticResource WindowBrush}"
         AllowDrop="True"
         Drop="Window_Drop"
         DragOver="Window_DragOver"
         Closing="Window_Closing">
     <Window.Resources>
-        <SolidColorBrush x:Key="PanelBrush" Color="#151B23" />
-        <SolidColorBrush x:Key="PanelAltBrush" Color="#1B2330" />
-        <SolidColorBrush x:Key="BorderBrush" Color="#2A3544" />
-        <SolidColorBrush x:Key="TextBrush" Color="#F1F5F9" />
-        <SolidColorBrush x:Key="MutedBrush" Color="#93A4B8" />
-        <SolidColorBrush x:Key="AccentBrush" Color="#4F8CFF" />
-
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-            <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI" />
-        </Style>
-        <Style TargetType="Label">
-            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
-            <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI" />
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="Padding" Value="0,0,0,6" />
-        </Style>
         <Style x:Key="SourceBadgeButton" TargetType="Button">
             <Setter Property="Foreground" Value="#6FA8FF" />
             <Setter Property="Background" Value="Transparent" />
@@ -34,7 +17,7 @@
             <Setter Property="Padding" Value="4,0,0,6" />
             <Setter Property="FontSize" Value="10" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI" />
+            <Setter Property="FontFamily" Value="{DynamicResource Ui.FontFamily}" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="HorizontalAlignment" Value="Right" />
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -120,41 +103,12 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <Style TargetType="TextBox">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-            <Setter Property="Background" Value="#10161E" />
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-            <Setter Property="CaretBrush" Value="White" />
-            <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI" />
-            <Setter Property="FontSize" Value="14" />
-            <Setter Property="Padding" Value="10,8" />
-            <Setter Property="BorderThickness" Value="1" />
-        </Style>
-        <Style TargetType="Button">
-            <Setter Property="Foreground" Value="White" />
-            <Setter Property="Background" Value="#263244" />
-            <Setter Property="BorderBrush" Value="#36465D" />
-            <Setter Property="Padding" Value="16,9" />
-            <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Cursor" Value="Hand" />
-        </Style>
-        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
-            <Setter Property="BorderBrush" Value="#6FA2FF" />
-        </Style>
-        <Style TargetType="CheckBox">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-            <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI" />
-            <Setter Property="Margin" Value="0,0,20,0" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-        </Style>
         <Style x:Key="DarkComboBoxItem" TargetType="{x:Type ComboBoxItem}">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             <Setter Property="Background" Value="#10161E" />
             <Setter Property="Padding" Value="10,8" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI" />
+            <Setter Property="FontFamily" Value="{DynamicResource Ui.FontFamily}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type ComboBoxItem}">
@@ -184,7 +138,8 @@
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="10,7" />
-            <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI" />
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="FontFamily" Value="{DynamicResource Ui.FontFamily}" />
             <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboBoxItem}" />
             <Setter Property="MaxDropDownHeight" Value="260" />
             <Setter Property="Template">
@@ -194,9 +149,10 @@
                             <Border x:Name="MainBorder"
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}">
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="6">
                                 <Grid>
-                                    <ContentPresenter Margin="{TemplateBinding Padding}"
+                                    <ContentPresenter Margin="10,7,28,7"
                                                       VerticalAlignment="Center"
                                                       HorizontalAlignment="Left"
                                                       Content="{TemplateBinding SelectionBoxItem}"
@@ -228,7 +184,8 @@
                                         Margin="0,2,0,0"
                                         Background="#10161E"
                                         BorderBrush="#3A4A61"
-                                        BorderThickness="1">
+                                        BorderThickness="1"
+                                        CornerRadius="6">
                                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                                         <StackPanel IsItemsHost="True" />
                                     </ScrollViewer>
@@ -236,6 +193,9 @@
                             </Popup>
                         </Grid>
                         <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="{StaticResource BorderHoverBrush}" />
+                            </Trigger>
                             <Trigger Property="IsKeyboardFocusWithin" Value="True">
                                 <Setter TargetName="MainBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
                             </Trigger>
@@ -256,7 +216,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="#111821" BorderBrush="#253040" BorderThickness="0,0,0,1" Padding="24,18">
+        <Border Grid.Row="0" Background="{StaticResource ChromeBrush}" BorderBrush="#253040" BorderThickness="0,0,0,1" Padding="20,16">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -265,21 +225,27 @@
                     <ColumnDefinition Width="12" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Border Width="44" Height="44" CornerRadius="12" Background="#244B8F" Margin="0,0,14,0">
-                    <TextBlock Text="M" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <Border Width="42" Height="42" CornerRadius="11" Background="#244B8F" Margin="0,0,13,0">
+                    <TextBlock Text="M" FontSize="21" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="JAV Metadata Lite" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="JAV Metadata Lite" FontSize="19" FontWeight="SemiBold" />
                         <Border Background="#193A2A" CornerRadius="8" Padding="9,3" Margin="12,1,0,0">
                             <TextBlock Text="{DynamicResource Main.ModeBadge}" Foreground="#72E3A6" FontSize="11" FontWeight="SemiBold" />
                         </Border>
                     </StackPanel>
-                    <TextBlock Text="{DynamicResource Main.Subtitle}" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,3,0,0" />
+                    <TextBlock x:Name="SubtitleText"
+                               Text="{DynamicResource Main.Subtitle}"
+                               Foreground="{StaticResource MutedBrush}"
+                               FontSize="12"
+                               Margin="0,3,16,0"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{DynamicResource Main.Subtitle}" />
                 </StackPanel>
                 <ComboBox x:Name="LanguageComboBox"
                           Grid.Column="2"
-                          Width="126"
+                          Width="122"
                           Style="{StaticResource DarkComboBox}"
                           ToolTip="{DynamicResource Main.LanguageTooltip}"
                           SelectionChanged="LanguageComboBox_SelectionChanged"
@@ -289,18 +255,18 @@
                     <ComboBoxItem Content="English" Tag="en" />
                     <ComboBoxItem Content="日本語" Tag="ja" />
                 </ComboBox>
-                <Button Grid.Column="4" Content="{DynamicResource Main.ChooseVideo}" Click="ChooseFile_Click" VerticalAlignment="Center" />
+                <Button x:Name="ChooseVideoButton" Grid.Column="4" Content="{DynamicResource Main.ChooseVideo}" Click="ChooseFile_Click" VerticalAlignment="Center" />
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" Margin="22">
+        <Grid Grid.Row="1" Margin="20">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="310" />
-                <ColumnDefinition Width="18" />
+                <ColumnDefinition Width="300" />
+                <ColumnDefinition Width="16" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="14" Padding="18">
+            <Border x:Name="ArtworkPanel" Grid.Column="0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="16">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -339,7 +305,7 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="14">
+            <Border x:Name="MetadataPanel" Grid.Column="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -347,23 +313,23 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <Border Background="{StaticResource PanelAltBrush}" CornerRadius="14,14,0,0" Padding="18,16" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                    <Border x:Name="SearchToolbar" Background="{StaticResource PanelAltBrush}" CornerRadius="12,12,0,0" Padding="16,14" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="155" />
-                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="8" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="8" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="10" />
-                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="162" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="{DynamicResource Main.MovieId}" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                            <TextBox Grid.Column="1" Text="{Binding Id, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox x:Name="IdTextBox" Grid.Column="1" Text="{Binding Id, UpdateSourceTrigger=PropertyChanged}" />
                             <Button x:Name="SearchButton" Grid.Column="3" Style="{StaticResource PrimaryButton}" Content="{DynamicResource Main.Search}" Click="Search_Click" />
-                            <Button Grid.Column="5" Content="{DynamicResource Main.BrowserImport}" Click="Browser_Click" ToolTip="{DynamicResource Main.BrowserImportTooltip}" />
+                            <Button x:Name="BrowserImportButton" Grid.Column="5" Content="{DynamicResource Main.BrowserImport}" Click="Browser_Click" ToolTip="{DynamicResource Main.BrowserImportTooltip}" />
                             <ComboBox x:Name="SourceComboBox" Grid.Column="7" SelectedIndex="0" Style="{StaticResource DarkComboBox}">
                                 <ComboBoxItem Content="{DynamicResource Main.Source.Auto}"
                                               ToolTip="{DynamicResource Main.Source.AutoTooltip}"
@@ -377,11 +343,11 @@
                         </Grid>
                     </Border>
 
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="18,16">
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="16,15">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="12" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
@@ -401,7 +367,7 @@
                                 </Grid>
                                 <TextBox Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
-                            <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,13,0,0">
+                            <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,12,0,0">
                                 <Grid>
                                     <Label Content="{DynamicResource Field.OriginalTitle}" />
                                     <Button x:Name="OriginalTitleSourceText" Tag="OriginalTitle" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
@@ -409,14 +375,14 @@
                                 <TextBox Text="{Binding OriginalTitle, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
-                            <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,13,0,0">
+                            <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,12,0,0">
                                 <Grid>
                                     <Label Content="{DynamicResource Field.ReleaseDate}" />
                                     <Button x:Name="ReleaseDateSourceText" Tag="ReleaseDate" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding ReleaseDate, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
-                            <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,13,0,0">
+                            <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,12,0,0">
                                 <Grid>
                                     <Label Content="{DynamicResource Field.RuntimeMinutes}" />
                                     <Button x:Name="RuntimeSourceText" Tag="RuntimeMinutes" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
@@ -424,14 +390,14 @@
                                 <TextBox Text="{Binding RuntimeMinutes, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
-                            <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,13,0,0">
+                            <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,12,0,0">
                                 <Grid>
                                     <Label Content="{DynamicResource Field.Maker}" />
                                     <Button x:Name="MakerSourceText" Tag="Maker" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding Maker, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
-                            <StackPanel Grid.Row="3" Grid.Column="2" Margin="0,13,0,0">
+                            <StackPanel Grid.Row="3" Grid.Column="2" Margin="0,12,0,0">
                                 <Grid>
                                     <Label Content="{DynamicResource Field.Director}" />
                                     <Button x:Name="DirectorSourceText" Tag="Director" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
@@ -439,14 +405,14 @@
                                 <TextBox Text="{Binding Director, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
-                            <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,13,0,0">
+                            <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,12,0,0">
                                 <Grid>
                                     <Label Content="{DynamicResource Field.Label}" />
                                     <Button x:Name="LabelSourceText" Tag="Label" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
-                            <StackPanel Grid.Row="4" Grid.Column="2" Margin="0,13,0,0">
+                            <StackPanel Grid.Row="4" Grid.Column="2" Margin="0,12,0,0">
                                 <Grid>
                                     <Label Content="{DynamicResource Field.Series}" />
                                     <Button x:Name="SeriesSourceText" Tag="Series" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
@@ -454,14 +420,14 @@
                                 <TextBox Text="{Binding Series, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
 
-                            <StackPanel Grid.Row="5" Grid.Column="0" Margin="0,13,0,0">
+                            <StackPanel Grid.Row="5" Grid.Column="0" Margin="0,12,0,0">
                                 <Grid>
                                     <Label Content="{DynamicResource Field.Actors}" />
                                     <Button x:Name="ActorsSourceText" Tag="Actors" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding ActorsText, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" MinHeight="42" />
                             </StackPanel>
-                            <StackPanel Grid.Row="5" Grid.Column="2" Margin="0,13,0,0">
+                            <StackPanel Grid.Row="5" Grid.Column="2" Margin="0,12,0,0">
                                 <Grid>
                                     <Label Content="{DynamicResource Field.Genres}" />
                                     <Button x:Name="GenresSourceText" Tag="Genres" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
@@ -469,7 +435,7 @@
                                 <TextBox Text="{Binding GenresText, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" MinHeight="42" />
                             </StackPanel>
 
-                            <StackPanel Grid.Row="6" Grid.ColumnSpan="3" Margin="0,13,0,6">
+                            <StackPanel Grid.Row="6" Grid.ColumnSpan="3" Margin="0,12,0,6">
                                 <Grid>
                                     <Label Content="{DynamicResource Field.Plot}" />
                                     <Button x:Name="PlotSourceText" Tag="Plot" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
@@ -479,7 +445,7 @@
                         </Grid>
                     </ScrollViewer>
 
-                    <Border Grid.Row="2" Background="{StaticResource PanelAltBrush}" CornerRadius="0,0,14,14" Padding="18,15" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+                    <Border x:Name="OutputPanel" Grid.Row="2" Background="{StaticResource PanelAltBrush}" CornerRadius="0,0,12,12" Padding="16,14" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -559,14 +525,14 @@
                                            TextWrapping="Wrap"
                                            Margin="0,8,0,0" />
                             </StackPanel>
-                            <Button x:Name="SaveButton" Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="{DynamicResource Common.Save}" Click="Save_Click" Margin="28,0,0,0" />
+                            <Button x:Name="SaveButton" Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="{DynamicResource Common.Save}" Click="Save_Click" Margin="24,0,0,0" />
                         </Grid>
                     </Border>
                 </Grid>
             </Border>
         </Grid>
 
-        <Border Grid.Row="2" Background="#111821" BorderBrush="#253040" BorderThickness="0,1,0,0" Padding="22,11">
+        <Border Grid.Row="2" Background="{StaticResource ChromeBrush}" BorderBrush="#253040" BorderThickness="0,1,0,0" Padding="20,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />

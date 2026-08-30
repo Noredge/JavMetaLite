@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.9.0-dev2 — Interface consistency
+
+- Introduces one shared dark theme for the main window, save preview, and embedded browser.
+- Gives buttons, text fields, checkboxes, combo boxes, and tooltips consistent sizing, rounded geometry, and hover, focus, pressed, and disabled states.
+- Rebalances the main card widths, search toolbar, form spacing, output area, and footer without moving or reordering any feature.
+- Makes the save-preview footer and browser toolbar adapt safely to long localized text.
+- Adds automated four-language minimum-window bounds checks plus shared-theme and secondary-window layout checks.
+- Preserves all search, source, metadata, artwork, save, path, overwrite, transfer, rollback, and preference behavior.
+
 ## v0.9.0-dev1-r2 — Localization polish
 
 - Shortens the English multi-source label so it remains fully visible in the fixed-width selector, while a localized tooltip retains the complete recommendation.
