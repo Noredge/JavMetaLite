@@ -75,7 +75,7 @@ public partial class MainWindow : Window
         _uiInitialized = true;
         ApplyMetadata(_metadata, []);
         RefreshTargetLocationUi();
-        AppLog.Info("JavMetaLite v1.1.0 启动");
+        AppLog.Info("JavMetaLite v1.1.1 启动");
     }
 
     internal void LoadPreferences()
@@ -538,6 +538,11 @@ public partial class MainWindow : Window
                     ? LocalizationService.Get("Status.SidecarsMigrated")
                     : LocalizationService.Get("Status.NoChanges")
                 : string.Join(LocalizationService.Get("Common.ListSeparator"), outputs);
+            if (options.DownloadExtrafanart && result.Outputs.ExtrafanartPaths.Count == 0)
+            {
+                outputSummary += LocalizationService.Get("Common.ListSeparator") +
+                                 LocalizationService.Get("Status.ExtrafanartSkipped");
+            }
             SetStatus(LocalizationService.Get("Status.SaveComplete", outputSummary, fanartNote, moveNote), true);
         });
     }

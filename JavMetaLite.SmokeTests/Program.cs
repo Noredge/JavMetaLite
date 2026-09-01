@@ -107,6 +107,7 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("高清海报自动裁切", TestPosterCropping),
     ("NFO 生成", TestNfoWriter),
     ("完整封套 fanart 与 Sample Images 输出", TestArtworkOutput),
+    ("v1.1 无 Sample Images 时自动跳过", TestMissingSampleImagesAreSkipped),
     ("v0.6 本地完整封套输出", TestLocalCompleteCoverOutput),
     ("v0.4 文件整理计划与安全执行", TestFileOrganization),
     ("v0.6 本地 sidecar 定位", TestLocalSidecarLocator),
@@ -1037,6 +1038,50 @@ static async Task TestArtworkOutput()
             metadata,
             new JavMetaLite.Core.Models.SaveOptions(true, true, true, true, false));
         AssertEqual("5", conflicts.Count.ToString());
+    }
+    finally
+    {
+        Directory.Delete(root, true);
+    }
+}
+
+static async Task TestMissingSampleImagesAreSkipped()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.NoSampleImagesTests.{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    try
+    {
+        var videoPath = Path.Combine(root, "START-585.mp4");
+        await File.WriteAllBytesAsync(videoPath, [0x53, 0x54, 0x41, 0x52, 0x54]);
+        var metadata = new MovieMetadata
+        {
+            Id = "START-585",
+            Title = "无独立剧照测试",
+            ScreenshotUrls = []
+        };
+
+        var options = new JavMetaLite.Core.Models.SaveOptions(false, false, false, true, false);
+        using var service = new OutputService();
+        var result = await service.SaveAsync(
+            videoPath,
+            metadata,
+            options);
+
+        AssertEqual("0", result.ExtrafanartPaths.Count.ToString());
+        AssertEqual("False", Directory.Exists(Path.Combine(root, "extrafanart")).ToString());
+        AssertEqual("True", File.Exists(videoPath).ToString());
+
+        var organizationService = new FileOrganizationService(service);
+        var plan = FileOrganizationService.BuildPlan(
+            videoPath,
+            metadata,
+            options,
+            new OrganizationOptions(false, false));
+        var organized = await organizationService.ExecuteAsync(plan, metadata, allowOverwrite: false);
+        AssertEqual("0", organized.Outputs.ExtrafanartPaths.Count.ToString());
+        AssertEqual(videoPath, organized.VideoPath);
+        AssertEqual("False", organized.VideoMoved.ToString());
+        AssertEqual("True", File.Exists(videoPath).ToString());
     }
     finally
     {

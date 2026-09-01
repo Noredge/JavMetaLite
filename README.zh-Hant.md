@@ -24,7 +24,7 @@
 
 ## 快速開始
 
-1. 從 [GitHub Releases](https://github.com/Noredge/JavMetaLite/releases) 下載 `JavMetaLite-v1.1.0-win-x64-portable.zip`。
+1. 從 [GitHub Releases](https://github.com/Noredge/JavMetaLite/releases) 下載 `JavMetaLite-v1.1.1-win-x64-portable.zip`。
 2. 對照同一個 Release 內的 `SHA256SUMS.txt` 校驗壓縮檔，然後解壓縮。
 3. 執行 `JavMetaLite.exe`，選擇影片，或拖入一個影片檔案或單片番號資料夾。
 4. 檢查番號並搜尋資料，選擇合適的文字與封套來源。

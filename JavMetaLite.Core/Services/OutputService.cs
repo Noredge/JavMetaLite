@@ -83,10 +83,9 @@ public sealed class OutputService : IDisposable
         var extraImages = options.DownloadExtrafanart
             ? screenshots.ToArray()
             : [];
-        if (options.DownloadExtrafanart && extraImages.Length == 0 &&
-            !options.WriteNfo && !options.DownloadPoster && !options.DownloadFanart)
+        if (options.DownloadExtrafanart && extraImages.Length == 0)
         {
-            throw new InvalidOperationException("没有找到可保存的 Sample Images。 ");
+            AppLog.Info($"未找到可保存的 Sample Images，已跳过 extrafanart id={metadata.Id}");
         }
 
         var extraDirectory = Path.Combine(directory, "extrafanart");

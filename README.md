@@ -24,7 +24,7 @@ JavMetaLite is a lightweight Windows metadata editor that handles one movie at a
 
 ## Quick start
 
-1. Download `JavMetaLite-v1.1.0-win-x64-portable.zip` from [GitHub Releases](https://github.com/Noredge/JavMetaLite/releases).
+1. Download `JavMetaLite-v1.1.1-win-x64-portable.zip` from [GitHub Releases](https://github.com/Noredge/JavMetaLite/releases).
 2. Verify the archive against `SHA256SUMS.txt` from the same release, then extract it.
 3. Run `JavMetaLite.exe`, then choose a movie or drop one movie file or single-movie ID folder.
 4. Verify the detected ID, search for metadata, and choose suitable text and cover sources.

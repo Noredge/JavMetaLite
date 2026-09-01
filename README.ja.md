@@ -24,7 +24,7 @@
 
 ## クイックスタート
 
-1. [GitHub Releases](https://github.com/Noredge/JavMetaLite/releases)から`JavMetaLite-v1.1.0-win-x64-portable.zip`をダウンロードします。
+1. [GitHub Releases](https://github.com/Noredge/JavMetaLite/releases)から`JavMetaLite-v1.1.1-win-x64-portable.zip`をダウンロードします。
 2. 同じReleaseにある`SHA256SUMS.txt`と照合してから、ZIPを展開します。
 3. `JavMetaLite.exe`を実行し、動画を選択するか、動画ファイルまたは単一作品の品番フォルダーを1つドロップします。
 4. 検出された品番を確認して情報を検索し、適切な文字情報とジャケット画像の取得元を選びます。

@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.1 — Stable
+
+- When “Save all stills” is enabled but the selected source has no usable Sample Images, saving now skips `extrafanart` automatically instead of interrupting the entire operation.
+- The completion status and local log explicitly report that the still-image output was skipped.
+
 ## v1.1.0 — Stable
 
 - Promotes RC1 without functional changes after the complete automated gate and final Windows acceptance passed.
