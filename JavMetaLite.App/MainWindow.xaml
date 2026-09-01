@@ -297,7 +297,7 @@
                             <Image x:Name="PosterImage" Stretch="Uniform" Margin="8" />
                             <StackPanel x:Name="DropHint" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
                                 <TextBlock Text="＋" FontSize="38" Foreground="#5E7CA6" HorizontalAlignment="Center" />
-                                <TextBlock Text="{DynamicResource Main.DropVideo}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,8,0,0" />
+                                <TextBlock Text="{DynamicResource Main.DropInput}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,8,0,0" TextAlignment="Center" TextWrapping="Wrap" />
                                 <TextBlock Text="MP4 · MKV · AVI · WMV" Foreground="{StaticResource MutedBrush}" FontSize="12" HorizontalAlignment="Center" Margin="0,6,0,0" />
                             </StackPanel>
                         </Grid>
@@ -479,7 +479,7 @@
                                     <CheckBox x:Name="RememberPreferencesCheckBox"
                                               Content="{DynamicResource Main.RememberPreferences}"
                                               IsChecked="False"
-                                              ToolTip="{DynamicResource Main.RememberPreferencesTooltip}" />
+                                              ToolTip="{DynamicResource Main.RememberPreferencesTooltipVerification}" />
                                 </WrapPanel>
                                 <WrapPanel Margin="0,10,0,0">
                                     <TextBlock Text="{DynamicResource Main.TargetLocation}" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
@@ -493,6 +493,13 @@
                                         <ComboBoxItem Content="{DynamicResource Main.Target.SourceNumberFolder}" Tag="SourceNumberFolder" />
                                         <ComboBoxItem Content="{DynamicResource Main.Target.CustomRootNumberFolder}" Tag="CustomRootNumberFolder" />
                                     </ComboBox>
+                                    <CheckBox x:Name="SkipCrossVolumeVerificationCheckBox"
+                                              Content="{DynamicResource Main.SkipCrossVolumeVerification}"
+                                              IsChecked="False"
+                                              Visibility="Collapsed"
+                                              Checked="TargetOption_Changed"
+                                              Unchecked="TargetOption_Changed"
+                                              ToolTip="{DynamicResource Main.SkipCrossVolumeVerificationTooltip}" />
                                 </WrapPanel>
                                 <Grid x:Name="CustomTargetPanel" Margin="0,10,0,0" Visibility="Collapsed">
                                     <Grid.ColumnDefinitions>
@@ -550,7 +557,7 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#72E3A6" VerticalAlignment="Center" Margin="0,0,9,0" />
-                <TextBlock x:Name="StatusText" Grid.Column="1" Text="{DynamicResource Main.StatusReady}" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+                <TextBlock x:Name="StatusText" Grid.Column="1" Text="{DynamicResource Main.StatusReadyInput}" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
                 <Button x:Name="CancelOperationButton"
                         Grid.Column="2"
                         Content="{DynamicResource Main.CancelOperation}"
@@ -563,7 +570,7 @@
                         BorderBrush="#85363D"
                         Visibility="Collapsed" />
                 <Button Grid.Column="3" Content="{DynamicResource Common.OpenLogs}" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
-                <TextBlock Grid.Column="4" Text="{DynamicResource Main.Version}" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="4" Text="{DynamicResource Main.VersionPreview}" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>

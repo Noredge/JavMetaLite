@@ -98,6 +98,7 @@ public partial class SavePreviewWindow : Window
             PlannedChangeKind.RenameVideo => (LocalizationService.Get("Preview.Action.RenameVideo"), "#193152", "#8DB8FF"),
             PlannedChangeKind.MoveAndRenameVideo => (LocalizationService.Get("Preview.Action.MoveAndRename"), "#193152", "#8DB8FF"),
             PlannedChangeKind.CopyAndVerifyVideo => (LocalizationService.Get("Preview.Action.CopyVerify"), "#193152", "#8DB8FF"),
+            PlannedChangeKind.CopyVideo => (LocalizationService.Get("Preview.Action.CopyFast"), "#4A3218", "#FFD18A"),
             PlannedChangeKind.UpdateFile => (LocalizationService.Get("Preview.Action.Update"), "#1B3C36", "#72E3C1"),
             PlannedChangeKind.KeepFile => (LocalizationService.Get("Preview.Action.Keep"), "#252D38", "#A9B7C8"),
             PlannedChangeKind.ReplaceImage => (LocalizationService.Get("Preview.Action.ReplaceImage"), "#4A3218", "#FFD18A"),
@@ -130,6 +131,7 @@ public partial class SavePreviewWindow : Window
             PlannedChangeKind.RenameVideo => "Preview.Description.RenameVideo",
             PlannedChangeKind.MoveAndRenameVideo => "Preview.Description.MoveAndRename",
             PlannedChangeKind.CopyAndVerifyVideo => "Preview.Description.CopyVerify",
+            PlannedChangeKind.CopyVideo => "Preview.Description.CopyFast",
             _ => null
         };
         if (videoKey is not null)

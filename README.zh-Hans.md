@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 
-一次只整理一部影片的轻量 Windows metadata 编辑器。选择或拖入影片，搜索资料，逐项检查和修改，然后在保存前预览所有文件变更。JavMetaLite 不扫描媒体库，也不会在用户确认前写入或移动影片。
+一次只整理一部影片的轻量 Windows metadata 编辑器。选择影片，或拖入单个影片文件或单片番号文件夹，再搜索资料、逐项检查和修改，并在保存前预览所有文件变更。JavMetaLite 不扫描媒体库，也不会在用户确认前写入或移动影片。
 
 ![JavMetaLite v1.0.0 主界面](docs/images/javmetalite-v1.0.0-main.zh-Hans.png)
 
@@ -18,15 +18,15 @@
 - 读取并安全更新本地 NFO、poster 和 fanart，保留未知 XML。
 - 生成 Jellyfin 兼容的 NFO、poster、fanart，以及可选的 `extrafanart/`。
 - 可保持影片原位、在原地建立番号文件夹，或整理到自定义目标根目录。
-- 跨磁盘或 UNC 目标使用安全复制与 SHA-256 校验，失败时回滚。
+- 跨磁盘或 UNC 目标使用安全暂存复制。默认执行完整 SHA-256 校验；用户也可自行承担风险，明确选择仅检查文件大小的快速模式。
 - 保存前默认显示实际变更预览；目标影片冲突时始终阻止执行。
 - 便携、自包含的 Windows x64 单文件程序，无需安装 .NET Runtime。
 
 ## 快速开始
 
-1. 从 [GitHub Releases](https://github.com/Noredge/JavMetaLite/releases) 下载 `JavMetaLite-v1.0.0-win-x64-portable.zip`。
+1. 从 [GitHub Releases](https://github.com/Noredge/JavMetaLite/releases) 下载 `JavMetaLite-v1.1.0-win-x64-portable.zip`。
 2. 对照同一 Release 内的 `SHA256SUMS.txt` 校验压缩包，然后解压。
-3. 运行 `JavMetaLite.exe`，选择或拖入一个影片。
+3. 运行 `JavMetaLite.exe`，选择影片，或拖入一个影片文件或单片番号文件夹。
 4. 检查番号并搜索资料，选择合适的文字与封套来源。
 5. 修改所需字段，选择输出和目标位置。
 6. 检查保存前变更预览，确认后执行。
@@ -62,7 +62,7 @@
 - 默认不移动影片，也不直接覆盖 metadata。
 - 预览窗口显示即将新建、更新、移动或保持不变的文件。
 - 影片目标已存在时不会覆盖另一个影片。
-- 跨卷传输在删除来源前校验文件大小与 SHA-256。
+- 跨卷传输默认在删除来源前校验文件大小与 SHA-256。可选快速模式会跳过内容校验，但仍保留暂存、大小检查、冲突保护与回滚。
 - 提交失败时恢复已覆盖的 metadata，并尽量保持原影片位置。
 - 搜索时会把识别出的番号发送给用户选择的资料来源。选择影片和读取本地 NFO 不会自动联网写入。
 - 手动导入 JAVLibrary 时只读取当前影片页面；内置 WebView2 浏览器可能保留网站验证所需的 Cookie。

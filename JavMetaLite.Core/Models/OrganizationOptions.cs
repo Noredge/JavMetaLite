@@ -7,6 +7,12 @@ public enum OrganizationTargetMode
     CustomRootNumberFolder
 }
 
+public enum CrossVolumeVerificationMode
+{
+    FullSha256,
+    FileSizeOnly
+}
+
 public sealed record OrganizationOptions
 {
     public OrganizationOptions(bool createMovieFolder, bool renameVideo)
@@ -14,18 +20,23 @@ public sealed record OrganizationOptions
             createMovieFolder
                 ? OrganizationTargetMode.SourceNumberFolder
                 : OrganizationTargetMode.VideoDirectory,
-            renameVideo)
+            renameVideo,
+            crossVolumeVerification: CrossVolumeVerificationMode.FullSha256)
     {
     }
 
     public OrganizationOptions(
         OrganizationTargetMode targetMode,
         bool renameVideo,
-        string? customRootDirectory = null)
+        string? customRootDirectory = null,
+        CrossVolumeVerificationMode crossVolumeVerification = CrossVolumeVerificationMode.FullSha256)
     {
         TargetMode = targetMode;
         RenameVideo = renameVideo;
         CustomRootDirectory = customRootDirectory;
+        CrossVolumeVerification = Enum.IsDefined(crossVolumeVerification)
+            ? crossVolumeVerification
+            : CrossVolumeVerificationMode.FullSha256;
     }
 
     public OrganizationTargetMode TargetMode { get; }
@@ -33,6 +44,8 @@ public sealed record OrganizationOptions
     public bool RenameVideo { get; }
 
     public string? CustomRootDirectory { get; }
+
+    public CrossVolumeVerificationMode CrossVolumeVerification { get; }
 
     public bool CreateMovieFolder => TargetMode is not OrganizationTargetMode.VideoDirectory;
 
@@ -63,6 +76,7 @@ public enum PlannedChangeKind
     RenameVideo,
     MoveAndRenameVideo,
     CopyAndVerifyVideo,
+    CopyVideo,
     CreateFile,
     OverwriteFile,
     UpdateFile,
@@ -147,6 +161,7 @@ public enum FileTransactionStage
     VerifyingMovie,
     Committing,
     RetiringSource,
+    RetiringSourceFast,
     Completed
 }
 

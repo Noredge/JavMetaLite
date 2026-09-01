@@ -8,8 +8,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-if ($Version -notmatch '^\d+\.\d+\.\d+$') {
-    throw "Version must use the form 1.0.0."
+if ($Version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$') {
+    throw "Version must use a semantic version such as 1.0.0 or 1.1.0-dev1."
 }
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))

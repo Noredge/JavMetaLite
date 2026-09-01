@@ -23,4 +23,17 @@
     <sys:String x:Key="Dialog.VideoFilter">影片檔案|*.mp4;*.m4v;*.mkv;*.avi;*.wmv;*.mov;*.webm;*.ts;*.m2ts|所有檔案|*.*</sys:String>
     <sys:String x:Key="Preview.Description.CreateFolder">建立番號資料夾</sys:String><sys:String x:Key="Preview.Description.MoveVideo">移動影片</sys:String><sys:String x:Key="Preview.Description.RenameVideo">重新命名影片</sys:String><sys:String x:Key="Preview.Description.MoveAndRename">移動並重新命名影片</sys:String><sys:String x:Key="Preview.Description.CopyVerify">安全複製並校驗影片，成功後移除來源</sys:String><sys:String x:Key="Preview.Description.GenerateNfo">產生 NFO</sys:String><sys:String x:Key="Preview.Description.OverwriteNfo">覆寫 NFO</sys:String><sys:String x:Key="Preview.Description.UpdateNfo">更新 NFO</sys:String><sys:String x:Key="Preview.Description.UpdateNfoPreserve">更新 NFO（保留未知 XML）</sys:String><sys:String x:Key="Preview.Description.KeepNfo">NFO 內容保持不變</sys:String><sys:String x:Key="Preview.Description.GenerateArtwork">產生 {0}</sys:String><sys:String x:Key="Preview.Description.ReplaceArtwork">取代 {0}</sys:String><sys:String x:Key="Preview.Description.KeepArtwork">{0} 內容保持不變</sys:String><sys:String x:Key="Preview.Description.MissingArtwork">本機 {0} 缺少，保持缺少</sys:String><sys:String x:Key="Preview.Description.Migrate">遷移並保持 {0}</sys:String><sys:String x:Key="Preview.Description.GenerateStill">產生劇照</sys:String><sys:String x:Key="Preview.Description.ReplaceStill">取代劇照</sys:String><sys:String x:Key="Preview.Conflict.CustomRootFile">自訂目標根目錄路徑已被檔案占用：{0}</sys:String><sys:String x:Key="Preview.Conflict.CustomRootUnavailable">自訂目標根目錄目前無法使用，程式不會自動建立該根目錄：{0}</sys:String><sys:String x:Key="Preview.Conflict.TargetFolderFile">目標資料夾路徑已被檔案占用：{0}</sys:String><sys:String x:Key="Preview.Conflict.TargetMovieExists">目標影片已存在，軟體不會覆寫影片：{0}</sys:String><sys:String x:Key="Progress.Preparing">正在準備 metadata 與安全交易…</sys:String><sys:String x:Key="Progress.Copying">正在將影片複製到目標暫存區…</sys:String><sys:String x:Key="Progress.CopyingPercent">正在將影片複製到目標暫存區… {0}%</sys:String><sys:String x:Key="Progress.Verifying">正在校驗目標影片 SHA-256…</sys:String><sys:String x:Key="Progress.VerifyingPercent">正在校驗目標影片 SHA-256… {0}%</sys:String><sys:String x:Key="Progress.Committing">正在提交目標影片與 metadata…</sys:String><sys:String x:Key="Progress.RetiringSource">目標校驗與提交完成，正在移除來源影片…</sys:String><sys:String x:Key="Progress.Completed">安全儲存已完成</sys:String>
     <sys:String x:Key="Error.SourceTimeout">資料來源 {0} 在 {1:0} 秒內沒有回應，請稍後重試或更換來源。</sys:String>
+    <sys:String x:Key="Main.SkipCrossVolumeVerification">略過跨磁碟 SHA-256 校驗（較快，風險自負）</sys:String>
+    <sys:String x:Key="Main.SkipCrossVolumeVerificationTooltip">只檢查複製完成與檔案大小，不逐位元組校驗影片內容</sys:String>
+    <sys:String x:Key="Main.FastCopy">傳輸方式：快速跨磁碟複製，只檢查檔案大小（風險自負）</sys:String>
+    <sys:String x:Key="Preview.Action.CopyFast">快速複製</sys:String>
+    <sys:String x:Key="Preview.Description.CopyFast">快速複製影片；只檢查檔案大小，不校驗內容，成功後移除來源</sys:String>
+    <sys:String x:Key="Main.RememberPreferencesTooltipVerification">記住儲存方式、目標位置、跨磁碟校驗和輸出選項，包括直接儲存並覆寫</sys:String>
+    <sys:String x:Key="Progress.RetiringSourceFast">目標複製與提交完成，正在移除來源影片…</sys:String>
+    <sys:String x:Key="Main.VersionPreview">v1.1.0 · 穩定版</sys:String>
+    <sys:String x:Key="Main.DropInput">拖入一個影片檔案或番號資料夾</sys:String>
+    <sys:String x:Key="Main.StatusReadyInput">準備就緒，請選擇影片，或拖入一個影片檔案或番號資料夾</sys:String>
+    <sys:String x:Key="Error.FolderHasNoVideo">此資料夾頂層找不到支援的影片檔案。</sys:String>
+    <sys:String x:Key="Error.FolderHasMultipleVideos">此資料夾包含多個支援的影片檔案，請改為拖入單一影片檔案。</sys:String>
+    <sys:String x:Key="Error.ReadVideoFolder">無法讀取拖入的資料夾：{0}</sys:String>
 </ResourceDictionary>

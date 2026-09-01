@@ -1,5 +1,39 @@
 # Changelog
 
+## v1.1.0 — Stable
+
+- Promotes RC1 without functional changes after the complete automated gate and final Windows acceptance passed.
+- Adds an explicit faster cross-volume transfer mode while retaining full target-side SHA-256 verification as the safe default.
+- Makes successful online searches select their new artwork by default while preserving local images as selectable candidates.
+- Accepts a single-movie ID folder through drag and drop, with non-recursive and ambiguity-blocking input rules.
+
+## v1.1.0-rc1 — Release candidate
+
+- Freezes the accepted dev1–dev3 behavior without additional functional changes.
+- Carries forward optional cross-volume verification, post-search online artwork defaults, and single-movie ID-folder drag and drop.
+- Requires the complete offline automated gate and a final compact Windows acceptance pass before stable promotion.
+
+## v1.1.0-dev3 — ID folder drag and drop
+
+- Accepts either one supported movie file or one single-movie ID folder through drag and drop.
+- Resolves only a folder's top-level movie file so metadata subfolders and unrelated nested media are never scanned.
+- Rejects empty or multi-movie folders with a clear localized message instead of guessing which movie to open.
+
+## v1.1.0-dev2 — Online artwork becomes the post-search default
+
+- Switches poster and fanart to the preferred successful online source after a search, matching the existing metadata-field behavior.
+- Keeps previously loaded local images and a manually chosen cover in the artwork source menu so the user can switch back explicitly.
+- Leaves initial movie loading unchanged: local sidecar images remain the default until a successful search supplies new artwork.
+
+## v1.1.0-dev1 — Optional cross-volume verification
+
+- Keeps full target-side SHA-256 verification as the safe default for cross-volume and UNC transfers.
+- Adds an explicit fast-transfer option that skips the second complete target read and checks copy completion plus file size only.
+- Preserves target-side staging, late-conflict protection, cancellation, source retirement after commit, and rollback in both modes.
+- Shows the selected transfer policy in the target hint and save preview, with a clear at-your-own-risk warning for fast mode.
+- Persists the choice only when the user enables remembered save preferences and migrates schema-v4 settings to full verification.
+- Adds four-language UI copy plus offline preference, transaction, preview, and UI regression coverage.
+
 ## v1.0.0 — First public stable release
 
 - Establishes the accepted v0.9.0 feature set as the first public, feature-frozen release.

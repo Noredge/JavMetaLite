@@ -57,7 +57,9 @@
     <sys:String x:Key="Main.RenameVideo">影片重命名为番号</sys:String>
     <sys:String x:Key="Main.RenameVideoTooltip">只改变影片文件名，不改变扩展名</sys:String>
     <sys:String x:Key="Main.RememberPreferences">记住保存偏好</sys:String>
-    <sys:String x:Key="Main.RememberPreferencesTooltip">记住本行保存方式、目标位置和输出选项，包括直接保存并覆盖</sys:String>
+    <sys:String x:Key="Main.RememberPreferencesTooltip">记住本行保存方式、目标位置、跨盘校验和输出选项，包括直接保存并覆盖</sys:String>
+    <sys:String x:Key="Main.SkipCrossVolumeVerification">跳过跨盘 SHA-256 校验（更快，风险自负）</sys:String>
+    <sys:String x:Key="Main.SkipCrossVolumeVerificationTooltip">仅检查复制完成和文件大小，不验证影片内容是否逐字节一致</sys:String>
     <sys:String x:Key="Main.TargetLocation">目标位置</sys:String>
     <sys:String x:Key="Main.Target.VideoDirectory">影片所在位置（不移动）</sys:String>
     <sys:String x:Key="Main.Target.SourceNumberFolder">来源位置的番号文件夹</sys:String>
@@ -71,10 +73,11 @@
     <sys:String x:Key="Main.TargetHintCustom">请选择自定义目标根目录；选择影片后将显示最终路径</sys:String>
     <sys:String x:Key="Main.FinalVideo">最终影片：{0}</sys:String>
     <sys:String x:Key="Main.SafeCopy">传输方式：安全复制 + SHA-256 校验，成功后移除来源</sys:String>
+    <sys:String x:Key="Main.FastCopy">传输方式：快速跨盘复制，仅检查文件大小（风险自负）</sys:String>
     <sys:String x:Key="Main.CancelOperation">取消当前操作</sys:String>
     <sys:String x:Key="Main.StatusReady">准备就绪，请选择或拖入一个影片</sys:String>
     <sys:String x:Key="Status.LanguageChanged">界面语言已切换</sys:String>
-    <sys:String x:Key="Main.Version">v1.0.0 · 稳定版</sys:String>
+    <sys:String x:Key="Main.Version">v1.1.0-dev1 · 可选跨盘校验</sys:String>
 
     <sys:String x:Key="Browser.Title">JAVLibrary 浏览器</sys:String>
     <sys:String x:Key="Browser.Instruction">完成验证并打开正确的影片详情页</sys:String>
@@ -97,6 +100,7 @@
     <sys:String x:Key="Preview.Action.RenameVideo">重命名影片</sys:String>
     <sys:String x:Key="Preview.Action.MoveAndRename">移动并重命名</sys:String>
     <sys:String x:Key="Preview.Action.CopyVerify">复制并校验</sys:String>
+    <sys:String x:Key="Preview.Action.CopyFast">快速复制</sys:String>
     <sys:String x:Key="Preview.Action.Update">更新</sys:String>
     <sys:String x:Key="Preview.Action.Keep">保持不变</sys:String>
     <sys:String x:Key="Preview.Action.ReplaceImage">替换图片</sys:String>
@@ -108,6 +112,7 @@
     <sys:String x:Key="Preview.Description.RenameVideo">重命名影片</sys:String>
     <sys:String x:Key="Preview.Description.MoveAndRename">移动并重命名影片</sys:String>
     <sys:String x:Key="Preview.Description.CopyVerify">安全复制并校验影片，成功后移除来源</sys:String>
+    <sys:String x:Key="Preview.Description.CopyFast">快速复制影片；仅检查文件大小，不校验内容，成功后移除来源</sys:String>
     <sys:String x:Key="Preview.Description.GenerateNfo">生成 NFO</sys:String>
     <sys:String x:Key="Preview.Description.OverwriteNfo">覆盖 NFO</sys:String>
     <sys:String x:Key="Preview.Description.UpdateNfo">更新 NFO</sys:String>
@@ -130,7 +135,7 @@
     <sys:String x:Key="Progress.Verifying">正在校验目标影片 SHA-256…</sys:String>
     <sys:String x:Key="Progress.VerifyingPercent">正在校验目标影片 SHA-256… {0}%</sys:String>
     <sys:String x:Key="Progress.Committing">正在提交目标影片与 metadata…</sys:String>
-    <sys:String x:Key="Progress.RetiringSource">目标校验与提交完成，正在移除来源影片…</sys:String>
+    <sys:String x:Key="Progress.RetiringSource">目标复制与提交完成，正在移除来源影片…</sys:String>
     <sys:String x:Key="Progress.Completed">安全保存已完成</sys:String>
 
     <sys:String x:Key="Dialog.ChooseVideo">选择一个影片</sys:String>
@@ -229,4 +234,12 @@
     <sys:String x:Key="Error.PreviewDownload">图片预览下载失败。</sys:String>
     <sys:String x:Key="App.StartFailed">JAV Metadata Lite 启动失败。&#10;&#10;错误记录：{0}&#10;&#10;{1}</sys:String>
     <sys:String x:Key="Error.SourceTimeout">资料来源 {0} 在 {1:0} 秒内没有响应，请稍后重试或更换来源。</sys:String>
+    <sys:String x:Key="Main.RememberPreferencesTooltipVerification">记住保存方式、目标位置、跨盘校验和输出选项，包括直接保存并覆盖</sys:String>
+    <sys:String x:Key="Progress.RetiringSourceFast">目标复制与提交完成，正在移除来源影片…</sys:String>
+    <sys:String x:Key="Main.VersionPreview">v1.1.0 · 稳定版</sys:String>
+    <sys:String x:Key="Main.DropInput">拖入一个影片文件或番号文件夹</sys:String>
+    <sys:String x:Key="Main.StatusReadyInput">准备就绪，请选择影片，或拖入一个影片文件或番号文件夹</sys:String>
+    <sys:String x:Key="Error.FolderHasNoVideo">该文件夹顶层没有找到支持的影片文件。</sys:String>
+    <sys:String x:Key="Error.FolderHasMultipleVideos">该文件夹包含多个支持的影片文件，请改为拖入单个影片文件。</sys:String>
+    <sys:String x:Key="Error.ReadVideoFolder">无法读取拖入的文件夹：{0}</sys:String>
 </ResourceDictionary>

@@ -69,7 +69,9 @@ public sealed class FileOrganizationService
             var nameChanges = !Path.GetFileName(sourceVideoPath)
                 .Equals(Path.GetFileName(targetVideoPath), StringComparison.OrdinalIgnoreCase);
             var kind = pathPlan.RequiresVerifiedCopy
-                ? PlannedChangeKind.CopyAndVerifyVideo
+                ? organizationOptions.CrossVolumeVerification is CrossVolumeVerificationMode.FullSha256
+                    ? PlannedChangeKind.CopyAndVerifyVideo
+                    : PlannedChangeKind.CopyVideo
                 : directoryChanges && nameChanges
                     ? PlannedChangeKind.MoveAndRenameVideo
                     : directoryChanges
@@ -78,6 +80,7 @@ public sealed class FileOrganizationService
             var description = kind switch
             {
                 PlannedChangeKind.CopyAndVerifyVideo => "安全复制并校验影片，成功后移除来源",
+                PlannedChangeKind.CopyVideo => "快速复制影片并检查文件大小，成功后移除来源",
                 PlannedChangeKind.MoveAndRenameVideo => "移动并重命名影片",
                 PlannedChangeKind.MoveVideo => "移动影片",
                 _ => "重命名影片"
@@ -267,11 +270,14 @@ public sealed class FileOrganizationService
         var stagingVideoPath = Path.Combine(
             sourceStagingRoot,
             plan.TargetBaseName + Path.GetExtension(plan.TargetVideoPath));
-        var verifiedCopy = plan.RequiresVerifiedVideoCopy && plan.VideoWillMove;
-        var targetStagingRoot = verifiedCopy
+        var crossVolumeCopy = plan.RequiresVerifiedVideoCopy && plan.VideoWillMove;
+        var fullVerification = crossVolumeCopy &&
+                               plan.OrganizationOptions.CrossVolumeVerification is
+                                   CrossVolumeVerificationMode.FullSha256;
+        var targetStagingRoot = crossVolumeCopy
             ? Path.Combine(plan.TargetDirectory, $".JavMetaLite-target-{operationId}.tmp")
             : sourceStagingRoot;
-        var targetPayloadRoot = verifiedCopy
+        var targetPayloadRoot = crossVolumeCopy
             ? Path.Combine(targetStagingRoot, "payload")
             : sourceStagingRoot;
         var backupRoot = Path.Combine(targetStagingRoot, "backup");
@@ -286,7 +292,7 @@ public sealed class FileOrganizationService
         var operationSucceeded = false;
         var rollbackSucceeded = false;
 
-        if (verifiedCopy)
+        if (crossVolumeCopy)
         {
             EnsureTargetCapacity(plan.SourceVideoPath, plan.TargetDirectory);
         }
@@ -295,7 +301,7 @@ public sealed class FileOrganizationService
             $"开始执行保存计划 source={plan.SourceVideoPath} target={plan.TargetVideoPath} " +
             $"organize={plan.OrganizationOptions.CreateMovieFolder} rename={plan.OrganizationOptions.RenameVideo} " +
             $"roundTrip={plan.NfoWriteContext?.LocalBundle is not null} transfers={plan.SidecarTransfers.Count} " +
-            $"verifiedCopy={verifiedCopy}");
+            $"crossVolumeCopy={crossVolumeCopy} verification={plan.OrganizationOptions.CrossVolumeVerification}");
 
         try
         {
@@ -342,7 +348,7 @@ public sealed class FileOrganizationService
 
             string? targetStagedVideoPath = null;
             IReadOnlyList<string> commitStagedPaths = stagedPaths;
-            if (verifiedCopy)
+            if (crossVolumeCopy)
             {
                 Directory.CreateDirectory(targetPayloadRoot);
                 var targetCopies = new List<string>(stagedPaths.Count);
@@ -361,26 +367,42 @@ public sealed class FileOrganizationService
                     targetStagingRoot,
                     "movie",
                     Path.GetFileName(plan.TargetVideoPath));
-                var sourceHash = await CopyMovieWithHashAsync(
+                var sourceLength = new FileInfo(plan.SourceVideoPath).Length;
+                var sourceHash = await CopyMovieAsync(
                     plan.SourceVideoPath,
                     targetStagedVideoPath,
+                    fullVerification,
                     progress,
                     cancellationToken);
-                progress?.Report(new FileTransactionProgress(
-                    FileTransactionStage.VerifyingMovie,
-                    "正在校验目标影片 SHA-256…",
-                    0,
-                    new FileInfo(targetStagedVideoPath).Length,
-                    targetStagedVideoPath));
-                var targetHash = await ComputeSha256Async(
-                    targetStagedVideoPath,
-                    progress,
-                    cancellationToken);
-                if (!sourceHash.Equals(targetHash, StringComparison.OrdinalIgnoreCase))
+                var targetLength = new FileInfo(targetStagedVideoPath).Length;
+                if (sourceLength != targetLength)
                 {
-                    throw new IOException("目标影片 SHA-256 校验失败；来源影片已保留，未提交目标文件。");
+                    throw new IOException(
+                        $"目标影片大小检查失败；来源影片已保留，未提交目标文件。" +
+                        $"来源 {sourceLength} 字节，目标 {targetLength} 字节。");
                 }
-                AppLog.Info($"跨卷影片复制校验完成 sha256={sourceHash} bytes={new FileInfo(targetStagedVideoPath).Length}");
+                if (fullVerification)
+                {
+                    progress?.Report(new FileTransactionProgress(
+                        FileTransactionStage.VerifyingMovie,
+                        "正在校验目标影片 SHA-256…",
+                        0,
+                        targetLength,
+                        targetStagedVideoPath));
+                    var targetHash = await ComputeSha256Async(
+                        targetStagedVideoPath,
+                        progress,
+                        cancellationToken);
+                    if (!string.Equals(sourceHash, targetHash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new IOException("目标影片 SHA-256 校验失败；来源影片已保留，未提交目标文件。");
+                    }
+                    AppLog.Info($"跨卷影片复制校验完成 sha256={sourceHash} bytes={targetLength}");
+                }
+                else
+                {
+                    AppLog.Warning($"跨卷影片使用快速传输，仅检查文件大小 bytes={targetLength}");
+                }
             }
 
             var mappings = commitStagedPaths
@@ -422,7 +444,7 @@ public sealed class FileOrganizationService
                 committedOutputs.Add(mapping.FinalPath);
             }
 
-            if (verifiedCopy)
+            if (crossVolumeCopy)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 File.Move(targetStagedVideoPath!, plan.TargetVideoPath);
@@ -445,11 +467,15 @@ public sealed class FileOrganizationService
 
             if (plan.VideoWillMove)
             {
-                if (verifiedCopy)
+                if (crossVolumeCopy)
                 {
                     progress?.Report(new FileTransactionProgress(
-                        FileTransactionStage.RetiringSource,
-                        "目标校验与提交完成，正在移除来源影片…"));
+                        fullVerification
+                            ? FileTransactionStage.RetiringSource
+                            : FileTransactionStage.RetiringSourceFast,
+                        fullVerification
+                            ? "目标校验与提交完成，正在移除来源影片…"
+                            : "目标复制与提交完成，正在移除来源影片…"));
                     sourceVideoBackupPath = Path.Combine(
                         sourceRetireRoot,
                         "movie",
@@ -476,7 +502,11 @@ public sealed class FileOrganizationService
             AppLog.Info($"保存计划完成 video={plan.TargetVideoPath} outputs={committedOutputs.Count} moved={videoMoved}");
             progress?.Report(new FileTransactionProgress(
                 FileTransactionStage.Completed,
-                verifiedCopy ? "安全复制、校验与提交已完成" : "安全保存已完成"));
+                crossVolumeCopy
+                    ? fullVerification
+                        ? "安全复制、校验与提交已完成"
+                        : "快速跨卷复制与提交已完成"
+                    : "安全保存已完成"));
             operationSucceeded = true;
             rollbackSucceeded = true;
             return new OrganizedSaveResult(finalResult, plan.TargetVideoPath, videoMoved);
@@ -487,7 +517,7 @@ public sealed class FileOrganizationService
             var rollbackErrors = Rollback(
                 plan,
                 videoMoved,
-                verifiedCopy,
+                crossVolumeCopy,
                 targetVideoCommitted,
                 sourceVideoRetired,
                 sourceVideoBackupPath,
@@ -496,7 +526,7 @@ public sealed class FileOrganizationService
             rollbackSucceeded = rollbackErrors.Count == 0;
             if (!rollbackSucceeded)
             {
-                var recoveryPaths = verifiedCopy
+                var recoveryPaths = crossVolumeCopy
                     ? $"{sourceStagingRoot}；{targetStagingRoot}"
                     : sourceStagingRoot;
                 AppLog.Error($"文件恢复不完整，临时备份保留在 {recoveryPaths}", new AggregateException(rollbackErrors));
@@ -712,9 +742,10 @@ public sealed class FileOrganizationService
         }
     }
 
-    private static async Task<string> CopyMovieWithHashAsync(
+    private static async Task<string?> CopyMovieAsync(
         string sourcePath,
         string destinationPath,
+        bool computeSha256,
         IProgress<FileTransactionProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -734,7 +765,9 @@ public sealed class FileOrganizationService
             FileShare.None,
             bufferSize,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hash = computeSha256
+            ? IncrementalHash.CreateHash(HashAlgorithmName.SHA256)
+            : null;
         var buffer = GC.AllocateUninitializedArray<byte>(bufferSize);
         var totalBytes = source.Length;
         long copiedBytes = 0;
@@ -750,7 +783,7 @@ public sealed class FileOrganizationService
                 break;
             }
 
-            hash.AppendData(buffer, 0, read);
+            hash?.AppendData(buffer, 0, read);
             await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
             copiedBytes += read;
             var percentage = totalBytes <= 0 ? 100 : (int)(copiedBytes * 100L / totalBytes);
@@ -767,7 +800,7 @@ public sealed class FileOrganizationService
         }
 
         await destination.FlushAsync(cancellationToken);
-        return Convert.ToHexString(hash.GetHashAndReset());
+        return hash is null ? null : Convert.ToHexString(hash.GetHashAndReset());
 
         void ReportProgress(
             FileTransactionStage stage,

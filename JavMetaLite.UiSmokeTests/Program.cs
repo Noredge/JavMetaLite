@@ -215,6 +215,12 @@ internal static class Program
         {
             throw new InvalidOperationException("完整封套尚未加载时应保留无文字的固定间距。 ");
         }
+        if (window.FindName("DropHint") is not StackPanel dropHint ||
+            dropHint.Children.OfType<TextBlock>().All(text =>
+                !text.Text.Contains("番号文件夹", StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException("拖放提示没有说明可直接拖入番号文件夹。 ");
+        }
         var initialPosterPreviewBorder = window.FindName("PosterPreviewBorder") as Border
             ?? throw new InvalidOperationException("封套预览区域未创建。 ");
         var fanartPreviewBorder = window.FindName("FanartPreviewBorder") as Border
@@ -255,6 +261,12 @@ internal static class Program
         {
             throw new InvalidOperationException("v0.8 安全偏好开关未创建或没有保持默认关闭。 ");
         }
+        if (window.FindName("SkipCrossVolumeVerificationCheckBox") is not CheckBox skipVerificationCheckBox ||
+            skipVerificationCheckBox.IsChecked == true ||
+            skipVerificationCheckBox.Visibility != Visibility.Collapsed)
+        {
+            throw new InvalidOperationException("v1.1 跨盘校验选项未创建或没有保持完整校验默认值。 ");
+        }
 
         var applyPreferences = typeof(MainWindow).GetMethod(
             "ApplyPreferences",
@@ -272,6 +284,7 @@ internal static class Program
             UiLanguage = UiLanguageCodes.SimplifiedChinese,
             RememberSavePreferences = true,
             DirectSaveOverwrite = true,
+            CrossVolumeVerification = CrossVolumeVerificationMode.FileSizeOnly,
             TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
             CustomRootDirectory = preferencesRoot,
             RecentCustomRootDirectories = [secondPreferencesRoot, preferencesRoot],
@@ -288,6 +301,7 @@ internal static class Program
         if (directSaveCheckBox.IsChecked != true ||
             rememberPreferencesCheckBox.IsChecked != true ||
             !remembered.DirectSaveOverwrite ||
+            remembered.CrossVolumeVerification != CrossVolumeVerificationMode.FileSizeOnly ||
             remembered.TargetMode != OrganizationTargetMode.CustomRootNumberFolder ||
             remembered.CustomRootDirectory != preferencesRoot ||
             !remembered.RenameVideo || remembered.WriteNfo || remembered.DownloadPoster ||
@@ -350,6 +364,10 @@ internal static class Program
         if (directSaveCheckBox.IsChecked == true)
         {
             throw new InvalidOperationException("v0.8.1 安全默认值没有关闭直接保存并覆盖。 ");
+        }
+        if (skipVerificationCheckBox.IsChecked == true)
+        {
+            throw new InvalidOperationException("v1.1 安全默认值没有恢复完整 SHA-256 校验。 ");
         }
         if (window.FindName("SaveButton") is not Button saveButton || saveButton.Content?.ToString() != "保存")
         {
@@ -586,10 +604,11 @@ internal static class Program
             reviewedLocalMetadata.Director != "在线导演" ||
             titleSourceText.Content?.ToString() != "LibreDMM ▾" ||
             directorSourceText.Content?.ToString() != "LibreDMM ▾" ||
-            artworkSourceButton.Content?.ToString() != "本地图片 ▾" ||
+            artworkSourceButton.Content?.ToString() != "LibreDMM ▾" ||
+            reviewedLocalMetadata.CoverUrl != localLibre.CoverUrl ||
             posterImage.Source is null || fanartImage.Source is null)
         {
-            throw new InvalidOperationException("在线搜索后没有默认选择新文字资料，或意外改变了本地图片。 ");
+            throw new InvalidOperationException("在线搜索后没有统一默认选择新的文字与图片资料。 ");
         }
 
         artworkSourceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -730,10 +749,20 @@ internal static class Program
             customRootTextBox.Text = $@"{otherDrive}\JavMetaLite-dev2-test";
             window.UpdateLayout();
             if (!saveButton.IsEnabled ||
-                !targetPathHintText.Text.Contains("安全复制 + SHA-256", StringComparison.Ordinal))
+                !targetPathHintText.Text.Contains("安全复制 + SHA-256", StringComparison.Ordinal) ||
+                skipVerificationCheckBox.Visibility != Visibility.Visible ||
+                skipVerificationCheckBox.IsChecked == true)
             {
-                throw new InvalidOperationException("dev3 跨盘符目标没有启用安全复制提示。 ");
+                throw new InvalidOperationException("v1.1 跨盘符目标没有保持完整 SHA-256 默认值或显示校验选项。 ");
             }
+            skipVerificationCheckBox.IsChecked = true;
+            window.UpdateLayout();
+            if (!targetPathHintText.Text.Contains("快速跨盘复制", StringComparison.Ordinal) ||
+                !targetPathHintText.Text.Contains("风险自负", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("v1.1 快速跨盘模式没有显示明确风险提示。 ");
+            }
+            skipVerificationCheckBox.IsChecked = false;
         }
 
         targetModeComboBox.SelectedIndex = 1;
@@ -783,7 +812,8 @@ internal static class Program
                 new PlannedFileChange(PlannedChangeKind.UpdateFile, "更新 NFO", "C:\\Media\\IPX-123\\IPX-123.nfo"),
                 new PlannedFileChange(PlannedChangeKind.KeepFile, "poster 内容保持不变", "C:\\Media\\IPX-123\\IPX-123-poster.jpg"),
                 new PlannedFileChange(PlannedChangeKind.ReplaceImage, "替换 fanart", "C:\\Media\\IPX-123\\IPX-123-fanart.jpg"),
-                new PlannedFileChange(PlannedChangeKind.CopyAndVerifyVideo, "安全复制影片", "D:\\Media\\IPX-123\\IPX-123.mp4", "C:\\Media\\source.mp4")
+                new PlannedFileChange(PlannedChangeKind.CopyAndVerifyVideo, "安全复制影片", "D:\\Media\\IPX-123\\IPX-123.mp4", "C:\\Media\\source.mp4"),
+                new PlannedFileChange(PlannedChangeKind.CopyVideo, "快速复制影片", "E:\\Media\\IPX-123\\IPX-123.mp4", "C:\\Media\\source.mp4")
             ],
             [],
             []);
@@ -816,7 +846,7 @@ internal static class Program
         var previewActions = previewChanges.Items.Cast<object>()
             .Select(item => item.GetType().GetProperty("Action")?.GetValue(item)?.ToString())
             .ToArray();
-        if (!new[] { "生成", "更新", "保持不变", "替换图片", "复制并校验" }.All(previewActions.Contains))
+        if (!new[] { "生成", "更新", "保持不变", "替换图片", "复制并校验", "快速复制" }.All(previewActions.Contains))
         {
             throw new InvalidOperationException("dev4 保存预览没有区分创建、更新、保持不变和替换图片。 ");
         }

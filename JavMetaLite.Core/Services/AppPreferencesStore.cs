@@ -64,6 +64,13 @@ public sealed class AppPreferencesStore
             {
                 preferences = preferences with { UiLanguage = UiLanguageCodes.SimplifiedChinese };
             }
+            if (preferences.SchemaVersion <= 4)
+            {
+                preferences = preferences with
+                {
+                    CrossVolumeVerification = CrossVolumeVerificationMode.FullSha256
+                };
+            }
 
             if (!preferences.RememberSavePreferences)
             {
@@ -171,6 +178,9 @@ public sealed class AppPreferencesStore
             TargetMode = Enum.IsDefined(preferences.TargetMode)
                 ? preferences.TargetMode
                 : OrganizationTargetMode.VideoDirectory,
+            CrossVolumeVerification = Enum.IsDefined(preferences.CrossVolumeVerification)
+                ? preferences.CrossVolumeVerification
+                : CrossVolumeVerificationMode.FullSha256,
             CustomRootDirectory = customRoot,
             RecentCustomRootDirectories = recentRoots.ToArray()
         };
