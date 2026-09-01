@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 
-JavMetaLite is a lightweight Windows metadata editor that handles one movie at a time. Select or drop a movie, search selected sources, review and edit every field, then preview all file changes before saving. JavMetaLite does not scan a media library or write or move a movie before the user confirms the operation.
+JavMetaLite is a lightweight Windows metadata editor that handles one movie at a time. Select a movie, or drop one movie file or single-movie ID folder, then search selected sources, review and edit every field, and preview all file changes before saving. JavMetaLite does not scan a media library or write or move a movie before the user confirms the operation.
 
 ![JavMetaLite v1.0.0 main window](docs/images/javmetalite-v1.0.0-main.en.png)
 
@@ -18,15 +18,15 @@ JavMetaLite is a lightweight Windows metadata editor that handles one movie at a
 - Reads and safely updates local NFO, poster, and fanart files while preserving unknown XML.
 - Produces Jellyfin-compatible NFO, poster, fanart, and optional `extrafanart/` files.
 - Keeps the movie in place, creates an ID folder beside it, or organizes it under a custom destination root.
-- Uses safe copy and SHA-256 verification for cross-volume or UNC destinations, with rollback on failure.
+- Uses safe staged copies for cross-volume or UNC destinations. Full SHA-256 verification remains the default; an explicit faster file-size-only mode is available at the user's own risk.
 - Shows the actual file changes before saving by default and always blocks conflicting target movies.
 - Ships as a portable, self-contained Windows x64 executable with no .NET Runtime installation required.
 
 ## Quick start
 
-1. Download `JavMetaLite-v1.0.0-win-x64-portable.zip` from [GitHub Releases](https://github.com/Noredge/JavMetaLite/releases).
+1. Download `JavMetaLite-v1.1.1-win-x64-portable.zip` from [GitHub Releases](https://github.com/Noredge/JavMetaLite/releases).
 2. Verify the archive against `SHA256SUMS.txt` from the same release, then extract it.
-3. Run `JavMetaLite.exe` and choose or drop one movie.
+3. Run `JavMetaLite.exe`, then choose a movie or drop one movie file or single-movie ID folder.
 4. Verify the detected ID, search for metadata, and choose suitable text and cover sources.
 5. Edit any fields and choose the outputs and destination.
 6. Review the save preview and confirm the operation.
@@ -62,7 +62,7 @@ Source sites can change or become temporarily unavailable. Multi-source search l
 - Does not move the movie or directly overwrite metadata by default.
 - The preview lists files that will be created, updated, moved, or left unchanged.
 - Never overwrites another movie when the target movie already exists.
-- Verifies file size and SHA-256 before removing the source during cross-volume transfers.
+- By default, verifies file size and SHA-256 before removing the source during cross-volume transfers. The optional fast mode skips content verification but keeps staging, size checks, conflict protection, and rollback.
 - Restores overwritten metadata and attempts to preserve the original movie location if a commit fails.
 - Searching sends the detected movie ID to the selected metadata sources. Selecting a movie and reading local NFO data does not automatically write anything online or locally.
 - Manual JAVLibrary import reads only the current movie page; its embedded WebView2 browser may retain cookies used for site verification.

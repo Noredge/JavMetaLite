@@ -20,9 +20,9 @@ The projects run sequentially because the smoke and UI projects share build outp
 
 | Layer | Project | Purpose |
 | --- | --- | --- |
-| Core smoke | `JavMetaLite.SmokeTests` | Parsers, metadata merge, v0.5 multi-source orchestration/provenance, unified poster/fanart selection, safe local sidecar/NFO/image reads, XML-preserving round-trip writing, image conversion, versioned preference storage, organization and logs |
-| File regression | `JavMetaLite.RegressionTests` | File layout and target-mode matrices, custom-root validation, same-volume moves, verified cross-volume copies, preview purity, NFO no-op/update, sidecar migration, overwrite/conflict policy, exact rollback, movie hashes and input validation |
-| UI smoke | `JavMetaLite.UiSmokeTests` | WPF construction, source/candidate menus, v0.6 local metadata/artwork loading, v0.7 target-mode controls and live paths, v0.8/v0.8.1 preference mapping, v0.9 four-language switching, editable valid NFO state, preview action kinds, failure isolation and safe defaults |
+| Core smoke | `JavMetaLite.SmokeTests` | Parsers, movie-file/ID-folder input resolution, metadata merge, multi-source orchestration/provenance, unified poster/fanart selection, safe local sidecar/NFO/image reads, XML-preserving round-trip writing, image conversion, schema-v5 preference storage, organization and logs |
+| File regression | `JavMetaLite.RegressionTests` | File layout and target-mode matrices, custom-root validation, same-volume moves, full-SHA and fast cross-volume copies, preview purity, NFO no-op/update, sidecar migration, overwrite/conflict policy, exact rollback, movie hashes and input validation |
+| UI smoke | `JavMetaLite.UiSmokeTests` | WPF construction, source/candidate menus, local metadata/artwork loading, target-mode controls and live paths, remembered verification preferences, four-language switching, transfer warnings, preview action kinds, failure isolation and safe defaults |
 
 The regression runner supports discovery and category filters:
 
@@ -45,12 +45,13 @@ Available categories are `layout`, `target`, `transfer`, `overwrite`, `roundtrip
 - Synthetic local-image fixtures verify independent poster/fanart discovery, missing-counterpart behavior, invalid-image isolation, decoded dimensions, manual full-cover poster/fanart generation, and unchanged movie/source bytes.
 - Round-trip fixtures verify a pure/cancelled preview, unchanged-NFO zero writes, selective field updates, unknown XML retention, known-sidecar migration, external NFO changes, byte-exact rollback, and unchanged movie hashes.
 - Target fixtures verify all three destination modes, independent movie renaming, no duplicate number folder, absolute-root validation, file-occupied roots, movie conflicts, and correct atomic-move versus verified-copy selection.
-- Transfer fixtures force the verified-copy path inside isolated temporary directories and verify independent SHA-256 checks, progress, cancellation, hash mismatch, late movie conflicts, post-commit rollback, source preservation, target cleanup, and unchanged successful movie bytes.
+- Transfer fixtures force both cross-volume paths inside isolated temporary directories. They verify independent full SHA-256 checks, fast-mode size checks without a target reread, distinct progress/preview states, cancellation, hash mismatch, late movie conflicts, post-commit rollback, source preservation, target cleanup, and unchanged successful movie bytes.
 - WPF local fixtures verify the visible NFO and artwork sources, editable valid-NFO state, blocked invalid-NFO state, online-after-search composition, preview action labels, manual restoration, invalid-file logging, and complete candidate reset on the next movie.
-- RC2 fixtures verify local values before search, online non-empty text defaults after search, local fallback for missing online fields, identical-value online provenance, retained manual/local candidates, and unchanged local artwork selection.
-- v0.8/v0.8.1 preference fixtures verify missing, valid, damaged, and future-version JSON; schema-v1/v2 migration; bounded and deduplicated recent roots; persistent history clearing; atomic replacement cleanup; explicit opt-in; direct-overwrite restoration in schema v3; and safe disabled defaults for legacy or invalid configuration.
+- Online/local composition fixtures verify local values and artwork before search, online non-empty text and artwork defaults after search, local fallback for missing online fields, identical-value online provenance, and retained manual/local candidates that can be selected again.
+- Input fixtures verify a directly dropped movie, one top-level movie inside an ID folder, rejection of empty and multi-movie folders, and no recursive scan into nested folders.
+- Preference fixtures verify missing, valid, damaged, and future-version JSON; schema-v1 through v4 migration; bounded and deduplicated recent roots; persistent history clearing; atomic replacement cleanup; explicit opt-in; remembered direct overwrite and fast transfer; and safe full-verification defaults for legacy, disabled, or invalid configuration.
 - v0.8 recent-root UI fixtures verify the compact dark menu, selection, current-entry removal, full clearing, retained current paths, unavailable-root blocking, and zero directory creation.
-- v0.9 localization fixtures verify four complete and matching resource dictionaries, immediate switching of primary controls, schema-v4 language persistence, disabled save-memory isolation, and safe migration of schema-v1/v2/v3 users to Simplified Chinese. A cancellable slow-provider fixture also verifies the 10-second production safeguard with a short test timeout and confirms that a successful source is retained.
+- Localization fixtures verify four complete and matching resource dictionaries, immediate switching of primary controls, schema-v5 language and verification persistence, disabled save-memory isolation, and safe migration of older users. A cancellable slow-provider fixture also verifies the 10-second production safeguard with a short test timeout and confirms that a successful source is retained.
 - Each test verifies and removes temporary transaction artifacts.
 - A failed test returns a non-zero process exit code and prevents the gate from continuing.
 - A fixed defect should receive a regression case before the fix is considered complete.
@@ -65,7 +66,7 @@ The following remain manual because they depend on external state or human visua
 - The native Windows image picker and visual confirmation that a real manually selected complete cover produces the expected crops.
 - The native Windows target-folder picker, compact layout at the supported minimum window size, and the wording/readability of long destination paths.
 - Real Windows permission prompts, antivirus interference, forced process termination and power loss.
-- Real cross-drive and UNC throughput, disconnect behavior, free-space reporting, and cancellation timing with a large movie.
+- Real cross-drive and UNC throughput in both full and fast modes, disconnect behavior, free-space reporting, and cancellation timing with a large movie.
 - Final inspection of a packaged single-file executable.
 
 These checks complement the automated gate; they are not replaced by it.

@@ -75,7 +75,7 @@ public partial class MainWindow : Window
         _uiInitialized = true;
         ApplyMetadata(_metadata, []);
         RefreshTargetLocationUi();
-        AppLog.Info("JavMetaLite v1.0.0 启动");
+        AppLog.Info("JavMetaLite v1.1.1 启动");
     }
 
     internal void LoadPreferences()
@@ -110,6 +110,7 @@ public partial class MainWindow : Window
             AppLog.Info(
                 $"已恢复保存偏好 target={result.Preferences.TargetMode} " +
                 $"rename={result.Preferences.RenameVideo} directOverwrite={result.Preferences.DirectSaveOverwrite} " +
+                $"crossVolumeVerification={result.Preferences.CrossVolumeVerification} " +
                 $"customRoot={result.Preferences.CustomRootDirectory}");
             SetStatus(
                 result.Preferences.DirectSaveOverwrite
@@ -123,6 +124,8 @@ public partial class MainWindow : Window
     {
         ApplyLanguagePreference(preferences.UiLanguage);
         DirectSaveOverwriteCheckBox.IsChecked = preferences.DirectSaveOverwrite;
+        SkipCrossVolumeVerificationCheckBox.IsChecked =
+            preferences.CrossVolumeVerification is CrossVolumeVerificationMode.FileSizeOnly;
         RememberPreferencesCheckBox.IsChecked = preferences.RememberSavePreferences;
         WriteNfoCheckBox.IsChecked = preferences.WriteNfo;
         DownloadPosterCheckBox.IsChecked = preferences.DownloadPoster;
@@ -158,6 +161,7 @@ public partial class MainWindow : Window
             UiLanguage = LocalizationService.CurrentLanguageCode,
             RememberSavePreferences = RememberPreferencesCheckBox.IsChecked == true,
             DirectSaveOverwrite = DirectSaveOverwriteCheckBox.IsChecked == true,
+            CrossVolumeVerification = GetCrossVolumeVerificationMode(),
             TargetMode = GetSelectedTargetMode(),
             CustomRootDirectory = string.IsNullOrWhiteSpace(CustomRootTextBox.Text)
                 ? _lastValidCustomRootDirectory
@@ -269,15 +273,49 @@ public partial class MainWindow : Window
 
     private void Window_DragOver(object sender, DragEventArgs e)
     {
-        e.Effects = TryGetDroppedVideo(e.Data, out _) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Effects = TryGetSingleDroppedPath(e.Data, out var path) &&
+                    (VideoFileSupport.IsSupportedExistingFile(path) || Directory.Exists(path))
+            ? DragDropEffects.Copy
+            : DragDropEffects.None;
         e.Handled = true;
     }
 
     private async void Window_Drop(object sender, DragEventArgs e)
     {
-        if (TryGetDroppedVideo(e.Data, out var path))
+        if (!TryGetSingleDroppedPath(e.Data, out var path))
         {
-            await SelectVideoAsync(path!);
+            return;
+        }
+
+        try
+        {
+            var resolution = VideoFileSupport.ResolveInputPath(path);
+            if (resolution.Success)
+            {
+                if (Directory.Exists(path))
+                {
+                    AppLog.Info($"从拖入番号文件夹解析影片 folder={path} video={resolution.VideoPath}");
+                }
+                await SelectVideoAsync(resolution.VideoPath!);
+            }
+            else
+            {
+                ShowError(LocalizationService.Get(resolution.Status switch
+                {
+                    VideoInputPathStatus.FolderHasNoVideo => "Error.FolderHasNoVideo",
+                    VideoInputPathStatus.FolderHasMultipleVideos => "Error.FolderHasMultipleVideos",
+                    _ => "Error.UnsupportedVideo"
+                }));
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            AppLog.Warning($"无法读取拖入的影片文件夹 path={path}", exception);
+            ShowError(LocalizationService.Get("Error.ReadVideoFolder", exception.Message));
+        }
+        finally
+        {
+            e.Handled = true;
         }
     }
 
@@ -500,6 +538,11 @@ public partial class MainWindow : Window
                     ? LocalizationService.Get("Status.SidecarsMigrated")
                     : LocalizationService.Get("Status.NoChanges")
                 : string.Join(LocalizationService.Get("Common.ListSeparator"), outputs);
+            if (options.DownloadExtrafanart && result.Outputs.ExtrafanartPaths.Count == 0)
+            {
+                outputSummary += LocalizationService.Get("Common.ListSeparator") +
+                                 LocalizationService.Get("Status.ExtrafanartSkipped");
+            }
             SetStatus(LocalizationService.Get("Status.SaveComplete", outputSummary, fanartNote, moveNote), true);
         });
     }
@@ -746,7 +789,13 @@ public partial class MainWindow : Window
             RenameVideoCheckBox.IsChecked == true,
             GetSelectedTargetMode() is OrganizationTargetMode.CustomRootNumberFolder
                 ? CustomRootTextBox.Text
-                : null);
+                : null,
+            GetCrossVolumeVerificationMode());
+
+    private CrossVolumeVerificationMode GetCrossVolumeVerificationMode() =>
+        SkipCrossVolumeVerificationCheckBox.IsChecked == true
+            ? CrossVolumeVerificationMode.FileSizeOnly
+            : CrossVolumeVerificationMode.FullSha256;
 
     private OrganizationTargetMode GetSelectedTargetMode()
     {
@@ -771,6 +820,7 @@ public partial class MainWindow : Window
     private void RefreshTargetLocationPreview()
     {
         _targetConfigurationError = null;
+        SkipCrossVolumeVerificationCheckBox.Visibility = Visibility.Collapsed;
         var customMode = GetSelectedTargetMode() is OrganizationTargetMode.CustomRootNumberFolder;
         if (customMode &&
             !string.IsNullOrWhiteSpace(CustomRootTextBox.Text) &&
@@ -808,8 +858,14 @@ public partial class MainWindow : Window
             TargetPathHintText.Text = LocalizationService.Get("Main.FinalVideo", pathPlan.TargetVideoPath);
             if (pathPlan.RequiresVerifiedCopy)
             {
-                TargetPathHintText.Text += Environment.NewLine + LocalizationService.Get("Main.SafeCopy");
-                TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(141, 184, 255));
+                SkipCrossVolumeVerificationCheckBox.Visibility = Visibility.Visible;
+                var fastCopy = GetCrossVolumeVerificationMode() is CrossVolumeVerificationMode.FileSizeOnly;
+                TargetPathHintText.Text += Environment.NewLine + LocalizationService.Get(
+                    fastCopy ? "Main.FastCopy" : "Main.SafeCopy");
+                TargetPathHintText.Foreground = new SolidColorBrush(
+                    fastCopy
+                        ? Color.FromRgb(255, 209, 138)
+                        : Color.FromRgb(141, 184, 255));
             }
             else
             {
@@ -1036,6 +1092,9 @@ public partial class MainWindow : Window
         IReadOnlyList<MovieMetadata> onlineSources)
     {
         var retainedManualCandidates = CaptureManualCandidates();
+        _preferredArtworkSourceName = MetadataCandidateSource
+            .FromMetadata(preferredOnlineMetadata)
+            .Name;
         if (_localSourceMetadata is null)
         {
             ApplyMetadataCore(preferredOnlineMetadata, onlineSources, retainedManualCandidates);
@@ -1725,6 +1784,7 @@ public partial class MainWindow : Window
             FileTransactionStage.VerifyingMovie => LocalizationService.Get("Progress.Verifying"),
             FileTransactionStage.Committing => LocalizationService.Get("Progress.Committing"),
             FileTransactionStage.RetiringSource => LocalizationService.Get("Progress.RetiringSource"),
+            FileTransactionStage.RetiringSourceFast => LocalizationService.Get("Progress.RetiringSourceFast"),
             FileTransactionStage.Completed => LocalizationService.Get("Progress.Completed"),
             _ => update.Message
         };
@@ -1834,7 +1894,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private static bool TryGetDroppedVideo(IDataObject data, out string? path)
+    private static bool TryGetSingleDroppedPath(IDataObject data, out string? path)
     {
         path = null;
         if (!data.GetDataPresent(DataFormats.FileDrop) || data.GetData(DataFormats.FileDrop) is not string[] files || files.Length != 1)
@@ -1843,7 +1903,7 @@ public partial class MainWindow : Window
         }
 
         path = files[0];
-        return VideoFileSupport.IsSupportedExistingFile(path);
+        return true;
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)

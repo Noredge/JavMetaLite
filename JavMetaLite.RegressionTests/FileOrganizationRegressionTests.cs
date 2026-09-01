@@ -21,6 +21,7 @@ internal static class FileOrganizationRegressionTests
         new("target", "同卷自定义根目录安全执行并保持影片字节", TestSameVolumeCustomTargetExecution),
         new("target", "自定义根目录校验、冲突、跨盘符与 UNC 规划", TestCustomTargetValidation),
         new("transfer", "安全复制、SHA-256 校验并在提交后移除来源", TestVerifiedCopySuccess),
+        new("transfer", "快速跨盘复制仅检查大小并跳过内容校验", TestFastCrossVolumeCopySuccess),
         new("transfer", "复制期间取消会保留来源并清理目标", TestVerifiedCopyCancellation),
         new("transfer", "SHA-256 不一致会拒绝提交并保留来源", TestVerifiedCopyHashMismatch),
         new("transfer", "复制后出现目标影片冲突会保留两边文件", TestVerifiedCopyLateTargetConflict),
@@ -303,6 +304,22 @@ internal static class FileOrganizationRegressionTests
                 crossDrive.RequiresVerifiedCopy,
                 "A different-drive target did not select the verified-copy transaction.");
 
+            var fastCrossDrivePlan = FileOrganizationService.BuildPlan(
+                sourcePath,
+                Metadata("IPX-888", "快速跨盘预览"),
+                NfoOnly(),
+                new OrganizationOptions(
+                    OrganizationTargetMode.CustomRootNumberFolder,
+                    true,
+                    @"Z:\Jellyfin\Movies",
+                    CrossVolumeVerificationMode.FileSizeOnly));
+            AssertEx.True(
+                fastCrossDrivePlan.Changes.Any(change => change.Kind is PlannedChangeKind.CopyVideo),
+                "Fast mode was not shown as a fast copy in the save plan.");
+            AssertEx.False(
+                fastCrossDrivePlan.Changes.Any(change => change.Kind is PlannedChangeKind.CopyAndVerifyVideo),
+                "Fast mode was incorrectly shown as full SHA-256 verification.");
+
             var unc = OrganizationPathPlanner.Resolve(
                 sourcePath,
                 "IPX-888",
@@ -356,6 +373,53 @@ internal static class FileOrganizationRegressionTests
         AssertEx.True(stages.Contains(FileTransactionStage.VerifyingMovie), "Movie verification progress was not reported.");
         AssertEx.True(stages.Contains(FileTransactionStage.RetiringSource), "Source retirement was not reported.");
         AssertEx.True(stages.Contains(FileTransactionStage.Completed), "Transaction completion was not reported.");
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestFastCrossVolumeCopySuccess()
+    {
+        using var workspace = new TestWorkspace("fast-cross-volume-copy-success");
+        var sourceBytes = Enumerable.Range(0, 3 * 1024 * 1024 + 911)
+            .Select(index => (byte)(index % 239))
+            .ToArray();
+        var sourcePath = workspace.WriteFile("incoming/fast-source.mkv", sourceBytes);
+        var sourceHash = AssertEx.Sha256(sourcePath);
+        var customRoot = workspace.CreateDirectory("library");
+        var metadata = Metadata("IPX-895", "快速跨盘复制");
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            NfoOnly(),
+            new OrganizationOptions(
+                OrganizationTargetMode.CustomRootNumberFolder,
+                true,
+                customRoot,
+                CrossVolumeVerificationMode.FileSizeOnly)) with
+        {
+            RequiresVerifiedVideoCopy = true
+        };
+        var stages = new List<FileTransactionStage>();
+        var progress = new InlineProgress<FileTransactionProgress>(update => stages.Add(update.Stage));
+        using var outputService = new OutputService();
+        var result = await new FileOrganizationService(outputService)
+            .ExecuteAsync(plan, metadata, false, CancellationToken.None, progress);
+
+        AssertEx.FileDoesNotExist(sourcePath);
+        AssertEx.FileExists(result.VideoPath);
+        AssertEx.Equal(sourceBytes.LongLength, new FileInfo(result.VideoPath).Length);
+        AssertEx.Equal(sourceHash, AssertEx.Sha256(result.VideoPath));
+        AssertEx.True(
+            stages.Contains(FileTransactionStage.CopyingMovie),
+            "Fast mode did not report copy progress.");
+        AssertEx.False(
+            stages.Contains(FileTransactionStage.VerifyingMovie),
+            "Fast mode unexpectedly reread the complete target for SHA-256 verification.");
+        AssertEx.True(
+            stages.Contains(FileTransactionStage.RetiringSourceFast),
+            "Fast mode did not report source retirement.");
+        AssertEx.True(
+            stages.Contains(FileTransactionStage.Completed),
+            "Fast mode did not report completion.");
         workspace.AssertNoTemporaryArtifacts();
     }
 

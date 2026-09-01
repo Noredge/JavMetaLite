@@ -7,9 +7,9 @@
     <Nullable>enable</Nullable>
     <AssemblyName>JavMetaLite</AssemblyName>
     <RootNamespace>JavMetaLite.App</RootNamespace>
-    <Version>1.0.0</Version>
-    <FileVersion>1.0.0.0</FileVersion>
-    <InformationalVersion>1.0.0</InformationalVersion>
+    <Version>1.1.1</Version>
+    <FileVersion>1.1.1.0</FileVersion>
+    <InformationalVersion>1.1.1</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Authors>Noredge</Authors>
     <Company>Noredge</Company>

@@ -93,7 +93,8 @@ var tests = new List<(string Name, Func<Task> Run)>
 {
     ("番号识别", TestMovieIdParser),
     ("v0.8 启动影片参数解析", TestStartupVideoRequestResolver),
-    ("v0.9 四语言与保存偏好原子存储", TestAppPreferencesStore),
+    ("v1.1 影片文件与番号文件夹输入解析", TestVideoInputPathResolver),
+    ("v1.1 四语言、跨盘校验与保存偏好原子存储", TestAppPreferencesStore),
     ("LibreDMM JSON 解析与清理", TestLibreDmmParser),
     ("多来源字段补全", TestMetadataMerge),
     ("v0.5 多来源搜索编排", TestMetadataSearchCoordinator),
@@ -106,6 +107,7 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("高清海报自动裁切", TestPosterCropping),
     ("NFO 生成", TestNfoWriter),
     ("完整封套 fanart 与 Sample Images 输出", TestArtworkOutput),
+    ("v1.1 无 Sample Images 时自动跳过", TestMissingSampleImagesAreSkipped),
     ("v0.6 本地完整封套输出", TestLocalCompleteCoverOutput),
     ("v0.4 文件整理计划与安全执行", TestFileOrganization),
     ("v0.6 本地 sidecar 定位", TestLocalSidecarLocator),
@@ -200,6 +202,50 @@ static Task TestStartupVideoRequestResolver()
     return Task.CompletedTask;
 }
 
+static Task TestVideoInputPathResolver()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.VideoInput.{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    try
+    {
+        var directVideo = Path.Combine(root, "IPX-123.mp4");
+        File.WriteAllBytes(directVideo, [0x01]);
+        var direct = VideoFileSupport.ResolveInputPath(directVideo);
+        AssertEqual(VideoInputPathStatus.Success.ToString(), direct.Status.ToString());
+        AssertEqual(Path.GetFullPath(directVideo), direct.VideoPath);
+
+        var numberFolder = Path.Combine(root, "SONE-855");
+        Directory.CreateDirectory(numberFolder);
+        var folderVideo = Path.Combine(numberFolder, "SONE-855.mkv");
+        File.WriteAllBytes(folderVideo, [0x02]);
+        File.WriteAllText(Path.Combine(numberFolder, "SONE-855.nfo"), "<movie />");
+        var folder = VideoFileSupport.ResolveInputPath(numberFolder);
+        AssertEqual(VideoInputPathStatus.Success.ToString(), folder.Status.ToString());
+        AssertEqual(Path.GetFullPath(folderVideo), folder.VideoPath);
+
+        var emptyFolder = Path.Combine(root, "FNS-121");
+        Directory.CreateDirectory(emptyFolder);
+        Directory.CreateDirectory(Path.Combine(emptyFolder, "nested"));
+        File.WriteAllBytes(Path.Combine(emptyFolder, "nested", "FNS-121.mp4"), [0x03]);
+        AssertEqual(
+            VideoInputPathStatus.FolderHasNoVideo.ToString(),
+            VideoFileSupport.ResolveInputPath(emptyFolder).Status.ToString());
+
+        File.WriteAllBytes(Path.Combine(numberFolder, "extra.avi"), [0x04]);
+        AssertEqual(
+            VideoInputPathStatus.FolderHasMultipleVideos.ToString(),
+            VideoFileSupport.ResolveInputPath(numberFolder).Status.ToString());
+        AssertEqual(
+            VideoInputPathStatus.UnsupportedPath.ToString(),
+            VideoFileSupport.ResolveInputPath(Path.Combine(root, "missing")).Status.ToString());
+        return Task.CompletedTask;
+    }
+    finally
+    {
+        Directory.Delete(root, recursive: true);
+    }
+}
+
 static Task TestAppPreferencesStore()
 {
     var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.PreferencesTests.{Guid.NewGuid():N}");
@@ -211,6 +257,7 @@ static Task TestAppPreferencesStore()
         AssertEqual(UiLanguageCodes.System, missing.Preferences.UiLanguage);
         AssertEqual("False", missing.Preferences.RememberSavePreferences.ToString());
         AssertEqual("False", missing.Preferences.DirectSaveOverwrite.ToString());
+        AssertEqual(CrossVolumeVerificationMode.FullSha256.ToString(), missing.Preferences.CrossVolumeVerification.ToString());
         AssertEqual(OrganizationTargetMode.VideoDirectory.ToString(), missing.Preferences.TargetMode.ToString());
         AssertEqual("True", missing.Preferences.WriteNfo.ToString());
         AssertEqual("True", missing.Preferences.DownloadPoster.ToString());
@@ -224,6 +271,7 @@ static Task TestAppPreferencesStore()
             UiLanguage = UiLanguageCodes.Japanese,
             RememberSavePreferences = true,
             DirectSaveOverwrite = true,
+            CrossVolumeVerification = CrossVolumeVerificationMode.FileSizeOnly,
             TargetMode = OrganizationTargetMode.CustomRootNumberFolder,
             CustomRootDirectory = $"  {customRoot}  ",
             RecentCustomRootDirectories =
@@ -245,16 +293,18 @@ static Task TestAppPreferencesStore()
 
         AssertEqual("True", File.Exists(store.SettingsPath).ToString());
         var json = File.ReadAllText(store.SettingsPath);
-        AssertEqual("True", json.Contains("\"SchemaVersion\": 4", StringComparison.Ordinal).ToString());
+        AssertEqual("True", json.Contains("\"SchemaVersion\": 5", StringComparison.Ordinal).ToString());
         AssertEqual("True", json.Contains("\"UiLanguage\": \"ja\"", StringComparison.Ordinal).ToString());
         AssertEqual("True", json.Contains("\"CustomRootNumberFolder\"", StringComparison.Ordinal).ToString());
         AssertEqual("True", json.Contains("\"DirectSaveOverwrite\": true", StringComparison.Ordinal).ToString());
+        AssertEqual("True", json.Contains("\"CrossVolumeVerification\": \"FileSizeOnly\"", StringComparison.Ordinal).ToString());
         AssertEqual("0", Directory.EnumerateFiles(root, "*.tmp").Count().ToString());
 
         var loaded = store.Load();
         AssertEqual("True", loaded.Preferences.RememberSavePreferences.ToString());
         AssertEqual(UiLanguageCodes.Japanese, loaded.Preferences.UiLanguage);
         AssertEqual("True", loaded.Preferences.DirectSaveOverwrite.ToString());
+        AssertEqual(CrossVolumeVerificationMode.FileSizeOnly.ToString(), loaded.Preferences.CrossVolumeVerification.ToString());
         AssertEqual("True", loaded.CanOverwrite.ToString());
         AssertEqual(OrganizationTargetMode.CustomRootNumberFolder.ToString(), loaded.Preferences.TargetMode.ToString());
         AssertEqual(customRoot, loaded.Preferences.CustomRootDirectory);
@@ -299,6 +349,7 @@ static Task TestAppPreferencesStore()
         AssertEqual("1", migrated.Preferences.RecentCustomRootDirectories.Length.ToString());
         AssertEqual(secondRoot, migrated.Preferences.RecentCustomRootDirectories[0]);
         AssertEqual("False", migrated.Preferences.DirectSaveOverwrite.ToString());
+        AssertEqual(CrossVolumeVerificationMode.FullSha256.ToString(), migrated.Preferences.CrossVolumeVerification.ToString());
         AssertEqual(UiLanguageCodes.SimplifiedChinese, migrated.Preferences.UiLanguage);
 
         var v2Json = System.Text.Json.JsonSerializer.Serialize(new
@@ -319,6 +370,7 @@ static Task TestAppPreferencesStore()
         AssertEqual(AppPreferences.CurrentSchemaVersion.ToString(), migratedV2.Preferences.SchemaVersion.ToString());
         AssertEqual("True", migratedV2.CanOverwrite.ToString());
         AssertEqual("False", migratedV2.Preferences.DirectSaveOverwrite.ToString());
+        AssertEqual(CrossVolumeVerificationMode.FullSha256.ToString(), migratedV2.Preferences.CrossVolumeVerification.ToString());
         AssertEqual(UiLanguageCodes.SimplifiedChinese, migratedV2.Preferences.UiLanguage);
 
         var v3Json = System.Text.Json.JsonSerializer.Serialize(new
@@ -333,11 +385,27 @@ static Task TestAppPreferencesStore()
         AssertEqual(AppPreferences.CurrentSchemaVersion.ToString(), migratedV3.Preferences.SchemaVersion.ToString());
         AssertEqual(UiLanguageCodes.SimplifiedChinese, migratedV3.Preferences.UiLanguage);
         AssertEqual("True", migratedV3.Preferences.DirectSaveOverwrite.ToString());
+        AssertEqual(CrossVolumeVerificationMode.FullSha256.ToString(), migratedV3.Preferences.CrossVolumeVerification.ToString());
+
+        var v4Json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            SchemaVersion = 4,
+            UiLanguage = "en",
+            RememberSavePreferences = true,
+            DirectSaveOverwrite = false,
+            TargetMode = "CustomRootNumberFolder",
+            CustomRootDirectory = customRoot
+        });
+        File.WriteAllText(store.SettingsPath, v4Json);
+        var migratedV4 = store.Load();
+        AssertEqual(AppPreferences.CurrentSchemaVersion.ToString(), migratedV4.Preferences.SchemaVersion.ToString());
+        AssertEqual(CrossVolumeVerificationMode.FullSha256.ToString(), migratedV4.Preferences.CrossVolumeVerification.ToString());
 
         File.WriteAllText(store.SettingsPath, "{ invalid json");
         var malformed = store.Load();
         AssertEqual("False", malformed.Preferences.RememberSavePreferences.ToString());
         AssertEqual("False", malformed.Preferences.DirectSaveOverwrite.ToString());
+        AssertEqual(CrossVolumeVerificationMode.FullSha256.ToString(), malformed.Preferences.CrossVolumeVerification.ToString());
         AssertEqual("True", malformed.CanOverwrite.ToString());
         AssertEqual("True", (!string.IsNullOrWhiteSpace(malformed.Warning)).ToString());
 
@@ -354,6 +422,7 @@ static Task TestAppPreferencesStore()
         var future = store.Load();
         AssertEqual("False", future.Preferences.RememberSavePreferences.ToString());
         AssertEqual("False", future.Preferences.DirectSaveOverwrite.ToString());
+        AssertEqual(CrossVolumeVerificationMode.FullSha256.ToString(), future.Preferences.CrossVolumeVerification.ToString());
         AssertEqual("False", future.CanOverwrite.ToString());
         AssertEqual("True", File.ReadAllText(store.SettingsPath).Contains("99", StringComparison.Ordinal).ToString());
 
@@ -361,13 +430,15 @@ static Task TestAppPreferencesStore()
         {
             UiLanguage = UiLanguageCodes.English,
             RememberSavePreferences = false,
-            DirectSaveOverwrite = true
+            DirectSaveOverwrite = true,
+            CrossVolumeVerification = CrossVolumeVerificationMode.FileSizeOnly
         });
         AssertEqual("True", File.Exists(store.SettingsPath).ToString());
         var disabledMemory = store.Load();
         AssertEqual(UiLanguageCodes.English, disabledMemory.Preferences.UiLanguage);
         AssertEqual("False", disabledMemory.Preferences.RememberSavePreferences.ToString());
         AssertEqual("False", disabledMemory.Preferences.DirectSaveOverwrite.ToString());
+        AssertEqual(CrossVolumeVerificationMode.FullSha256.ToString(), disabledMemory.Preferences.CrossVolumeVerification.ToString());
         return Task.CompletedTask;
     }
     finally
@@ -967,6 +1038,50 @@ static async Task TestArtworkOutput()
             metadata,
             new JavMetaLite.Core.Models.SaveOptions(true, true, true, true, false));
         AssertEqual("5", conflicts.Count.ToString());
+    }
+    finally
+    {
+        Directory.Delete(root, true);
+    }
+}
+
+static async Task TestMissingSampleImagesAreSkipped()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"JavMetaLite.NoSampleImagesTests.{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    try
+    {
+        var videoPath = Path.Combine(root, "START-585.mp4");
+        await File.WriteAllBytesAsync(videoPath, [0x53, 0x54, 0x41, 0x52, 0x54]);
+        var metadata = new MovieMetadata
+        {
+            Id = "START-585",
+            Title = "无独立剧照测试",
+            ScreenshotUrls = []
+        };
+
+        var options = new JavMetaLite.Core.Models.SaveOptions(false, false, false, true, false);
+        using var service = new OutputService();
+        var result = await service.SaveAsync(
+            videoPath,
+            metadata,
+            options);
+
+        AssertEqual("0", result.ExtrafanartPaths.Count.ToString());
+        AssertEqual("False", Directory.Exists(Path.Combine(root, "extrafanart")).ToString());
+        AssertEqual("True", File.Exists(videoPath).ToString());
+
+        var organizationService = new FileOrganizationService(service);
+        var plan = FileOrganizationService.BuildPlan(
+            videoPath,
+            metadata,
+            options,
+            new OrganizationOptions(false, false));
+        var organized = await organizationService.ExecuteAsync(plan, metadata, allowOverwrite: false);
+        AssertEqual("0", organized.Outputs.ExtrafanartPaths.Count.ToString());
+        AssertEqual(videoPath, organized.VideoPath);
+        AssertEqual("False", organized.VideoMoved.ToString());
+        AssertEqual("True", File.Exists(videoPath).ToString());
     }
     finally
     {
