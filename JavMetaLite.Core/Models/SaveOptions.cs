@@ -1,11 +1,19 @@
 namespace JavMetaLite.Core.Models;
 
+public enum OutputNamingMode
+{
+    VideoBase,
+    MovieFolder
+}
+
 public sealed record SaveOptions(
     bool WriteNfo,
     bool DownloadPoster,
     bool DownloadFanart,
     bool DownloadExtrafanart,
-    bool OverwriteExisting)
+    bool IncludeIdInTitle,
+    bool OverwriteExisting,
+    bool ReplaceLocalExtrafanart = false)
 {
     public bool RequiresPreview => !OverwriteExisting;
 }

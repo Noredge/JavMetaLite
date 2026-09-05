@@ -71,12 +71,50 @@ public sealed class AppPreferencesStore
                     CrossVolumeVerification = CrossVolumeVerificationMode.FullSha256
                 };
             }
+            if (preferences.SchemaVersion <= 5)
+            {
+                preferences = preferences with { SkipBatchSavePreview = false };
+            }
+            if (preferences.SchemaVersion <= 6)
+            {
+                preferences = preferences with { IncludeIdInTitle = true };
+            }
+            if (preferences.SchemaVersion <= 7)
+            {
+                preferences = preferences with { CustomSourceProfile = new MetadataSourcePreferenceProfile() };
+            }
+            else if (preferences.SchemaVersion == 8 &&
+                     MetadataSourcePreferenceProfile.IsPreview11Default(preferences.CustomSourceProfile))
+            {
+                preferences = preferences with { CustomSourceProfile = new MetadataSourcePreferenceProfile() };
+            }
+            if (preferences.SchemaVersion <= 9)
+            {
+                preferences = preferences with
+                {
+                    SkipSavePreview = preferences.DirectSaveOverwrite || preferences.SkipBatchSavePreview,
+                    DirectSaveOverwrite = false,
+                    SkipBatchSavePreview = false
+                };
+            }
+            if (preferences.SchemaVersion <= 10)
+            {
+                preferences = preferences with
+                {
+                    SearchSourceMode = MetadataSearchSourceModes.LibreDmm
+                };
+            }
+            if (preferences.SchemaVersion <= 11)
+            {
+                preferences = preferences with { ReplaceLocalExtrafanart = false };
+            }
 
             if (!preferences.RememberSavePreferences)
             {
                 return new AppPreferencesLoadResult(AppPreferences.CreateSafeDefaults() with
                 {
-                    UiLanguage = UiLanguageCodes.Normalize(preferences.UiLanguage)
+                    UiLanguage = UiLanguageCodes.Normalize(preferences.UiLanguage),
+                    CustomSourceProfile = MetadataSourcePreferenceProfile.Normalize(preferences.CustomSourceProfile)
                 });
             }
 
@@ -107,7 +145,8 @@ public sealed class AppPreferencesStore
                 ? preferences
                 : AppPreferences.CreateSafeDefaults() with
                 {
-                    UiLanguage = preferences.UiLanguage
+                    UiLanguage = preferences.UiLanguage,
+                    CustomSourceProfile = MetadataSourcePreferenceProfile.Normalize(preferences.CustomSourceProfile)
                 };
             var normalized = Normalize(source, promoteCurrentRoot: false) with
             {
@@ -175,14 +214,19 @@ public sealed class AppPreferencesStore
         {
             SchemaVersion = AppPreferences.CurrentSchemaVersion,
             UiLanguage = UiLanguageCodes.Normalize(preferences.UiLanguage),
+            SearchSourceMode = MetadataSearchSourceModes.Normalize(preferences.SearchSourceMode),
             TargetMode = Enum.IsDefined(preferences.TargetMode)
                 ? preferences.TargetMode
                 : OrganizationTargetMode.VideoDirectory,
             CrossVolumeVerification = Enum.IsDefined(preferences.CrossVolumeVerification)
                 ? preferences.CrossVolumeVerification
                 : CrossVolumeVerificationMode.FullSha256,
+            DirectSaveOverwrite = false,
+            SkipBatchSavePreview = false,
+            ReplaceLocalExtrafanart = preferences.DownloadExtrafanart && preferences.ReplaceLocalExtrafanart,
             CustomRootDirectory = customRoot,
-            RecentCustomRootDirectories = recentRoots.ToArray()
+            RecentCustomRootDirectories = recentRoots.ToArray(),
+            CustomSourceProfile = MetadataSourcePreferenceProfile.Normalize(preferences.CustomSourceProfile)
         };
     }
 

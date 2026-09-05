@@ -6,102 +6,42 @@
 
 [![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 
-一次只整理一部影片的轻量 Windows metadata 编辑器。选择影片，或拖入单个影片文件或单片番号文件夹，再搜索资料、逐项检查和修改，并在保存前预览所有文件变更。JavMetaLite 不扫描媒体库，也不会在用户确认前写入或移动影片。
+> 当前版本：**1.2.0**。
 
-![JavMetaLite v1.0.0 主界面](docs/images/javmetalite-v1.0.0-main.zh-Hans.png)
+用于本地影片资料审核与整理的 Windows 工具，支持单片编辑、批量处理和 Jellyfin 兼容输出。
+
+![单片工作区，v1.2.0](docs/images/javmetalite-v1.2.0-main-single.zh-Hans.png)
+
+图片与资料均为合成演示。[更多截图](docs/SCREENSHOTS-v1.2.0.md)。
 
 ## 主要功能
 
-- 只处理当前选择的一部影片，不提供批量刮削或媒体库扫描。
-- LibreDMM 提供日文资料，R18.dev 提供英文资料，JAVLibrary 可作为手动网页后备。
-- 多来源搜索后可为每个字段选择资料来源，也可继续手动修改。
-- 读取并安全更新本地 NFO、poster 和 fanart，保留未知 XML。
-- 生成 Jellyfin 兼容的 NFO、poster、fanart，以及可选的 `extrafanart/`。
-- 可保持影片原位、在原地建立番号文件夹，或整理到自定义目标根目录。
-- 跨磁盘或 UNC 目标使用安全暂存复制。默认执行完整 SHA-256 校验；用户也可自行承担风险，明确选择仅检查文件大小的快速模式。
-- 保存前默认显示实际变更预览；目标影片冲突时始终阻止执行。
-- 便携、自包含的 Windows x64 单文件程序，无需安装 .NET Runtime。
+- 添加影片或扫描文件夹，将 CD1/CD2 分组为一部影片，在队列中批量审核。
+- 支持 LibreDMM（默认推荐）、R18.dev 和自定义多来源；JAVLibrary 仅用于手动网页查询。
+- 编辑本地 NFO、选择图片来源与样张，生成 NFO、海报、fanart 和可选的 Extra Fanart。
+- 图片查看器支持比较与本地图片删除，主界面提供低分辨率封套提示。
+- 保存前预览文件变更，可保持影片原位或整理到指定文件夹；支持简、繁、英、日四语言。
 
 ## 快速开始
 
-1. 从 [GitHub Releases](https://github.com/Noredge/JavMetaLite/releases) 下载 `JavMetaLite-v1.1.1-win-x64-portable.zip`。
-2. 对照同一 Release 内的 `SHA256SUMS.txt` 校验压缩包，然后解压。
-3. 运行 `JavMetaLite.exe`，选择影片，或拖入一个影片文件或单片番号文件夹。
-4. 检查番号并搜索资料，选择合适的文字与封套来源。
-5. 修改所需字段，选择输出和目标位置。
-6. 检查保存前变更预览，确认后执行。
+需要 Windows 10/11 x64；无需另装 .NET Runtime，内置浏览器需要 Microsoft Edge WebView2 Runtime。
 
-首次运行未签名程序时，Windows 可能显示 SmartScreen 提示。请只从本仓库的正式 Release 下载，并核对 SHA-256。
+1. 从 [Releases](https://github.com/Noredge/JavMetaLite/releases) 获取已发布的便携包，或使用提供的本地包，核对 SHA-256 后解压。
+2. 运行 `JavMetaLite.exe`，选择或拖入影片／文件夹。
+3. 检查番号、搜索资料，按需调整文字、图片与保存设置。
+4. 点击保存并检查变更预览。批量保存不要求先打开每部影片的预览。
 
-## 输出示例
+## 必要提醒
 
-```text
-目标根目录/
-  IPX-123/
-    IPX-123.mp4
-    IPX-123.nfo
-    IPX-123-poster.jpg
-    IPX-123-fanart.jpg
-    extrafanart/       # 可选
-      fanart1.jpg
-      fanart2.jpg
-```
+- 批量推荐 LibreDMM；R18 可能因限流而较慢。
+- 关闭后不会恢复队列。移除队列项目不删除影片；确认删除本地图片会立即执行。
+- 请备份重要媒体。保存遇到失败或取消会停止；恢复失败时请保留恢复目录。
+- 来源网站可能含成人内容，请遵守其条款及适用的年龄与法律要求。
 
-## 资料来源
+## 更多
 
-| 来源 | 主要用途 | 说明 |
-| --- | --- | --- |
-| LibreDMM | 日文资料、完整封套、样张 | 推荐的日文来源 |
-| R18.dev | 英文资料、完整封套、Gallery | 英文输出与辅助来源 |
-| JAVLibrary | 手动网页导入 | 网站要求验证或自动来源失败时使用 |
+[版本说明](docs/RELEASE-NOTES-v1.2.0.md) · [交付清单](docs/RELEASE-v1.2.0.zh-Hans.md) · [更新历史](CHANGELOG.md) · [开发与测试](TESTING.md)
 
-来源网站可能变更或暂时不可用。多来源搜索对每个来源设置等待上限；失败时可以切换来源或手动填写，不需要反复重启程序。
+编译需要 .NET SDK 10.0.400。日志和偏好设置位于 `%LOCALAPPDATA%\JavMetaLite`。
 
-## 安全设计
-
-- 默认不移动影片，也不直接覆盖 metadata。
-- 预览窗口显示即将新建、更新、移动或保持不变的文件。
-- 影片目标已存在时不会覆盖另一个影片。
-- 跨卷传输默认在删除来源前校验文件大小与 SHA-256。可选快速模式会跳过内容校验，但仍保留暂存、大小检查、冲突保护与回滚。
-- 提交失败时恢复已覆盖的 metadata，并尽量保持原影片位置。
-- 搜索时会把识别出的番号发送给用户选择的资料来源。选择影片和读取本地 NFO 不会自动联网写入。
-- 手动导入 JAVLibrary 时只读取当前影片页面；内置 WebView2 浏览器可能保留网站验证所需的 Cookie。
-
-任何文件整理工具都不能替代备份。请先备份重要影片，并在第一次使用自定义目标位置时使用测试副本。
-
-## 系统要求与边界
-
-- Windows 10/11 x64。
-- 首次运行跟随 Windows 的简中、繁中、英文或日文显示语言；其他系统语言回退到英文，之后记住用户选择。
-- 内置浏览器需要 Microsoft Edge WebView2 Runtime；Windows 10/11 通常已经安装。
-- 支持 MP4、MKV、AVI、WMV 影片选择；不会写入容器内部 metadata。
-- 不扫描媒体库，不批量处理，不自动搬运未知字幕或伴随文件。
-- `actors/` 暂不生成；演员图片通过 NFO 内的远程 `thumb` 提供。
-- 真实网络共享的速度、权限和可用性取决于 Windows 与目标服务器。
-- 请遵守资料来源网站的使用条款，并仅以合理频率查询。
-- 资料来源可能包含成人内容。请仅在当地法律允许且符合用户年龄的情况下使用。
-
-运行日志位于 `%LOCALAPPDATA%\JavMetaLite\Logs`，默认保留最近 14 天。用户偏好位于 `%LOCALAPPDATA%\JavMetaLite\settings.json`。
-
-## 开发与测试
-
-需要 .NET 10 SDK：
-
-```powershell
-dotnet build .\JavMetaLite.App\JavMetaLite.App.csproj
-.\scripts\Test-Automated.ps1
-```
-
-生成干净的 Windows x64 便携包与 SHA-256：
-
-```powershell
-.\scripts\New-ReleasePackage.ps1
-```
-
-自动化测试层级见 [TESTING.md](TESTING.md)，版本历史见 [CHANGELOG.md](CHANGELOG.md)。
-
-## 许可证
-
-JavMetaLite 采用 [MIT License](LICENSE)，版权所有 © 2026 Noredge。第三方组件使用各自的许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
-
-JavMetaLite 与其读取的资料来源网站没有隶属或合作关系。本项目的 MIT 许可证不代表对来源网站数据的再授权。
+[MIT 许可证](LICENSE) · © 2026 Noredge · [第三方声明](THIRD_PARTY_NOTICES.md)。本项目与来源网站无隶属关系，项目许可证不包含网站资料的授权。

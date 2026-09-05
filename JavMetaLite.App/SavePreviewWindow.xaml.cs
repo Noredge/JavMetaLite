@@ -103,6 +103,7 @@ public partial class SavePreviewWindow : Window
             PlannedChangeKind.KeepFile => (LocalizationService.Get("Preview.Action.Keep"), "#252D38", "#A9B7C8"),
             PlannedChangeKind.ReplaceImage => (LocalizationService.Get("Preview.Action.ReplaceImage"), "#4A3218", "#FFD18A"),
             PlannedChangeKind.OverwriteFile => (LocalizationService.Get("Preview.Action.Overwrite"), "#4A3218", "#FFD18A"),
+            PlannedChangeKind.RemoveFile => (LocalizationService.Get("Preview.Action.Remove"), "#4A2025", "#FF9DA6"),
             _ => (LocalizationService.Get("Preview.Action.Generate"), "#233044", "#B8CFF0")
         };
         if (change.IsBlocking)
@@ -155,21 +156,22 @@ public partial class SavePreviewWindow : Window
             return key is null ? change.Description : LocalizationService.Get(key);
         }
 
+        if (change.DestinationPath.Contains("extrafanart", StringComparison.OrdinalIgnoreCase))
+        {
+            return LocalizationService.Get(change.Kind switch
+            {
+                PlannedChangeKind.RemoveFile => "Preview.Description.RemoveStill",
+                PlannedChangeKind.ReplaceImage or PlannedChangeKind.OverwriteFile => "Preview.Description.ReplaceStill",
+                _ => "Preview.Description.GenerateStill"
+            });
+        }
+
         var fileName = Path.GetFileName(change.DestinationPath);
         var artworkRole = fileName.Contains("poster", StringComparison.OrdinalIgnoreCase)
             ? "poster"
             : fileName.Contains("fanart", StringComparison.OrdinalIgnoreCase)
                 ? "fanart"
                 : null;
-        if (artworkRole is null &&
-            change.DestinationPath.Contains("extrafanart", StringComparison.OrdinalIgnoreCase))
-        {
-            return LocalizationService.Get(
-                change.Kind is PlannedChangeKind.ReplaceImage or PlannedChangeKind.OverwriteFile
-                    ? "Preview.Description.ReplaceStill"
-                    : "Preview.Description.GenerateStill");
-        }
-
         if (artworkRole is not null)
         {
             var artworkRoleLabel = LocalizationService.Get(

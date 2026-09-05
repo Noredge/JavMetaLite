@@ -6,7 +6,11 @@ internal static class Program
 {
     private static async Task<int> Main(string[] args)
     {
-        var tests = FileOrganizationRegressionTests.All;
+        if (args.FirstOrDefault() == "--save-performance")
+            return await SavePerformance.RunAsync(args.Skip(1).ToArray());
+        IReadOnlyList<RegressionTestCase> tests = FileOrganizationRegressionTests.All
+            .Concat(OutputDownloadRegressionTests.All).Concat(FileSharingRegressionTests.All)
+            .Concat(LocalSampleSafetyRegressionTests.All).ToArray();
         if (args.Contains("--list", StringComparer.OrdinalIgnoreCase))
         {
             foreach (var test in tests)

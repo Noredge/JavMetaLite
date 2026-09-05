@@ -7,6 +7,8 @@ namespace JavMetaLite.Core.Services;
 
 public sealed class OutputService : IDisposable
 {
+    private const int ScreenshotDownloadBatchSize = 3;
+    private const int MaximumOnlineScreenshots = 50;
     private readonly HttpClient _httpClient;
     private readonly bool _ownsClient;
 
@@ -52,6 +54,26 @@ public sealed class OutputService : IDisposable
         NfoWriteContext? nfoWriteContext,
         CancellationToken cancellationToken = default)
     {
+        return await SaveAsync(
+            sourceVideoPath,
+            outputVideoPath,
+            metadata,
+            options,
+            nfoWriteContext,
+            OutputNamingMode.VideoBase,
+            cancellationToken);
+    }
+
+    public async Task<SaveResult> SaveAsync(
+        string sourceVideoPath,
+        string outputVideoPath,
+        MovieMetadata metadata,
+        SaveOptions options,
+        NfoWriteContext? nfoWriteContext,
+        OutputNamingMode namingMode,
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<string>? extrafanartSourceLocations = null)
+    {
         if (!File.Exists(sourceVideoPath))
         {
             throw new FileNotFoundException("找不到所选影片。", sourceVideoPath);
@@ -64,10 +86,18 @@ public sealed class OutputService : IDisposable
 
         var directory = Path.GetDirectoryName(outputVideoPath)!;
         var baseName = Path.GetFileNameWithoutExtension(outputVideoPath);
-        var nfoPath = options.WriteNfo ? Path.Combine(directory, $"{baseName}.nfo") : null;
-        var posterPath = options.DownloadPoster ? Path.Combine(directory, $"{baseName}-poster.jpg") : null;
-        var fanartPath = options.DownloadFanart ? Path.Combine(directory, $"{baseName}-fanart.jpg") : null;
+        var nfoPath = options.WriteNfo
+            ? Path.Combine(directory, namingMode is OutputNamingMode.MovieFolder ? "movie.nfo" : $"{baseName}.nfo")
+            : null;
+        var posterPath = options.DownloadPoster
+            ? Path.Combine(directory, namingMode is OutputNamingMode.MovieFolder ? "poster.jpg" : $"{baseName}-poster.jpg")
+            : null;
+        var fanartPath = options.DownloadFanart
+            ? Path.Combine(directory, namingMode is OutputNamingMode.MovieFolder ? "fanart.jpg" : $"{baseName}-fanart.jpg")
+            : null;
 
+        using var timing = new SaveTimingLog("metadata", metadata.Id);
+        timing.Begin("coverRead");
         DownloadedImage? cover = null;
         if (options.DownloadPoster || options.DownloadFanart)
         {
@@ -75,9 +105,14 @@ public sealed class OutputService : IDisposable
             cover = await DownloadBestCoverAsync(metadata, cancellationToken);
         }
 
+        timing.Begin("samplesRead");
         var screenshots = options.DownloadExtrafanart
-            ? await DownloadScreenshotsAsync(metadata.ScreenshotUrls, cancellationToken)
+            ? await DownloadScreenshotsAsync(
+                extrafanartSourceLocations ?? metadata.ScreenshotUrls,
+                cancellationToken,
+                requireCompleteSelection: options.ReplaceLocalExtrafanart)
             : [];
+        timing.Begin("prepareOutputs");
         var fanartImage = options.DownloadFanart ? cover : null;
 
         var extraImages = options.DownloadExtrafanart
@@ -98,31 +133,20 @@ public sealed class OutputService : IDisposable
 
         if (posterPath is not null && cover is not null)
         {
-            await WriteImageAsync(
-                posterPath,
-                PosterImageProcessor.CreatePosterJpeg(cover.Bytes),
-                options.OverwriteExisting,
-                cancellationToken);
+            await ProcessAndWriteAsync(posterPath, cover, poster: true);
         }
 
         if (fanartPath is not null && fanartImage is not null)
         {
-            await WriteImageAsync(
-                fanartPath,
-                PosterImageProcessor.CreateFanartJpeg(fanartImage.Bytes),
-                options.OverwriteExisting,
-                cancellationToken);
+            await ProcessAndWriteAsync(fanartPath, fanartImage, poster: false);
         }
 
         for (var index = 0; index < extraImages.Length; index++)
         {
-            await WriteImageAsync(
-                extraPaths[index],
-                PosterImageProcessor.CreateFanartJpeg(extraImages[index].Bytes),
-                options.OverwriteExisting,
-                cancellationToken);
+            await ProcessAndWriteAsync(extraPaths[index], extraImages[index], poster: false);
         }
 
+        timing.Begin("nfoWrite");
         if (nfoPath is not null)
         {
             var posterReference = nfoWriteContext?.UpdatePosterReference == true
@@ -141,6 +165,7 @@ public sealed class OutputService : IDisposable
                     posterReference,
                     nfoWriteContext.UpdateFanartReference,
                     fanartReference,
+                    options.IncludeIdInTitle,
                     options.OverwriteExisting,
                     cancellationToken);
             }
@@ -151,6 +176,7 @@ public sealed class OutputService : IDisposable
                     metadata,
                     posterReference,
                     fanartReference,
+                    options.IncludeIdInTitle,
                     options.OverwriteExisting,
                     cancellationToken);
             }
@@ -159,13 +185,32 @@ public sealed class OutputService : IDisposable
         AppLog.Info(
             $"metadata 临时写入完成 base={baseName} nfo={nfoPath is not null} poster={posterPath is not null} " +
             $"fanart={fanartPath is not null} extrafanart={extraPaths.Length}");
+        timing.Complete();
         return new SaveResult(nfoPath, posterPath, fanartPath, extraPaths, options.DownloadFanart && cover is not null);
+
+        async Task ProcessAndWriteAsync(string path, DownloadedImage image, bool poster)
+        {
+            timing.Begin("imageProcess");
+            var bytes = poster
+                ? PosterImageProcessor.CreatePosterJpeg(image.Bytes)
+                : PosterImageProcessor.CreateFanartJpeg(image.Bytes);
+            timing.Begin("imageWrite");
+            await WriteImageAsync(path, bytes, options.OverwriteExisting, cancellationToken);
+        }
     }
 
     public static IReadOnlyList<string> GetExpectedOutputFiles(
         string outputVideoPath,
         MovieMetadata metadata,
-        SaveOptions options)
+        SaveOptions options) =>
+        GetExpectedOutputFiles(outputVideoPath, metadata, options, OutputNamingMode.VideoBase);
+
+    public static IReadOnlyList<string> GetExpectedOutputFiles(
+        string outputVideoPath,
+        MovieMetadata metadata,
+        SaveOptions options,
+        OutputNamingMode namingMode,
+        int? extrafanartCountOverride = null)
     {
         var directory = Path.GetDirectoryName(outputVideoPath);
         if (string.IsNullOrWhiteSpace(directory))
@@ -177,19 +222,25 @@ public sealed class OutputService : IDisposable
         var candidates = new List<string>();
         if (options.WriteNfo)
         {
-            candidates.Add(Path.Combine(directory, $"{baseName}.nfo"));
+            candidates.Add(Path.Combine(
+                directory,
+                namingMode is OutputNamingMode.MovieFolder ? "movie.nfo" : $"{baseName}.nfo"));
         }
         if (options.DownloadPoster)
         {
-            candidates.Add(Path.Combine(directory, $"{baseName}-poster.jpg"));
+            candidates.Add(Path.Combine(
+                directory,
+                namingMode is OutputNamingMode.MovieFolder ? "poster.jpg" : $"{baseName}-poster.jpg"));
         }
         if (options.DownloadFanart)
         {
-            candidates.Add(Path.Combine(directory, $"{baseName}-fanart.jpg"));
+            candidates.Add(Path.Combine(
+                directory,
+                namingMode is OutputNamingMode.MovieFolder ? "fanart.jpg" : $"{baseName}-fanart.jpg"));
         }
         if (options.DownloadExtrafanart)
         {
-            var count = Math.Min(50, metadata.ScreenshotUrls.Count);
+            var count = extrafanartCountOverride ?? SelectScreenshotLocations(metadata.ScreenshotUrls).Count;
             for (var index = 1; index <= count; index++)
             {
                 candidates.Add(Path.Combine(directory, "extrafanart", $"fanart{index}.jpg"));
@@ -241,32 +292,82 @@ public sealed class OutputService : IDisposable
 
     private async Task<List<DownloadedImage>> DownloadScreenshotsAsync(
         IReadOnlyList<string> urls,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool requireCompleteSelection = false)
     {
         var images = new List<DownloadedImage>();
         var hashes = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var url in urls.Take(50))
+        var failures = 0;
+        var locations = SelectScreenshotLocations(urls);
+        // Local-only saves keep their sequential disk access. Bound remote work by a small
+        // batch, not one task per sample or per movie; duplicates retain at most one batch
+        // of extra bytes until they can be discarded in the user's original order.
+        var batchSize = locations.All(location => ArtworkLocationHelper.TryGetLocalPath(location, out _))
+            ? 1 : ScreenshotDownloadBatchSize;
+        using var downloads = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        for (var offset = 0; offset < locations.Count; offset += batchSize)
         {
-            try
+            cancellationToken.ThrowIfCancellationRequested();
+            var tasks = locations.Skip(offset).Take(batchSize).Select(DownloadSampleAsync).ToArray();
+            var batch = await Task.WhenAll(tasks);
+            cancellationToken.ThrowIfCancellationRequested();
+            foreach (var image in batch)
             {
-                var image = await DownloadImageAsync(url, cancellationToken);
-                if (hashes.Add(image.Hash))
+                if (image is null)
+                    failures++;
+                else if (hashes.Add(image.Hash))
                 {
                     images.Add(image);
                 }
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception exception) when (IsRecoverableImageError(exception))
-            {
-                // Individual missing/blocked samples should not prevent the remaining images from being used.
-                AppLog.Warning($"样张下载失败，继续处理其余图片：{url}", exception);
-            }
         }
 
+        // An empty user selection is intentional; a failed download is not. Abort
+        // before staging writes so the transaction cannot retire irreplaceable originals.
+        if (requireCompleteSelection && failures > 0)
+        {
+            throw new InvalidDataException(
+                $"有 {failures} 张所选样张未能下载，已停止全面替换。本地图片和影片保持不变，请重试或调整选择。");
+        }
         return images;
+
+        async Task<DownloadedImage?> DownloadSampleAsync(string url)
+        {
+            try
+            {
+                downloads.Token.ThrowIfCancellationRequested();
+                return await DownloadImageAsync(url, downloads.Token);
+            }
+            catch (Exception exception) when (
+                !ArtworkLocationHelper.TryGetLocalPath(url, out _) && IsRecoverableImageError(exception))
+            {
+                // Missing online candidates may be skipped. A failed local read must
+                // abort, because committing a partial list would retire its original.
+                AppLog.Warning($"样张下载失败，继续处理其余图片：{url}", exception);
+                return null;
+            }
+            catch
+            {
+                // Cancel siblings immediately on cancellation or a non-recoverable failure.
+                // WhenAll still drains the batch before the caller can roll back staging.
+                downloads.Cancel();
+                throw;
+            }
+        }
+    }
+
+    internal static IReadOnlyList<string> SelectScreenshotLocations(IEnumerable<string> locations)
+    {
+        var selected = new List<string>();
+        var onlineCount = 0;
+        foreach (var location in locations)
+        {
+            // The download limit must not drop local files that the save transaction
+            // will reconcile. Continue scanning after the limit for later local items.
+            if (ArtworkLocationHelper.TryGetLocalPath(location, out _) || onlineCount++ < MaximumOnlineScreenshots)
+                selected.Add(location);
+        }
+        return selected;
     }
 
     private async Task<DownloadedImage> DownloadImageAsync(string url, CancellationToken cancellationToken)
@@ -347,7 +448,7 @@ public sealed class OutputService : IDisposable
         if (conflicts.Length > 0)
         {
             throw new IOException(
-                $"以下文件已经存在：\n{string.Join(Environment.NewLine, conflicts)}\n\n请勾选“直接保存并覆盖（跳过预览）”后重试。 ");
+                $"以下文件已经存在：\n{string.Join(Environment.NewLine, conflicts)}\n\n请重新保存并在安全预览中确认覆盖。 ");
         }
     }
 

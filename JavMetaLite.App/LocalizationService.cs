@@ -7,6 +7,7 @@ namespace JavMetaLite.App;
 internal static class LocalizationService
 {
     private const string DictionaryMarker = "JavMetaLite.Localization";
+    private static ResourceDictionary? _englishFallback;
 
     public static string CurrentLanguageCode { get; private set; } = UiLanguageCodes.English;
 
@@ -47,6 +48,7 @@ internal static class LocalizationService
     public static void ApplyLanguage(string? languageCode)
     {
         var normalized = ResolvePreference(languageCode);
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(normalized);
         var application = Application.Current;
         if (application is null)
         {
@@ -80,7 +82,18 @@ internal static class LocalizationService
 
     public static string Get(string key, params object?[] arguments)
     {
-        var value = Application.Current?.TryFindResource(key)?.ToString() ?? key;
+        var value = Application.Current?.TryFindResource(key)?.ToString();
+        if (value is null)
+        {
+            System.Diagnostics.Trace.TraceWarning($"Missing localization key: {CurrentLanguageCode}/{key}");
+            if (Application.Current is not null)
+            {
+                _englishFallback ??= new ResourceDictionary
+                { Source = new Uri("/JavMetaLite;component/Resources/Strings.en.xaml", UriKind.Relative) };
+                value = _englishFallback[key]?.ToString();
+            }
+        }
+        value ??= key;
         return arguments.Length == 0
             ? value
             : string.Format(CultureInfo.CurrentUICulture, value, arguments);

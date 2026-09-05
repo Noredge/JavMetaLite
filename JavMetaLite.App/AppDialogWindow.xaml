@@ -1,0 +1,76 @@
+<Window x:Class="JavMetaLite.App.AppDialogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="500"
+        MinWidth="420"
+        MaxWidth="620"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource WindowBrush}">
+    <Border Margin="1"
+            Padding="20"
+            Background="{StaticResource ChromeBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="10">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="36" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Width="28"
+                        Height="28"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        Background="#4A3218"
+                        BorderBrush="#8A5A24"
+                        BorderThickness="1"
+                        CornerRadius="14">
+                    <TextBlock Text="!"
+                               Foreground="#FFD18A"
+                               FontSize="16"
+                               FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+                <TextBlock x:Name="DialogHeadingText"
+                           Grid.Column="1"
+                           FontSize="17"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           TextWrapping="Wrap" />
+            </Grid>
+
+            <TextBlock x:Name="DialogMessageText"
+                       Grid.Row="1"
+                       Margin="36,14,0,0"
+                       Foreground="{StaticResource MutedBrush}"
+                       FontSize="13"
+                       LineHeight="20"
+                       TextWrapping="Wrap" />
+
+            <StackPanel Grid.Row="2"
+                        Margin="0,22,0,0"
+                        HorizontalAlignment="Right"
+                        Orientation="Horizontal">
+                <Button x:Name="CancelButton"
+                        Content="{DynamicResource Common.Cancel}"
+                        IsCancel="True"
+                        Click="Cancel_Click"
+                        Margin="0,0,10,0" />
+                <Button x:Name="ConfirmButton"
+                        Style="{StaticResource DangerButton}"
+                        Click="Confirm_Click" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

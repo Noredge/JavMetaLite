@@ -1,0 +1,117 @@
+{
+  "Version": "1.2.0-preview.46",
+  "Runtime": "10.0.11",
+  "CpuCount": 16,
+  "TimestampUtc": "2026-09-05T00:20:36.2655818Z",
+  "Notes": "Synthetic JPEGs: cover 1600x1000, poster 800x1000, four samples 640x400. No OS cache flushing. Input-priority heartbeat gap includes its 10ms interval. Browse retains up to 48 visited movies; GC is outside timed intervals. No network.",
+  "Rows": [
+    {
+      "Count": 100,
+      "Scenario": "bare",
+      "Iteration": 1,
+      "Operation": "search-dmm-fake2ms",
+      "ElapsedMs": 2451.72,
+      "MaxUiGapMs": 76.55,
+      "ViewResets": 401,
+      "AllocatedBytes": 176046184,
+      "RetainedManagedBytes": 4818400,
+      "WorkingSetBytes": 223186944
+    },
+    {
+      "Count": 100,
+      "Scenario": "bare",
+      "Iteration": 2,
+      "Operation": "search-dmm-fake2ms",
+      "ElapsedMs": 2186.58,
+      "MaxUiGapMs": 36.7,
+      "ViewResets": 401,
+      "AllocatedBytes": 174808128,
+      "RetainedManagedBytes": 4972224,
+      "WorkingSetBytes": 245043200
+    },
+    {
+      "Count": 100,
+      "Scenario": "bare",
+      "Iteration": 3,
+      "Operation": "search-dmm-fake2ms",
+      "ElapsedMs": 1882.3,
+      "MaxUiGapMs": 29.09,
+      "ViewResets": 401,
+      "AllocatedBytes": 174652480,
+      "RetainedManagedBytes": 5118264,
+      "WorkingSetBytes": 255152128
+    },
+    {
+      "Count": 500,
+      "Scenario": "bare",
+      "Iteration": 1,
+      "Operation": "search-dmm-fake2ms",
+      "ElapsedMs": 8473.92,
+      "MaxUiGapMs": 34.44,
+      "ViewResets": 2001,
+      "AllocatedBytes": 2132372464,
+      "RetainedManagedBytes": 6334896,
+      "WorkingSetBytes": 256696320
+    },
+    {
+      "Count": 500,
+      "Scenario": "bare",
+      "Iteration": 2,
+      "Operation": "search-dmm-fake2ms",
+      "ElapsedMs": 5650.43,
+      "MaxUiGapMs": 28.98,
+      "ViewResets": 2001,
+      "AllocatedBytes": 2100683032,
+      "RetainedManagedBytes": 6190296,
+      "WorkingSetBytes": 252399616
+    },
+    {
+      "Count": 500,
+      "Scenario": "bare",
+      "Iteration": 3,
+      "Operation": "search-dmm-fake2ms",
+      "ElapsedMs": 5756.73,
+      "MaxUiGapMs": 31.3,
+      "ViewResets": 2001,
+      "AllocatedBytes": 2100588440,
+      "RetainedManagedBytes": 6189672,
+      "WorkingSetBytes": 253775872
+    },
+    {
+      "Count": 1000,
+      "Scenario": "bare",
+      "Iteration": 1,
+      "Operation": "search-dmm-fake2ms",
+      "ElapsedMs": 13297.36,
+      "MaxUiGapMs": 34.38,
+      "ViewResets": 4001,
+      "AllocatedBytes": 7351272104,
+      "RetainedManagedBytes": 7984448,
+      "WorkingSetBytes": 247545856
+    },
+    {
+      "Count": 1000,
+      "Scenario": "bare",
+      "Iteration": 2,
+      "Operation": "search-dmm-fake2ms",
+      "ElapsedMs": 12542.15,
+      "MaxUiGapMs": 35.49,
+      "ViewResets": 4001,
+      "AllocatedBytes": 7351444760,
+      "RetainedManagedBytes": 7988152,
+      "WorkingSetBytes": 254332928
+    },
+    {
+      "Count": 1000,
+      "Scenario": "bare",
+      "Iteration": 3,
+      "Operation": "search-dmm-fake2ms",
+      "ElapsedMs": 13634.87,
+      "MaxUiGapMs": 37.87,
+      "ViewResets": 4001,
+      "AllocatedBytes": 7351140192,
+      "RetainedManagedBytes": 7987528,
+      "WorkingSetBytes": 253898752
+    }
+  ]
+}

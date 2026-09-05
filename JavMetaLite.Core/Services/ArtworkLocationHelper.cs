@@ -1,5 +1,7 @@
 namespace JavMetaLite.Core.Services;
 
+public sealed record ValidatedLocalImage(byte[] Bytes, int Width, int Height);
+
 public static class ArtworkLocationHelper
 {
     public const long MaximumLocalImageBytes = 100L * 1024 * 1024;
@@ -65,6 +67,11 @@ public static class ArtworkLocationHelper
 
     public static async Task<byte[]> ReadLocalImageAsync(
         string location,
+        CancellationToken cancellationToken = default) =>
+        (await ReadLocalImageWithDimensionsAsync(location, cancellationToken)).Bytes;
+
+    public static async Task<ValidatedLocalImage> ReadLocalImageWithDimensionsAsync(
+        string location,
         CancellationToken cancellationToken = default)
     {
         if (!TryGetLocalPath(location, out var path))
@@ -85,7 +92,8 @@ public static class ArtworkLocationHelper
         }
 
         var bytes = await File.ReadAllBytesAsync(path, cancellationToken);
-        _ = PosterImageProcessor.GetDimensions(bytes);
-        return bytes;
+        var dimensions = PosterImageProcessor.GetDimensions(bytes);
+        cancellationToken.ThrowIfCancellationRequested();
+        return new ValidatedLocalImage(bytes, dimensions.Width, dimensions.Height);
     }
 }

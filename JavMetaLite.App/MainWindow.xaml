@@ -1,6 +1,8 @@
 <Window x:Class="JavMetaLite.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:JavMetaLite.App"
+        xmlns:services="clr-namespace:JavMetaLite.Core.Services;assembly=JavMetaLite.Core"
         Title="{DynamicResource App.Title}"
         Icon="/JavMetaLite;component/Resources/Brand/JavMetaLite.ico"
         Width="1120" Height="790" MinWidth="930" MinHeight="650"
@@ -9,14 +11,21 @@
         AllowDrop="True"
         Drop="Window_Drop"
         DragOver="Window_DragOver"
+        PreviewKeyDown="Window_PreviewKeyDown"
+        PreviewKeyUp="Window_PreviewKeyUp"
+        PreviewMouseDown="Window_PreviewMouseDown"
+        Deactivated="Window_Deactivated"
         Closing="Window_Closing">
     <Window.Resources>
+        <SolidColorBrush x:Key="BatchSourceWarningBrush" Color="#E9BC75" />
         <Style x:Key="SourceBadgeButton" TargetType="Button">
             <Setter Property="Foreground" Value="#6FA8FF" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="4,0,0,6" />
-            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="MinWidth" Value="44" />
+            <Setter Property="MinHeight" Value="24" />
+            <Setter Property="FontSize" Value="11" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="FontFamily" Value="{DynamicResource Ui.FontFamily}" />
             <Setter Property="Cursor" Value="Hand" />
@@ -70,9 +79,12 @@
                                 CornerRadius="6"
                                 SnapsToDevicePixels="True">
                             <ScrollViewer Background="Transparent"
-                                          CanContentScroll="True"
+                                          CanContentScroll="False"
+                                          IsDeferredScrollingEnabled="False"
                                           HorizontalScrollBarVisibility="Disabled"
-                                          VerticalScrollBarVisibility="Auto">
+                                          VerticalScrollBarVisibility="Auto"
+                                          PanningMode="VerticalOnly"
+                                          local:PreciseScrollBehavior.Axis="Vertical">
                                 <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" />
                             </ScrollViewer>
                         </Border>
@@ -134,12 +146,15 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="ComboBoxSelectionContent" TargetType="ContentPresenter">
+            <Setter Property="Content" Value="{Binding SelectionBoxItem, RelativeSource={RelativeSource TemplatedParent}}" />
+        </Style>
         <Style x:Key="DarkComboBox" TargetType="{x:Type ComboBox}">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             <Setter Property="Background" Value="#10161E" />
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Padding" Value="10,7,28,7" />
             <Setter Property="MinHeight" Value="36" />
             <Setter Property="FontFamily" Value="{DynamicResource Ui.FontFamily}" />
             <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboBoxItem}" />
@@ -154,10 +169,10 @@
                                     BorderThickness="{TemplateBinding BorderThickness}"
                                     CornerRadius="6">
                                 <Grid>
-                                    <ContentPresenter Margin="10,7,28,7"
+                                    <ContentPresenter Margin="{TemplateBinding Padding}"
                                                       VerticalAlignment="Center"
                                                       HorizontalAlignment="Left"
-                                                      Content="{TemplateBinding SelectionBoxItem}"
+                                                      Style="{DynamicResource ComboBoxSelectionContent}"
                                                       ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                                       ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}" />
                                     <Path Width="8" Height="5" Margin="0,0,11,0"
@@ -190,7 +205,12 @@
                                         BorderBrush="#3A4A61"
                                         BorderThickness="1"
                                         CornerRadius="7">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Disabled"
+                                                  CanContentScroll="False"
+                                                  IsDeferredScrollingEnabled="False"
+                                                  PanningMode="VerticalOnly"
+                                                  local:PreciseScrollBehavior.Axis="Vertical">
                                         <StackPanel IsItemsHost="True" />
                                     </ScrollViewer>
                                 </Border>
@@ -205,6 +225,35 @@
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="MainBorder" Property="Opacity" Value="0.58" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="WorkspaceModeToggle" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="ModeBorder"
+                                Background="#151D27"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="7"
+                                Padding="10,6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ModeBorder" Property="BorderBrush" Value="{StaticResource BorderHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="ModeBorder" Property="Background" Value="#203D68" />
+                                <Setter TargetName="ModeBorder" Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+                                <Setter Property="Foreground" Value="White" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -227,6 +276,10 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="8" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Image x:Name="BrandIconImage"
@@ -251,8 +304,22 @@
                                TextTrimming="CharacterEllipsis"
                                ToolTip="{DynamicResource Main.Subtitle}" />
                 </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <RadioButton x:Name="SingleModeButton"
+                                 GroupName="WorkspaceMode"
+                                 Style="{StaticResource WorkspaceModeToggle}"
+                                 Content="{DynamicResource Main.Mode.Single}"
+                                 IsChecked="True"
+                                 Click="SingleMode_Click" />
+                    <RadioButton x:Name="BatchModeButton"
+                                 GroupName="WorkspaceMode"
+                                 Style="{StaticResource WorkspaceModeToggle}"
+                                 Content="{DynamicResource Main.Mode.Batch}"
+                                 Margin="5,0,0,0"
+                                 Click="BatchMode_Click" />
+                </StackPanel>
                 <ComboBox x:Name="LanguageComboBox"
-                          Grid.Column="2"
+                          Grid.Column="4"
                           Width="122"
                           Style="{StaticResource DarkComboBox}"
                           ToolTip="{DynamicResource Main.LanguageTooltip}"
@@ -263,36 +330,475 @@
                     <ComboBoxItem Content="English" Tag="en" />
                     <ComboBoxItem Content="日本語" Tag="ja" />
                 </ComboBox>
-                <Button x:Name="ChooseVideoButton" Grid.Column="4" Content="{DynamicResource Main.ChooseVideo}" Click="ChooseFile_Click" VerticalAlignment="Center" />
+                <Button x:Name="ChooseVideoButton" Grid.Column="6" Content="{DynamicResource Main.ChooseVideo}" Click="ChooseFile_Click" VerticalAlignment="Center" />
+                <Button x:Name="ScanFolderButton"
+                        Grid.Column="8"
+                        Content="{DynamicResource Main.ScanFolder}"
+                        Click="ScanFolder_Click"
+                        Visibility="Collapsed"
+                        VerticalAlignment="Center" />
             </Grid>
         </Border>
 
         <Grid Grid.Row="1" Margin="20">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="300" />
-                <ColumnDefinition Width="16" />
+                <ColumnDefinition x:Name="QueueColumn" Width="0" />
+                <ColumnDefinition x:Name="QueueSpacerColumn" Width="0" />
+                <ColumnDefinition x:Name="ArtworkColumn" Width="300" MinWidth="230" MaxWidth="390" />
+                <ColumnDefinition Width="10" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <Border x:Name="ArtworkPanel" Grid.Column="0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="16">
+            <GridSplitter x:Name="QueueSplitter"
+                          Grid.Column="1"
+                          Width="6"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Stretch"
+                          Background="Transparent"
+                          ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext"
+                          ShowsPreview="True"
+                          Visibility="Collapsed" />
+
+            <GridSplitter Grid.Column="3"
+                          Width="6"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Stretch"
+                          Background="Transparent"
+                          ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext"
+                          ShowsPreview="True" />
+
+            <Border x:Name="QueuePanel"
+                    Grid.Column="0"
+                    Visibility="Collapsed"
+                    Background="{StaticResource PanelBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="10">
                 <Grid>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid Margin="4,2,4,10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{DynamicResource Main.Queue}" FontWeight="SemiBold" />
+                        <TextBlock x:Name="QueueCountText"
+                                   Grid.Row="1"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   FontSize="11"
+                                   Margin="0,4,0,0"
+                                   TextWrapping="Wrap" />
+                    </Grid>
+                    <StackPanel Grid.Row="1" Margin="4,0,4,10">
+                        <ComboBox x:Name="QueueFilterComboBox"
+                                  SelectedIndex="0"
+                                  Style="{StaticResource DarkComboBox}"
+                                  SelectionChanged="QueueFilter_Changed"
+                                  ToolTip="{DynamicResource Main.QueueFilterTooltip}">
+                            <ComboBoxItem Content="{DynamicResource Main.QueueFilter.All}" Tag="all" IsSelected="True" />
+                            <ComboBoxItem Content="{DynamicResource Main.QueueFilter.Pending}" Tag="pending" />
+                            <ComboBoxItem Content="{DynamicResource Main.QueueFilter.Issues}" Tag="issues" />
+                        </ComboBox>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="5" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="PreviousQueueButton"
+                                    Content="{DynamicResource Main.PreviousMovie}"
+                                    AutomationProperties.Name="{DynamicResource Main.PreviousQueueTooltip}"
+                                    Padding="7,5"
+                                    Click="PreviousQueue_Click"
+                                    ToolTip="{DynamicResource Main.PreviousQueueTooltip}" />
+                            <Button x:Name="NextQueueButton"
+                                    Grid.Column="2"
+                                    Content="{DynamicResource Main.NextMovie}"
+                                    AutomationProperties.Name="{DynamicResource Main.NextQueueTooltip}"
+                                    Padding="7,5"
+                                    Click="NextQueue_Click"
+                                    ToolTip="{DynamicResource Main.NextQueueTooltip}" />
+                        </Grid>
+                        <Grid Margin="0,7,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="5" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="5" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="SelectAllQueueButton"
+                                    Content="{DynamicResource Main.QueueSelectAll}"
+                                    Click="SelectAllQueue_Click" />
+                            <Button x:Name="SelectNoneQueueButton"
+                                    Grid.Column="2"
+                                    Content="{DynamicResource Main.QueueSelectNone}"
+                                    Click="SelectNoneQueue_Click" />
+                            <Button x:Name="RemoveSelectedQueueButton"
+                                    Grid.Row="2"
+                                    Padding="6,6"
+                                    Content="{DynamicResource Main.QueueRemoveSelected}"
+                                    Click="RemoveSelectedQueue_Click">
+                                <Button.ContentTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" TextWrapping="Wrap" TextAlignment="Center" />
+                                    </DataTemplate>
+                                </Button.ContentTemplate>
+                            </Button>
+                            <Button x:Name="ClearQueueButton"
+                                    Grid.Row="2"
+                                    Grid.Column="2"
+                                    Content="{DynamicResource Main.QueueClear}"
+                                    Click="ClearQueue_Click" />
+                        </Grid>
+                        <StackPanel Margin="0,7,0,0">
+                            <Button x:Name="SearchQueueButton"
+                                    Style="{StaticResource PrimaryButton}"
+                                    Content="{DynamicResource Main.SearchQueue}"
+                                    Click="SearchQueue_Click" />
+                            <Button x:Name="SaveSelectedButton"
+                                    Style="{StaticResource PrimaryButton}"
+                                    Content="{DynamicResource Main.SaveSelected}"
+                                    ToolTip="{DynamicResource Main.SaveSelectedTooltip}"
+                                    Click="SaveSelected_Click"
+                                    Margin="0,6,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                    <ListBox x:Name="MovieQueueList"
+                             Grid.Row="2"
+                             Background="{StaticResource InputBrush}"
+                             BorderThickness="0"
+                             Padding="0"
+                             SelectionChanged="MovieQueueList_SelectionChanged"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             VirtualizingPanel.ScrollUnit="Pixel"
+                             ScrollViewer.CanContentScroll="True"
+                             ScrollViewer.IsDeferredScrollingEnabled="False"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ScrollViewer.PanningMode="VerticalOnly"
+                             local:PreciseScrollBehavior.Axis="Vertical">
+                        <ListBox.Template>
+                            <ControlTemplate TargetType="ListBox">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="7"
+                                        ClipToBounds="True">
+                                    <ScrollViewer x:Name="QueueScrollViewer"
+                                                  Background="{TemplateBinding Background}"
+                                                  CanContentScroll="{TemplateBinding ScrollViewer.CanContentScroll}"
+                                                  HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                                                  VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}"
+                                                  Focusable="False"
+                                                  PanningMode="VerticalOnly">
+                                        <ItemsPresenter />
+                                    </ScrollViewer>
+                                </Border>
+                            </ControlTemplate>
+                        </ListBox.Template>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                                <Setter Property="Background" Value="Transparent" />
+                                <Setter Property="BorderBrush" Value="Transparent" />
+                                <Setter Property="BorderThickness" Value="1" />
+                                <Setter Property="Padding" Value="10,8" />
+                                <Setter Property="Margin" Value="0,0,0,5" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="ItemBorder"
+                                                    Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    CornerRadius="7"
+                                                    Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="ItemBorder" Property="Background" Value="#1E2A38" />
+                                                    <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{StaticResource BorderHoverBrush}" />
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="ItemBorder" Property="Background" Value="#203D68" />
+                                                    <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ToolTip="{Binding VideoPath}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="34" />
+                                        <ColumnDefinition Width="8" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="34" Height="46"
+                                            Background="#111923"
+                                            BorderBrush="#334256"
+                                            BorderThickness="1"
+                                            CornerRadius="5"
+                                            VerticalAlignment="Top">
+                                        <TextBlock Text="▣"
+                                                   Foreground="#6FA8FF"
+                                                   FontSize="17"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="2">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Metadata.Id}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{DynamicResource Queue.CurrentlyViewing}"
+                                                       Foreground="#9BC1FF"
+                                                       FontSize="10"
+                                                       FontWeight="SemiBold"
+                                                       Margin="5,0,0,0"
+                                                       VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                             <CheckBox Grid.Column="2"
+                                                       IsChecked="{Binding IsSelectedForBatch, Mode=TwoWay}"
+                                                       ToolTip="{DynamicResource Queue.SelectedForBatch}"
+                                                       Margin="6,0,0,0">
+                                                <CheckBox.Style>
+                                                    <Style TargetType="CheckBox">
+                                                        <Style.Triggers>
+                                                             <DataTrigger Binding="{Binding SearchState}" Value="{x:Static services:MovieSearchState.Searching}">
+                                                                 <Setter Property="IsEnabled" Value="False" />
+                                                             </DataTrigger>
+                                                             <DataTrigger Binding="{Binding SaveState}" Value="{x:Static services:MovieSaveState.Saving}">
+                                                                 <Setter Property="IsEnabled" Value="False" />
+                                                             </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </CheckBox.Style>
+                                            </CheckBox>
+                                        </Grid>
+                                        <TextBlock Text="{Binding FileName}"
+                                                   Foreground="{StaticResource MutedBrush}"
+                                                   FontSize="11"
+                                                   Margin="0,3,0,0"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <Border x:Name="QueueReviewBadge" HorizontalAlignment="Left"
+                                                Margin="0,5,0,0"
+                                                Padding="7,2"
+                                                CornerRadius="8"
+                                                ToolTip="{Binding LastSearchError.Message}">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#202B38" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding SearchState}" Value="{x:Static services:MovieSearchState.NeedsId}">
+                                                            <Setter Property="Background" Value="#3A2C18" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding SearchState}" Value="{x:Static services:MovieSearchState.Searching}">
+                                                            <Setter Property="Background" Value="#18355B" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding SearchState}" Value="{x:Static services:MovieSearchState.NeedsReview}">
+                                                            <Setter Property="Background" Value="#17382D" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding HasPartialSourceFailure}" Value="True">
+                                                            <Setter Property="Background" Value="#3A2C18" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding HasLowResolutionCover}" Value="True">
+                                                            <Setter Property="Background" Value="#3A2C18" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding SearchState}" Value="{x:Static services:MovieSearchState.SearchFailed}">
+                                                            <Setter Property="Background" Value="#46242A" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding SearchState}" Value="{x:Static services:MovieSearchState.SearchCanceled}">
+                                                            <Setter Property="Background" Value="#3A2C18" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock FontSize="10.5">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="{DynamicResource Queue.Search.Searchable}" />
+                                                    <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding SearchState}" Value="{x:Static services:MovieSearchState.NeedsId}">
+                                                            <Setter Property="Text" Value="{DynamicResource Queue.Search.NeedsId}" />
+                                                            <Setter Property="Foreground" Value="#FFB74D" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding SearchState}" Value="{x:Static services:MovieSearchState.Searching}">
+                                                            <Setter Property="Text" Value="{DynamicResource Queue.Search.Searching}" />
+                                                            <Setter Property="Foreground" Value="#6FA8FF" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding SearchState}" Value="{x:Static services:MovieSearchState.NeedsReview}">
+                                                            <Setter Property="Text" Value="{DynamicResource Queue.Search.NeedsReview}" />
+                                                            <Setter Property="Foreground" Value="#72E3A6" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding SearchState}" Value="{x:Static services:MovieSearchState.SearchFailed}">
+                                                            <Setter Property="Text" Value="{DynamicResource Queue.Search.Failed}" />
+                                                            <Setter Property="Foreground" Value="#FF9DA6" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding SearchState}" Value="{x:Static services:MovieSearchState.SearchCanceled}">
+                                                            <Setter Property="Text" Value="{DynamicResource Queue.Search.Canceled}" />
+                                                            <Setter Property="Foreground" Value="#FFB74D" />
+                                                        </DataTrigger>
+                                                        <MultiDataTrigger>
+                                                            <MultiDataTrigger.Conditions>
+                                                                <Condition Binding="{Binding HasLowResolutionCover}" Value="True" />
+                                                                <Condition Binding="{Binding SearchState}" Value="{x:Static services:MovieSearchState.Searchable}" />
+                                                            </MultiDataTrigger.Conditions>
+                                                            <Setter Property="Text" Value="{DynamicResource Queue.Search.NeedsReview}" />
+                                                            <Setter Property="Foreground" Value="#FFB74D" />
+                                                        </MultiDataTrigger>
+                                                        <MultiDataTrigger>
+                                                            <MultiDataTrigger.Conditions>
+                                                                <Condition Binding="{Binding HasLowResolutionCover}" Value="True" />
+                                                                <Condition Binding="{Binding SearchState}" Value="{x:Static services:MovieSearchState.NeedsReview}" />
+                                                            </MultiDataTrigger.Conditions>
+                                                            <Setter Property="Foreground" Value="#FFB74D" />
+                                                        </MultiDataTrigger>
+                                                        <MultiDataTrigger>
+                                                            <MultiDataTrigger.Conditions>
+                                                                <Condition Binding="{Binding SearchState}" Value="{x:Static services:MovieSearchState.NeedsReview}" />
+                                                                <Condition Binding="{Binding HasPartialSourceFailure}" Value="True" />
+                                                            </MultiDataTrigger.Conditions>
+                                                            <Setter Property="Text" Value="{DynamicResource Queue.Search.Partial}" />
+                                                            <Setter Property="Foreground" Value="#FFB74D" />
+                                                            <Setter Property="ToolTip" Value="{Binding FailedSourceNames}" />
+                                                        </MultiDataTrigger>
+                                                        <DataTrigger Binding="{Binding HasRateLimitedSource}" Value="True">
+                                                            <Setter Property="ToolTip" Value="{DynamicResource Error.SourceRateLimited}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Border>
+                                        <TextBlock FontSize="11"
+                                                   Margin="0,3,0,0"
+                                                   ToolTip="{Binding LastSaveError.Message}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding SaveState}" Value="{x:Static services:MovieSaveState.Saving}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                            <Setter Property="Text" Value="{DynamicResource Queue.Save.Saving}" />
+                                                            <Setter Property="Foreground" Value="#6FA8FF" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding SaveState}" Value="{x:Static services:MovieSaveState.Completed}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                            <Setter Property="Text" Value="{DynamicResource Queue.Save.Completed}" />
+                                                            <Setter Property="Foreground" Value="#72E3A6" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding SaveState}" Value="{x:Static services:MovieSaveState.SaveFailed}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                            <Setter Property="Text" Value="{DynamicResource Queue.Save.Failed}" />
+                                                            <Setter Property="Foreground" Value="#FF9DA6" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding SaveState}" Value="{x:Static services:MovieSaveState.Conflict}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                            <Setter Property="Text" Value="{DynamicResource Queue.Save.Conflict}" />
+                                                            <Setter Property="Foreground" Value="#FF9DA6" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding SaveState}" Value="{x:Static services:MovieSaveState.SaveCanceled}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                            <Setter Property="Text" Value="{DynamicResource Queue.Save.Canceled}" />
+                                                            <Setter Property="Foreground" Value="#FFB74D" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <Border x:Name="ArtworkPanel" Grid.Column="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12" Padding="16">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="3*" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="1.35*" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid x:Name="ArtworkSourceHeader" Margin="0,0,0,7">
-                        <TextBlock Text="{DynamicResource Main.ArtworkHeader}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <Button x:Name="ArtworkSourceButton"
-                                Style="{StaticResource SourceBadgeButton}"
-                                Padding="5,2" Margin="8,0,0,0"
-                                HorizontalAlignment="Right"
-                                Click="ArtworkSourceButton_Click" />
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="ArtworkPreviewHeading" Text="{DynamicResource Main.ArtworkPreviewHeader}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" />
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,5,0,0">
+                            <Button x:Name="ArtworkViewerButton"
+                                    Content="{DynamicResource ArtworkViewer.OpenButton}"
+                                    Padding="8,3"
+                                    Margin="0,0,7,0"
+                                    Click="ArtworkViewerButton_Click" />
+                            <Button x:Name="ArtworkSourceButton"
+                                    Style="{StaticResource SourceBadgeButton}"
+                                    Padding="5,2"
+                                    Click="ArtworkSourceButton_Click" />
+                        </StackPanel>
                     </Grid>
-                    <Border x:Name="PosterPreviewBorder" Grid.Row="1" Background="#0B1016" BorderBrush="#2A3544" BorderThickness="1" CornerRadius="10" ClipToBounds="True">
+                    <TextBlock x:Name="PosterRoleText"
+                               Grid.Row="1"
+                               Text="{DynamicResource Main.ArtworkPosterLabel}"
+                               Foreground="{StaticResource MutedBrush}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Margin="0,1,0,6" />
+                    <Border x:Name="PosterPreviewBorder"
+                            Grid.Row="2"
+                            Background="#0B1016"
+                            BorderBrush="#2A3544"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            ClipToBounds="True"
+                            Cursor="Hand"
+                            ToolTip="{DynamicResource ArtworkViewer.OpenTooltip}"
+                            MouseLeftButtonUp="PosterPreview_MouseLeftButtonUp">
                         <Grid>
                             <Image x:Name="PosterImage" Stretch="Uniform" Margin="8" />
                             <StackPanel x:Name="DropHint" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
@@ -300,20 +806,80 @@
                                 <TextBlock Text="{DynamicResource Main.DropInput}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,8,0,0" TextAlignment="Center" TextWrapping="Wrap" />
                                 <TextBlock Text="MP4 · MKV · AVI · WMV" Foreground="{StaticResource MutedBrush}" FontSize="12" HorizontalAlignment="Center" Margin="0,6,0,0" />
                             </StackPanel>
+                            <StackPanel x:Name="PosterPreviewStatePanel"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Margin="20"
+                                        Visibility="Collapsed">
+                                <TextBlock Text="◌" FontSize="26" Foreground="#5E7CA6" HorizontalAlignment="Center" />
+                                <TextBlock x:Name="PosterPreviewStateText"
+                                           Text="{DynamicResource ArtworkPreview.Unavailable}"
+                                           Foreground="{StaticResource MutedBrush}"
+                                           FontSize="11"
+                                           Margin="0,5,0,0"
+                                           TextAlignment="Center"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
                         </Grid>
                     </Border>
-                    <TextBlock x:Name="FanartHintText" Grid.Row="2" Text="" MinHeight="14" Foreground="{StaticResource MutedBrush}" FontSize="11" HorizontalAlignment="Right" Margin="0,8,0,7" />
-                    <Border x:Name="FanartPreviewBorder" Grid.Row="3" MinHeight="105" Background="#0B1016" BorderBrush="#2A3544" BorderThickness="1" CornerRadius="8" ClipToBounds="True">
+                    <TextBlock x:Name="FanartRoleText"
+                               Grid.Row="3"
+                               Text="{DynamicResource Main.ArtworkFanartLabel}"
+                               Foreground="{StaticResource MutedBrush}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Margin="0,9,0,6" />
+                    <Border x:Name="FanartPreviewBorder"
+                            Grid.Row="4"
+                            MinHeight="105"
+                            Background="#0B1016"
+                            BorderBrush="#2A3544"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            ClipToBounds="True"
+                            Cursor="Hand"
+                            ToolTip="{DynamicResource ArtworkViewer.OpenTooltip}"
+                            MouseLeftButtonUp="FanartPreview_MouseLeftButtonUp">
                         <Grid>
                             <Image x:Name="FanartImage" Stretch="Uniform" Margin="5" />
+                            <TextBlock x:Name="FanartPreviewStateText"
+                                       Text="{DynamicResource ArtworkPreview.Unavailable}"
+                                       Foreground="{StaticResource MutedBrush}"
+                                       FontSize="11"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Margin="16"
+                                       Visibility="Collapsed" />
                         </Grid>
                     </Border>
-                    <TextBlock x:Name="FileNameText" Grid.Row="4" Text="{DynamicResource Main.NoVideo}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,14,0,0" />
-                    <TextBlock x:Name="FilePathText" Grid.Row="5" Text="{DynamicResource Main.VideoStaysHere}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" />
+                    <TextBlock x:Name="FanartHintText" Grid.Row="5" Text="" MinHeight="14" Foreground="{StaticResource MutedBrush}" FontSize="11" HorizontalAlignment="Right" Margin="0,5,0,0" />
+                    <Grid Grid.Row="6" Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="FileNameText"
+                                   Text="{DynamicResource Main.NoVideo}"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="Wrap"
+                                   VerticalAlignment="Center" />
+                        <Button x:Name="RemoveCurrentVideoButton"
+                                Grid.Column="1"
+                                Content="{DynamicResource Main.RemoveCurrentMovie}"
+                                ToolTip="{DynamicResource Main.RemoveCurrentMovieTooltip}"
+                                Padding="8,3"
+                                Margin="8,0,0,0"
+                                Click="RemoveCurrentVideo_Click"
+                                Visibility="Collapsed" />
+                    </Grid>
+                    <TextBlock x:Name="FilePathText" Grid.Row="7" Text="{DynamicResource Main.VideoStaysHere}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0" />
                 </Grid>
             </Border>
 
-            <Border x:Name="MetadataPanel" Grid.Column="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12">
+            <Border x:Name="MetadataPanel" Grid.Column="4" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -321,37 +887,140 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <Border x:Name="SearchToolbar" Background="{StaticResource PanelAltBrush}" CornerRadius="12,12,0,0" Padding="16,14" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
-                        <Grid>
+                    <Border x:Name="SearchToolbar"
+                            Background="{StaticResource PanelAltBrush}"
+                            CornerRadius="12,12,0,0"
+                            Padding="16,14"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="0,0,0,1"
+                            SizeChanged="SearchToolbar_SizeChanged">
+                        <Grid x:Name="SearchToolbarLayout" VerticalAlignment="Center">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="0" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="100" />
                                 <ColumnDefinition Width="8" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="8" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="8" />
-                                <ColumnDefinition Width="162" />
-                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="7" />
+                                <ColumnDefinition Width="*" MinWidth="120" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="{DynamicResource Main.MovieId}" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                            <TextBox x:Name="IdTextBox" Grid.Column="1" Text="{Binding Id, UpdateSourceTrigger=PropertyChanged}" />
-                            <Button x:Name="SearchButton" Grid.Column="3" Style="{StaticResource PrimaryButton}" Content="{DynamicResource Main.Search}" Click="Search_Click" />
-                            <Button x:Name="BrowserImportButton" Grid.Column="5" Content="{DynamicResource Main.BrowserImport}" Click="Browser_Click" ToolTip="{DynamicResource Main.BrowserImportTooltip}" />
-                            <ComboBox x:Name="SourceComboBox" Grid.Column="7" SelectedIndex="0" Style="{StaticResource DarkComboBox}">
-                                <ComboBoxItem Content="{DynamicResource Main.Source.Auto}"
-                                              ToolTip="{DynamicResource Main.Source.AutoTooltip}"
-                                              Tag="auto"
-                                              IsSelected="True" />
-                                <ComboBoxItem Content="LibreDMM" Tag="libredmm" />
-                                <ComboBoxItem Content="R18.dev" Tag="r18dev" />
-                                <ComboBoxItem Content="JAVLibrary" Tag="javlibrary" />
-                                <ComboBoxItem Content="{DynamicResource Main.Source.Manual}" Tag="manual" />
-                            </ComboBox>
+                            <TextBlock x:Name="MovieIdTextBlock"
+                                       Grid.Column="0"
+                                       Text="{DynamicResource Main.MovieId}"
+                                       Foreground="{StaticResource MutedBrush}"
+                                       VerticalAlignment="Center" />
+                            <TextBox x:Name="IdTextBox"
+                                     Grid.Column="2"
+                                     Width="100"
+                                     HorizontalAlignment="Stretch"
+                                     KeyDown="IdTextBox_KeyDown"
+                                     Text="{Binding Id, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button x:Name="SearchButton"
+                                    Grid.Column="4"
+                                    Style="{StaticResource PrimaryButton}"
+                                    Content="{DynamicResource Main.Search}"
+                                    Click="Search_Click" />
+                            <Button x:Name="BrowserImportButton"
+                                    Grid.Column="6"
+                                    Content="{DynamicResource Main.BrowserImportChoose}"
+                                    Click="Browser_Click"
+                                    ToolTip="{DynamicResource Main.BrowserImportChooseTooltip}"
+                                    Padding="10,7"
+                                    FontSize="12" />
+                            <TextBlock x:Name="AutomaticSourceText"
+                                       Grid.Column="8"
+                                       Text="{DynamicResource Main.AutomaticSourceShort}"
+                                       Foreground="{StaticResource MutedBrush}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center" />
+                            <Grid x:Name="SourceSelectorHost"
+                                  Grid.Column="10"
+                                  MinWidth="120">
+                                <ComboBox x:Name="SourceComboBox"
+                                          MinWidth="100"
+                                          Padding="7,7,53,7"
+                                          HorizontalAlignment="Stretch"
+                                          SelectedIndex="0"
+                                          Style="{StaticResource DarkComboBox}"
+                                          SelectionChanged="SourceSelection_Changed">
+                                    <ComboBox.Resources>
+                                        <!-- Only the closed selector is shortened; menu entries stay complete. -->
+                                        <Style x:Key="ComboBoxSelectionContent" TargetType="ContentPresenter">
+                                            <Setter Property="Content" Value="{DynamicResource SearchSourceSelectionLabel}" />
+                                        </Style>
+                                    </ComboBox.Resources>
+                                    <ComboBoxItem Content="{DynamicResource Main.Source.LibreDmmRecommended}"
+                                                  ToolTip="{DynamicResource Main.Source.LibreDmmTooltip}"
+                                                  Tag="libredmm"
+                                                  IsSelected="True" />
+                                    <ComboBoxItem Content="R18.dev"
+                                                  ToolTip="{DynamicResource Main.Source.R18Tooltip}"
+                                                  Tag="r18dev" />
+                                    <ComboBoxItem Content="{DynamicResource Main.Source.Custom}" Tag="custom" />
+                                    <ComboBoxItem Content="{DynamicResource Main.Source.Manual}" Tag="manual" />
+                                </ComboBox>
+                                <Border x:Name="SourceProfileDivider"
+                                        Width="1"
+                                        Height="18"
+                                        Margin="0,0,50,0"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Center"
+                                        Background="#52657D"
+                                        IsHitTestVisible="False"
+                                        Visibility="Collapsed" />
+                                <Button x:Name="SourceProfileButton"
+                                        Width="24"
+                                        Height="26"
+                                        MinWidth="24"
+                                        MinHeight="26"
+                                        Margin="0,0,23,0"
+                                        Padding="0"
+                                        HorizontalAlignment="Right"
+                                        Background="Transparent"
+                                        BorderBrush="Transparent"
+                                        ToolTip="{DynamicResource Main.Source.ConfigureTooltip}"
+                                        AutomationProperties.Name="{DynamicResource Main.Source.EditRules}"
+                                        Click="SourceProfile_Click"
+                                        Visibility="Collapsed">
+                                    <TextBlock Text="⚙"
+                                               FontFamily="Segoe UI Symbol"
+                                               FontSize="13"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                </Button>
+                            </Grid>
+                            <TextBlock x:Name="BatchSourceHint"
+                                       Grid.Row="3"
+                                       Grid.ColumnSpan="11"
+                                       Margin="0,8,0,0"
+                                       FontSize="11"
+                                       Foreground="{StaticResource MutedBrush}"
+                                       TextWrapping="Wrap"
+                                       Visibility="Collapsed" />
                         </Grid>
                     </Border>
 
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="16,15">
+                    <ScrollViewer x:Name="MetadataScrollViewer"
+                                  Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  CanContentScroll="False"
+                                  IsDeferredScrollingEnabled="False"
+                                  PanningMode="VerticalOnly"
+                                  Padding="16,15"
+                                  local:PreciseScrollBehavior.Axis="Vertical">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -422,18 +1091,19 @@
                             </StackPanel>
                             <StackPanel Grid.Row="4" Grid.Column="2" Margin="0,12,0,0">
                                 <Grid>
-                                    <Label Content="{DynamicResource Field.Series}" />
-                                    <Button x:Name="SeriesSourceText" Tag="Series" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
-                                </Grid>
-                                <TextBox Text="{Binding Series, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-
-                            <StackPanel Grid.Row="5" Grid.Column="0" Margin="0,12,0,0">
-                                <Grid>
                                     <Label Content="{DynamicResource Field.Actors}" />
                                     <Button x:Name="ActorsSourceText" Tag="Actors" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
                                 <TextBox Text="{Binding ActorsText, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" MinHeight="42" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="5" Grid.Column="0" Margin="0,12,0,0">
+                                <Grid>
+                                    <Label Content="{DynamicResource Field.Rating}" ToolTip="{DynamicResource Field.RatingTooltip}" />
+                                    <Button x:Name="RatingSourceText" Tag="Rating" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
+                                </Grid>
+                                <TextBox x:Name="RatingTextBox"
+                                         Text="{Binding Rating, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="{DynamicResource Field.RatingTooltip}" />
                             </StackPanel>
                             <StackPanel Grid.Row="5" Grid.Column="2" Margin="0,12,0,0">
                                 <Grid>
@@ -448,43 +1118,106 @@
                                     <Label Content="{DynamicResource Field.Plot}" />
                                     <Button x:Name="PlotSourceText" Tag="Plot" Style="{StaticResource SourceBadgeButton}" Click="SourceBadge_Click" />
                                 </Grid>
-                                <TextBox Text="{Binding Plot, UpdateSourceTrigger=PropertyChanged}" TextWrapping="Wrap" AcceptsReturn="True" MinHeight="92" VerticalScrollBarVisibility="Auto" />
+                                <TextBox Text="{Binding Plot, UpdateSourceTrigger=PropertyChanged}"
+                                         TextWrapping="Wrap"
+                                         AcceptsReturn="True"
+                                         MinHeight="92"
+                                         VerticalScrollBarVisibility="Auto"
+                                         ScrollViewer.IsDeferredScrollingEnabled="False"
+                                         local:PreciseScrollBehavior.Axis="Vertical" />
                             </StackPanel>
                         </Grid>
                     </ScrollViewer>
 
-                    <Border x:Name="OutputPanel" Grid.Row="2" Background="{StaticResource PanelAltBrush}" CornerRadius="0,0,12,12" Padding="16,14" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+                    <Border x:Name="OutputPanel" Grid.Row="2" Background="{StaticResource PanelAltBrush}" CornerRadius="0,0,12,12" Padding="16,11" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel VerticalAlignment="Center">
-                                <WrapPanel>
-                                    <TextBlock Text="{DynamicResource Main.Output}" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
-                                    <CheckBox x:Name="WriteNfoCheckBox" Content="{DynamicResource Main.WriteNfo}" IsChecked="True" />
-                                    <CheckBox x:Name="DownloadPosterCheckBox" Content="{DynamicResource Main.DownloadPoster}" IsChecked="True" ToolTip="{DynamicResource Main.DownloadPosterTooltip}" />
-                                    <CheckBox x:Name="DownloadFanartCheckBox" Content="{DynamicResource Main.DownloadFanart}" IsChecked="True" ToolTip="{DynamicResource Main.DownloadFanartTooltip}" />
-                                    <CheckBox x:Name="DownloadExtrafanartCheckBox" Content="{DynamicResource Main.DownloadExtrafanart}" IsChecked="False" ToolTip="{DynamicResource Main.DownloadExtrafanartTooltip}" />
-                                </WrapPanel>
-                                <WrapPanel Margin="0,10,0,0">
-                                    <TextBlock Text="{DynamicResource Main.SaveMode}" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
-                                    <CheckBox x:Name="DirectSaveOverwriteCheckBox" Content="{DynamicResource Main.DirectOverwrite}" IsChecked="False" ToolTip="{DynamicResource Main.DirectOverwriteTooltip}" />
-                                    <CheckBox x:Name="RenameVideoCheckBox"
-                                              Content="{DynamicResource Main.RenameVideo}"
-                                              IsChecked="False"
-                                              Checked="TargetOption_Changed"
-                                              Unchecked="TargetOption_Changed"
-                                              ToolTip="{DynamicResource Main.RenameVideoTooltip}" />
-                                    <CheckBox x:Name="RememberPreferencesCheckBox"
-                                              Content="{DynamicResource Main.RememberPreferences}"
-                                              IsChecked="False"
-                                              ToolTip="{DynamicResource Main.RememberPreferencesTooltipVerification}" />
-                                </WrapPanel>
+                                <Button x:Name="SaveSettingsToggleButton"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch"
+                                        MinWidth="0"
+                                        MinHeight="34"
+                                        Padding="8,5"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Click="ToggleSaveSettings_Click">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="18" />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Path x:Name="SaveSettingsChevronPath"
+                                              Style="{StaticResource DisclosureChevronPath}"
+                                              RenderTransformOrigin="0.5,0.5">
+                                            <Path.RenderTransform>
+                                                <RotateTransform Angle="0" />
+                                            </Path.RenderTransform>
+                                        </Path>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock x:Name="SaveSettingsTitleText"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold" />
+                                            <TextBlock x:Name="SaveSettingsSummaryText"
+                                                       Foreground="{StaticResource MutedBrush}"
+                                                       FontSize="11"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                                <StackPanel x:Name="SaveSettingsOptionsPanel"
+                                            Visibility="Collapsed"
+                                            Margin="8,8,0,2">
+                                    <WrapPanel>
+                                        <TextBlock Text="{DynamicResource Main.Output}" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
+                                        <CheckBox x:Name="WriteNfoCheckBox" Content="{DynamicResource Main.WriteNfo}" IsChecked="True" Checked="SaveConfiguration_Changed" Unchecked="SaveConfiguration_Changed" />
+                                        <CheckBox x:Name="DownloadPosterCheckBox" Content="{DynamicResource Main.DownloadPoster}" IsChecked="True" Checked="SaveConfiguration_Changed" Unchecked="SaveConfiguration_Changed" ToolTip="{DynamicResource Main.DownloadPosterTooltip}" />
+                                         <CheckBox x:Name="DownloadFanartCheckBox" Content="{DynamicResource Main.DownloadFanart}" IsChecked="True" Checked="SaveConfiguration_Changed" Unchecked="SaveConfiguration_Changed" ToolTip="{DynamicResource Main.DownloadFanartTooltip}" />
+                                         <CheckBox x:Name="DownloadExtrafanartCheckBox" Content="{DynamicResource Main.DownloadExtrafanart}" IsChecked="False" Checked="SaveConfiguration_Changed" Unchecked="SaveConfiguration_Changed" ToolTip="{DynamicResource Main.DownloadExtrafanartTooltip}" />
+                                         <CheckBox x:Name="ReplaceLocalExtrafanartCheckBox"
+                                                   Content="{DynamicResource Main.ReplaceLocalExtrafanart}"
+                                                   IsChecked="False"
+                                                   IsEnabled="{Binding IsChecked, ElementName=DownloadExtrafanartCheckBox}"
+                                                   Checked="SaveConfiguration_Changed"
+                                                   Unchecked="SaveConfiguration_Changed"
+                                                   ToolTip="{DynamicResource Main.ReplaceLocalExtrafanartTooltip}" />
+                                     </WrapPanel>
+                                    <WrapPanel Margin="0,9,0,0">
+                                        <TextBlock Text="{DynamicResource Main.NamingAndBehavior}" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
+                                        <CheckBox x:Name="IncludeIdInTitleCheckBox"
+                                                  Content="{DynamicResource Main.IncludeIdInTitle}"
+                                                  IsChecked="True"
+                                                  IsEnabled="{Binding IsChecked, ElementName=WriteNfoCheckBox}"
+                                                  Checked="IncludeIdInTitle_Changed"
+                                                  Unchecked="IncludeIdInTitle_Changed"
+                                                  ToolTip="{DynamicResource Main.IncludeIdInTitleTooltip}" />
+                                        <CheckBox x:Name="RenameVideoCheckBox"
+                                                  Content="{DynamicResource Main.RenameVideo}"
+                                                  IsChecked="False"
+                                                  Checked="TargetOption_Changed"
+                                                  Unchecked="TargetOption_Changed"
+                                                  ToolTip="{DynamicResource Main.RenameVideoTooltip}" />
+                                        <CheckBox x:Name="SkipSavePreviewCheckBox"
+                                                  Content="{DynamicResource Main.SkipSavePreview}"
+                                                  IsChecked="False"
+                                                  Checked="SavePreferencePresentation_Changed"
+                                                  Unchecked="SavePreferencePresentation_Changed"
+                                                  ToolTip="{DynamicResource Main.SkipSavePreviewTooltip}" />
+                                        <CheckBox x:Name="RememberPreferencesCheckBox"
+                                                  Content="{DynamicResource Main.RememberPreferences}"
+                                                  IsChecked="False"
+                                                  ToolTip="{DynamicResource Main.RememberUnifiedPreviewTooltip}" />
+                                    </WrapPanel>
+                                </StackPanel>
                                 <WrapPanel Margin="0,10,0,0">
                                     <TextBlock Text="{DynamicResource Main.TargetLocation}" Foreground="{StaticResource MutedBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,16,0" VerticalAlignment="Center" />
                                     <ComboBox x:Name="TargetModeComboBox"
-                                              Width="245"
+                                              MinWidth="245"
+                                              MaxWidth="360"
                                               SelectedIndex="0"
                                               Style="{StaticResource DarkComboBox}"
                                               SelectionChanged="TargetMode_Changed"
@@ -540,7 +1273,12 @@
                                            TextWrapping="Wrap"
                                            Margin="0,8,0,0" />
                             </StackPanel>
-                            <Button x:Name="SaveButton" Grid.Column="1" Style="{StaticResource PrimaryButton}" Content="{DynamicResource Common.Save}" Click="Save_Click" Margin="24,0,0,0" />
+                            <StackPanel x:Name="SingleSavePanel" Grid.Column="1" Margin="24,0,0,0" VerticalAlignment="Center">
+                                <Button x:Name="SaveButton"
+                                        Style="{StaticResource PrimaryButton}"
+                                        Content="{DynamicResource Common.Save}"
+                                        Click="Save_Click" />
+                            </StackPanel>
                         </Grid>
                     </Border>
                 </Grid>
@@ -555,11 +1293,22 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#72E3A6" VerticalAlignment="Center" Margin="0,0,9,0" />
                 <TextBlock x:Name="StatusText" Grid.Column="1" Text="{DynamicResource Main.StatusReadyInput}" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
-                <Button x:Name="CancelOperationButton"
+                <Button x:Name="RetryFailedSourcesButton"
                         Grid.Column="2"
+                        Content="{DynamicResource SearchFeedback.RetryFailed}"
+                        Click="RetryFailedSources_Click"
+                        Padding="10,4"
+                        Margin="12,0,0,0"
+                        FontSize="11"
+                        FontWeight="Normal"
+                        Background="#1B2330"
+                        Visibility="Collapsed" />
+                <Button x:Name="CancelOperationButton"
+                        Grid.Column="3"
                         Content="{DynamicResource Main.CancelOperation}"
                         Click="CancelOperation_Click"
                         Padding="10,4"
@@ -569,8 +1318,8 @@
                         Background="#4A2025"
                         BorderBrush="#85363D"
                         Visibility="Collapsed" />
-                <Button Grid.Column="3" Content="{DynamicResource Common.OpenLogs}" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
-                <TextBlock Grid.Column="4" Text="{DynamicResource Main.VersionPreview}" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
+                <Button Grid.Column="4" Content="{DynamicResource Common.OpenLogs}" Click="OpenLogs_Click" Padding="10,4" Margin="12,0" FontSize="11" FontWeight="Normal" Background="#1B2330" />
+                <TextBlock x:Name="VersionText" Grid.Column="5" Foreground="#607086" FontSize="11" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>

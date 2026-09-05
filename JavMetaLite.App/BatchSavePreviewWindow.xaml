@@ -1,0 +1,149 @@
+<Window x:Class="JavMetaLite.App.BatchSavePreviewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:JavMetaLite.App"
+        Title="{DynamicResource BatchPreview.Title}"
+        Width="900" Height="680" MinWidth="720" MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource WindowBrush}">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="{DynamicResource BatchPreview.Title}"
+                   FontSize="20" FontWeight="SemiBold" />
+        <TextBlock Grid.Row="1"
+                   Text="{DynamicResource BatchPreview.Description}"
+                   Foreground="{StaticResource MutedBrush}"
+                   TextWrapping="Wrap"
+                   Margin="0,6,0,14" />
+
+        <Border x:Name="IssuesPanel"
+                Grid.Row="2"
+                Visibility="Collapsed"
+                Background="#3D2D18"
+                BorderBrush="#8A5A24"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12"
+                Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="{DynamicResource BatchPreview.IssuesHeader}"
+                           Foreground="#FFD18A"
+                           FontWeight="SemiBold" />
+                <ScrollViewer x:Name="IssuesScrollViewer"
+                              MaxHeight="150"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              CanContentScroll="False"
+                              IsDeferredScrollingEnabled="False"
+                              PanningMode="VerticalOnly"
+                              local:PreciseScrollBehavior.Axis="Vertical">
+                    <ItemsControl x:Name="IssuesList" Margin="0,7,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,3,0,3">
+                                    <TextBlock Text="{Binding Header}" Foreground="#FFD18A" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Message}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
+
+        <ListBox x:Name="PlansList"
+                 Grid.Row="3"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling"
+                 VirtualizingPanel.ScrollUnit="Pixel"
+                 ScrollViewer.CanContentScroll="True"
+                 ScrollViewer.IsDeferredScrollingEnabled="False"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 ScrollViewer.PanningMode="VerticalOnly"
+                 local:PreciseScrollBehavior.Axis="Vertical">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0,0,0,12" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="IsHitTestVisible" Value="False" />
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border Background="{StaticResource PanelBrush}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="9"
+                            Padding="14">
+                        <StackPanel>
+                            <TextBlock Text="{Binding Header}" FontSize="15" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding SourcePath}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding SourcePath}" Margin="0,4,0,0" />
+                            <TextBlock Text="{Binding TargetPath}" Foreground="#8DB8FF" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding TargetPath}" Margin="0,2,0,8" />
+                            <ItemsControl ItemsSource="{Binding Changes}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,3,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="100" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Action}" Foreground="#72E3A6" FontWeight="SemiBold" FontSize="11" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Path}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <Border x:Name="WarningPanel"
+                Grid.Row="4"
+                Visibility="Collapsed"
+                Background="#4A3218"
+                BorderBrush="#8A5A24"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12"
+                Margin="0,4,0,0">
+            <StackPanel>
+                <TextBlock x:Name="WarningText" Foreground="#FFD18A" TextWrapping="Wrap" />
+                <CheckBox x:Name="OverwriteConfirmCheckBox"
+                          Content="{DynamicResource BatchPreview.ConfirmOverwrite}"
+                          Margin="0,10,0,0"
+                          Checked="OverwriteConfirm_Changed"
+                          Unchecked="OverwriteConfirm_Changed" />
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="5" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="SummaryText" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="{DynamicResource Common.Cancel}" Click="Cancel_Click" IsCancel="True" />
+            <Button x:Name="ConfirmButton"
+                    Grid.Column="2"
+                    Style="{StaticResource PrimaryButton}"
+                    Content="{DynamicResource BatchPreview.ConfirmSave}"
+                    Click="Confirm_Click"
+                    Margin="10,0,0,0" />
+        </Grid>
+    </Grid>
+</Window>

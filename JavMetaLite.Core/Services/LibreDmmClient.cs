@@ -30,7 +30,7 @@ public sealed partial class LibreDmmClient : IMetadataProvider
             throw new ArgumentException("请先输入影片番号。", nameof(rawId));
         }
 
-        var detailPageUrl = $"https://www.libredmm.com/movies/{Uri.EscapeDataString(id)}";
+        var detailPageUrl = BuildDetailPageUrl(id);
         var detailJsonUrl = $"{detailPageUrl}.json";
         using (var detailResponse = await _httpClient.GetAsync(detailJsonUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
         {
@@ -111,6 +111,9 @@ public sealed partial class LibreDmmClient : IMetadataProvider
             SourceDisplayName = DisplayName
         };
     }
+
+    public static string BuildDetailPageUrl(string rawId) =>
+        $"https://www.libredmm.com/movies/{Uri.EscapeDataString(MovieIdParser.Normalize(rawId))}";
 
     internal static string BuildHighResolutionCoverUrl(IEnumerable<string> screenshotUrls, string fallbackUrl)
     {

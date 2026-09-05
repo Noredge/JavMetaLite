@@ -1,6 +1,7 @@
 <Window x:Class="JavMetaLite.App.SavePreviewWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:JavMetaLite.App"
         Title="{DynamicResource Preview.Title}"
         Icon="/JavMetaLite;component/Resources/Brand/JavMetaLite.ico"
         Width="900" Height="650" MinWidth="720" MinHeight="520"
@@ -40,7 +41,19 @@
         </Border>
 
         <Border x:Name="ChangesPanel" Grid.Row="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="6">
-            <ListView x:Name="ChangesList" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextBrush}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListView x:Name="ChangesList"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      Foreground="{StaticResource TextBrush}"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      VirtualizingPanel.ScrollUnit="Pixel"
+                      ScrollViewer.CanContentScroll="True"
+                      ScrollViewer.IsDeferredScrollingEnabled="False"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                      ScrollViewer.PanningMode="VerticalOnly"
+                      local:PreciseScrollBehavior.Axis="Vertical">
                 <ListView.ItemContainerStyle>
                     <Style TargetType="ListViewItem">
                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />

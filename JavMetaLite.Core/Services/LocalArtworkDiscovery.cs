@@ -12,7 +12,19 @@ public static class LocalArtworkDiscovery
 
         var diagnostics = new List<string>();
         var posterPath = await ValidateAsync("poster", sidecars.PosterPath, diagnostics, cancellationToken);
-        var fanartPath = await ValidateAsync("fanart", sidecars.FanartPath, diagnostics, cancellationToken);
+        CoverResolutionCheck? fanartResolution = null;
+        var fanartPath = await ValidateAsync("fanart", sidecars.FanartPath, diagnostics, cancellationToken,
+            measured => fanartResolution = measured);
+        var extrafanartPaths = new List<string>();
+        foreach (var path in sidecars.ExtrafanartPaths)
+        {
+            var validatedPath = await ValidateAsync("extrafanart", path, diagnostics, cancellationToken);
+            if (validatedPath is not null)
+            {
+                extrafanartPaths.Add(validatedPath);
+            }
+        }
+
         ArtworkCoverCandidate? candidate = null;
         if (posterPath is not null || fanartPath is not null)
         {
@@ -23,14 +35,19 @@ public static class LocalArtworkDiscovery
                 fanartPath);
         }
 
-        return new LocalArtworkDiscoveryResult(candidate, diagnostics.ToArray());
+        return new LocalArtworkDiscoveryResult(candidate, diagnostics.ToArray())
+        {
+            ExtrafanartPaths = extrafanartPaths,
+            FanartResolution = fanartResolution
+        };
     }
 
     private static async Task<string?> ValidateAsync(
         string role,
         string? path,
         ICollection<string> diagnostics,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<CoverResolutionCheck>? measured = null)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -39,8 +56,10 @@ public static class LocalArtworkDiscovery
 
         try
         {
-            _ = await ArtworkLocationHelper.ReadLocalImageAsync(path, cancellationToken);
-            return Path.GetFullPath(path);
+            var image = await ArtworkLocationHelper.ReadLocalImageWithDimensionsAsync(path, cancellationToken);
+            var normalizedPath = Path.GetFullPath(path);
+            measured?.Invoke(new(normalizedPath, image.Width, image.Height));
+            return normalizedPath;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

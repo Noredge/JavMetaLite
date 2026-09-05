@@ -17,23 +17,60 @@ public sealed class FileOrganizationService
         MovieMetadata metadata,
         SaveOptions saveOptions,
         OrganizationOptions organizationOptions,
+        LocalSaveContext? localContext = null) =>
+        BuildPlan([videoPath], metadata, saveOptions, organizationOptions, localContext);
+
+    public static SavePlan BuildPlan(
+        IEnumerable<string> videoPaths,
+        MovieMetadata metadata,
+        SaveOptions saveOptions,
+        OrganizationOptions organizationOptions,
         LocalSaveContext? localContext = null)
     {
-        var sourceVideoPath = Path.GetFullPath(videoPath);
-        if (!File.Exists(sourceVideoPath))
+        var fileSet = MovieFileSet.Create(videoPaths);
+        foreach (var sourcePath in fileSet.VideoPaths)
         {
-            throw new FileNotFoundException("找不到所选影片。", sourceVideoPath);
+            if (!File.Exists(sourcePath))
+            {
+                throw new FileNotFoundException("找不到所选影片分段。", sourcePath);
+            }
         }
 
+        var sourceVideoPath = fileSet.PrimaryPath;
         ValidateOutputs(saveOptions);
+        var effectiveOrganizationOptions = OrganizationPathPlanner.ResolveEffectiveOptions(
+            organizationOptions,
+            fileSet.UsesMultipartNaming);
+        var outputNamingMode = fileSet.UsesMultipartNaming
+            ? OutputNamingMode.MovieFolder
+            : OutputNamingMode.VideoBase;
         var pathPlan = OrganizationPathPlanner.Resolve(
             sourceVideoPath,
             metadata.Id,
-            organizationOptions);
+            effectiveOrganizationOptions);
         var sourceDirectory = pathPlan.SourceDirectory;
         var targetDirectory = pathPlan.TargetDirectory;
-        var targetBaseName = pathPlan.TargetBaseName;
-        var targetVideoPath = pathPlan.TargetVideoPath;
+        var targetBaseName = fileSet.UsesMultipartNaming && !effectiveOrganizationOptions.RenameVideo
+            ? fileSet.MovieBaseName
+            : pathPlan.TargetBaseName;
+        var videoTransfers = fileSet.Parts.Select(part =>
+        {
+            var targetFileName = fileSet.UsesMultipartNaming
+                ? effectiveOrganizationOptions.RenameVideo
+                    ? $"{targetBaseName}-cd{part.PartNumber}{Path.GetExtension(part.Path)}"
+                    : Path.GetFileName(part.Path)
+                : targetBaseName + Path.GetExtension(part.Path);
+            var targetPath = Path.Combine(targetDirectory, targetFileName);
+            return new VideoFileTransfer(
+                part.Path,
+                targetPath,
+                part.PartNumber,
+                OrganizationPathPlanner.RequiresVerifiedCopy(part.Path, targetPath));
+        }).ToArray();
+        var targetVideoPath = videoTransfers[0].TargetPath;
+        var outputAnchorPath = Path.Combine(
+            targetDirectory,
+            targetBaseName + Path.GetExtension(sourceVideoPath));
 
         var changes = new List<PlannedFileChange>();
         var overwriteConflicts = new List<string>();
@@ -63,13 +100,14 @@ public sealed class FileOrganizationService
                 targetDirectory));
         }
 
-        if (!PathsEqual(sourceVideoPath, targetVideoPath))
+        foreach (var videoTransfer in videoTransfers.Where(transfer => transfer.WillMove))
         {
-            var directoryChanges = !PathsEqual(sourceDirectory, targetDirectory);
-            var nameChanges = !Path.GetFileName(sourceVideoPath)
-                .Equals(Path.GetFileName(targetVideoPath), StringComparison.OrdinalIgnoreCase);
-            var kind = pathPlan.RequiresVerifiedCopy
-                ? organizationOptions.CrossVolumeVerification is CrossVolumeVerificationMode.FullSha256
+            var partSourceDirectory = Path.GetDirectoryName(videoTransfer.SourcePath)!;
+            var directoryChanges = !PathsEqual(partSourceDirectory, targetDirectory);
+            var nameChanges = !Path.GetFileName(videoTransfer.SourcePath)
+                .Equals(Path.GetFileName(videoTransfer.TargetPath), StringComparison.OrdinalIgnoreCase);
+            var kind = videoTransfer.RequiresVerifiedCopy
+                ? effectiveOrganizationOptions.CrossVolumeVerification is CrossVolumeVerificationMode.FullSha256
                     ? PlannedChangeKind.CopyAndVerifyVideo
                     : PlannedChangeKind.CopyVideo
                 : directoryChanges && nameChanges
@@ -85,22 +123,23 @@ public sealed class FileOrganizationService
                 PlannedChangeKind.MoveVideo => "移动影片",
                 _ => "重命名影片"
             };
-            var blocked = File.Exists(targetVideoPath) || Directory.Exists(targetVideoPath);
+            var blocked = File.Exists(videoTransfer.TargetPath) || Directory.Exists(videoTransfer.TargetPath);
             changes.Add(new PlannedFileChange(
                 kind,
                 description,
-                targetVideoPath,
-                sourceVideoPath,
+                videoTransfer.TargetPath,
+                videoTransfer.SourcePath,
                 false,
                 blocked));
             if (blocked)
             {
-                blockingConflicts.Add($"目标影片已经存在，软件不会覆盖影片：{targetVideoPath}");
+                blockingConflicts.Add($"目标影片已经存在，软件不会覆盖影片：{videoTransfer.TargetPath}");
             }
         }
 
         var localBundle = localContext?.MetadataBundle;
-        if (localBundle is not null && !PathsEqual(localBundle.Sidecars.VideoPath, sourceVideoPath))
+        if (localBundle is not null && !fileSet.VideoPaths.Any(path =>
+                PathsEqual(localBundle.Sidecars.VideoPath, path)))
         {
             throw new InvalidOperationException("本地 NFO 上下文不属于当前影片，请重新选择影片。");
         }
@@ -108,20 +147,64 @@ public sealed class FileOrganizationService
         var localNfoPath = NormalizePath(localBundle?.Sidecars.NfoPath);
         var localPosterPath = NormalizePath(localContext?.LocalArtwork?.LocalPosterPath);
         var localFanartPath = NormalizePath(localContext?.LocalArtwork?.LocalFanartPath);
+        var localExtrafanartPaths = localContext?.LocalExtrafanartPaths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(Path.GetFullPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray() ?? [];
+        var localExtrafanartSet = localExtrafanartPaths.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var canUseOnlineExtrafanart = localContext is null || localContext.CanReplaceLocalExtrafanart;
+        var generateExtrafanart = saveOptions.DownloadExtrafanart && canUseOnlineExtrafanart;
+        var replaceLocalExtrafanart = generateExtrafanart && saveOptions.ReplaceLocalExtrafanart;
+        IReadOnlyList<string>? extrafanartSourceLocations = replaceLocalExtrafanart
+            ? metadata.ScreenshotUrls
+                .Where(location =>
+                    !ArtworkLocationHelper.TryGetLocalPath(location, out var localPath) ||
+                    !localExtrafanartSet.Contains(localPath))
+                .ToArray()
+            : null;
+        var sourceExtrafanartDirectory = Path.Combine(sourceDirectory, "extrafanart");
+        if (localExtrafanartPaths.Any(path =>
+                !PathsEqual(Path.GetDirectoryName(path)!, sourceExtrafanartDirectory)))
+        {
+            throw new InvalidOperationException("本地 extrafanart 上下文不属于当前影片，请重新选择影片。");
+        }
         AddExpectation(localNfoPath, localBundle?.OriginalNfoSha256, "已载入的本地 NFO", expectations, blockingConflicts);
         AddExpectation(localPosterPath, null, "已载入的本地 poster", expectations, blockingConflicts);
         AddExpectation(localFanartPath, null, "已载入的本地 fanart", expectations, blockingConflicts);
+        foreach (var path in localExtrafanartPaths)
+        {
+            AddExpectation(path, null, "已载入的本地 extrafanart", expectations, blockingConflicts);
+        }
 
         var selectedLocalPair = localContext?.SelectedArtwork?.IsSidecarPair == true;
         var replacePoster = saveOptions.DownloadPoster && !selectedLocalPair;
         var replaceFanart = saveOptions.DownloadFanart && !selectedLocalPair;
-        var targetNfoPath = Path.Combine(targetDirectory, $"{targetBaseName}.nfo");
+        var targetNfoPath = Path.Combine(
+            targetDirectory,
+            outputNamingMode is OutputNamingMode.MovieFolder ? "movie.nfo" : $"{targetBaseName}.nfo");
         var targetPosterPath = replacePoster
-            ? Path.Combine(targetDirectory, $"{targetBaseName}-poster.jpg")
-            : BuildPreservedTarget(localPosterPath, targetDirectory, targetBaseName, "-poster");
+            ? Path.Combine(
+                targetDirectory,
+                outputNamingMode is OutputNamingMode.MovieFolder ? "poster.jpg" : $"{targetBaseName}-poster.jpg")
+            : BuildPreservedTarget(
+                localPosterPath,
+                targetDirectory,
+                targetBaseName,
+                "-poster",
+                outputNamingMode,
+                "poster");
         var targetFanartPath = replaceFanart
-            ? Path.Combine(targetDirectory, $"{targetBaseName}-fanart.jpg")
-            : BuildPreservedTarget(localFanartPath, targetDirectory, targetBaseName, "-fanart");
+            ? Path.Combine(
+                targetDirectory,
+                outputNamingMode is OutputNamingMode.MovieFolder ? "fanart.jpg" : $"{targetBaseName}-fanart.jpg")
+            : BuildPreservedTarget(
+                localFanartPath,
+                targetDirectory,
+                targetBaseName,
+                "-fanart",
+                outputNamingMode,
+                "fanart");
 
         var updatePosterReference = targetPosterPath is not null &&
             (localBundle is null || replacePoster ||
@@ -137,13 +220,15 @@ public sealed class FileOrganizationService
             updatePosterReference,
             posterReference,
             updateFanartReference,
-            fanartReference);
+            fanartReference,
+            saveOptions.IncludeIdInTitle);
         var generateNfo = saveOptions.WriteNfo && nfoHasManagedChanges;
         var outputOptions = saveOptions with
         {
             WriteNfo = generateNfo,
             DownloadPoster = replacePoster,
-            DownloadFanart = replaceFanart
+            DownloadFanart = replaceFanart,
+            DownloadExtrafanart = generateExtrafanart
         };
 
         if (saveOptions.WriteNfo && generateNfo)
@@ -183,13 +268,38 @@ public sealed class FileOrganizationService
             localPosterPath, targetPosterPath, expectations, transfers, changes, overwriteConflicts, retirePaths);
         PlanArtwork(LocalSidecarRole.Fanart, "fanart", saveOptions.DownloadFanart, replaceFanart,
             localFanartPath, targetFanartPath, expectations, transfers, changes, overwriteConflicts, retirePaths);
+        if (!generateExtrafanart)
+        {
+            foreach (var localPath in localExtrafanartPaths)
+            {
+                var targetPath = Path.Combine(targetDirectory, "extrafanart", Path.GetFileName(localPath));
+                AddPreservedSidecar(
+                    LocalSidecarRole.Extrafanart,
+                    "本地 extrafanart 内容保持不变",
+                    localPath,
+                    targetPath,
+                    expectations,
+                    transfers,
+                    changes,
+                    overwriteConflicts,
+                    retirePaths);
+            }
+
+        }
 
         var explicitlyPlanned = new HashSet<string>(
             new[] { targetNfoPath, targetPosterPath, targetFanartPath }
                 .Where(path => path is not null)
                 .Select(path => Path.GetFullPath(path!)),
             StringComparer.OrdinalIgnoreCase);
-        foreach (var outputPath in OutputService.GetExpectedOutputFiles(targetVideoPath, metadata, outputOptions))
+        var expectedOutputPaths = OutputService.GetExpectedOutputFiles(
+                outputAnchorPath,
+            metadata,
+            outputOptions,
+            outputNamingMode,
+            OutputService.SelectScreenshotLocations(extrafanartSourceLocations ?? metadata.ScreenshotUrls).Count)
+            .ToArray();
+        foreach (var outputPath in expectedOutputPaths)
         {
             if (explicitlyPlanned.Contains(Path.GetFullPath(outputPath)))
             {
@@ -206,6 +316,23 @@ public sealed class FileOrganizationService
             AddOverwriteConflict(outputPath, exists, overwriteConflicts);
         }
 
+        if (generateExtrafanart)
+        {
+            foreach (var localPath in localExtrafanartPaths)
+            {
+                retirePaths.Add(localPath);
+                if (expectedOutputPaths.Any(outputPath => PathsEqual(outputPath, localPath)))
+                {
+                    continue;
+                }
+
+                changes.Add(new PlannedFileChange(
+                    PlannedChangeKind.RemoveFile,
+                    "移除未选或迁移后的本地剧照",
+                    localPath));
+            }
+        }
+
         var nfoContext = outputOptions.WriteNfo
             ? new NfoWriteContext(localBundle, updatePosterReference, posterReference, updateFanartReference, fanartReference)
             : null;
@@ -215,12 +342,15 @@ public sealed class FileOrganizationService
             targetDirectory,
             targetBaseName,
             saveOptions,
-            organizationOptions,
+            effectiveOrganizationOptions,
             changes,
             overwriteConflicts.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             blockingConflicts.Distinct(StringComparer.Ordinal).ToArray())
         {
             OutputGenerationOptions = outputOptions,
+            OutputAnchorPath = outputAnchorPath,
+            OutputNamingMode = outputNamingMode,
+            VideoTransfers = videoTransfers,
             LocalContext = localContext,
             NfoWriteContext = nfoContext,
             SidecarTransfers = transfers.ToArray(),
@@ -228,8 +358,9 @@ public sealed class FileOrganizationService
                 .DistinctBy(expectation => expectation.Path, StringComparer.OrdinalIgnoreCase)
                 .ToArray(),
             SourcePathsToRetire = retirePaths.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-            RequiresVerifiedVideoCopy = pathPlan.RequiresVerifiedCopy &&
-                                        !PathsEqual(sourceVideoPath, targetVideoPath)
+            ExtrafanartSourceLocations = extrafanartSourceLocations,
+            RequiresVerifiedVideoCopy = videoTransfers.Any(transfer =>
+                transfer.WillMove && transfer.RequiresVerifiedCopy)
         };
     }
 
@@ -240,6 +371,16 @@ public sealed class FileOrganizationService
         CancellationToken cancellationToken = default,
         IProgress<FileTransactionProgress>? progress = null)
     {
+        if (plan.VideoTransfers.Count > 1)
+        {
+            return await ExecuteMultipartAsync(
+                plan,
+                metadata,
+                allowOverwrite,
+                cancellationToken,
+                progress);
+        }
+
         progress?.Report(new FileTransactionProgress(
             FileTransactionStage.Preparing,
             "正在准备 metadata 与安全事务…"));
@@ -291,6 +432,8 @@ public sealed class FileOrganizationService
         string? sourceVideoBackupPath = null;
         var operationSucceeded = false;
         var rollbackSucceeded = false;
+        using var timing = new SaveTimingLog("transaction", metadata.Id);
+        timing.Begin("metadataPrepare");
 
         if (crossVolumeCopy)
         {
@@ -313,9 +456,12 @@ public sealed class FileOrganizationService
                     metadata,
                     plan.OutputGenerationOptions with { OverwriteExisting = true },
                     plan.NfoWriteContext,
-                    cancellationToken)
+                    plan.OutputNamingMode,
+                    cancellationToken,
+                    plan.ExtrafanartSourceLocations)
                 : new SaveResult(null, null, null, [], false);
 
+            timing.Begin("stageAndVerify");
             ValidateSourceExpectations(plan.SourceFileExpectations);
             var stagedPaths = new[] { stagedResult.NfoPath, stagedResult.PosterPath, stagedResult.FanartPath }
                 .Where(path => path is not null)
@@ -423,6 +569,7 @@ public sealed class FileOrganizationService
                     $"metadata 文件在预览后出现冲突：{Environment.NewLine}{string.Join(Environment.NewLine, lateConflicts)}");
             }
 
+            timing.Begin("commit");
             progress?.Report(new FileTransactionProgress(
                 FileTransactionStage.Committing,
                 "正在提交目标影片与 metadata…"));
@@ -437,17 +584,17 @@ public sealed class FileOrganizationService
                         "existing",
                         Path.GetRelativePath(plan.TargetDirectory, mapping.FinalPath));
                     Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
-                    File.Move(mapping.FinalPath, backupPath);
+                    await FileSharingRetry.MoveAsync(mapping.FinalPath, backupPath, cancellationToken);
                     backups.Add((backupPath, mapping.FinalPath));
                 }
-                File.Move(mapping.StagedPath, mapping.FinalPath);
+                await FileSharingRetry.MoveAsync(mapping.StagedPath, mapping.FinalPath, cancellationToken);
                 committedOutputs.Add(mapping.FinalPath);
             }
 
             if (crossVolumeCopy)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                File.Move(targetStagedVideoPath!, plan.TargetVideoPath);
+                await FileSharingRetry.MoveAsync(targetStagedVideoPath!, plan.TargetVideoPath, cancellationToken);
                 targetVideoCommitted = true;
             }
 
@@ -461,7 +608,7 @@ public sealed class FileOrganizationService
                 }
                 var backupPath = Path.Combine(sourceRetireRoot, $"{index:D2}-{Path.GetFileName(sourcePath)}");
                 Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
-                File.Move(sourcePath, backupPath);
+                await FileSharingRetry.MoveAsync(sourcePath, backupPath, cancellationToken);
                 backups.Add((backupPath, sourcePath));
             }
 
@@ -481,12 +628,12 @@ public sealed class FileOrganizationService
                         "movie",
                         Path.GetFileName(plan.SourceVideoPath));
                     Directory.CreateDirectory(Path.GetDirectoryName(sourceVideoBackupPath)!);
-                    File.Move(plan.SourceVideoPath, sourceVideoBackupPath);
+                    await FileSharingRetry.MoveAsync(plan.SourceVideoPath, sourceVideoBackupPath, cancellationToken);
                     sourceVideoRetired = true;
                 }
                 else
                 {
-                    File.Move(plan.SourceVideoPath, plan.TargetVideoPath);
+                    await FileSharingRetry.MoveAsync(plan.SourceVideoPath, plan.TargetVideoPath, cancellationToken);
                 }
                 videoMoved = true;
             }
@@ -509,12 +656,14 @@ public sealed class FileOrganizationService
                     : "安全保存已完成"));
             operationSucceeded = true;
             rollbackSucceeded = true;
+            timing.Complete();
             return new OrganizedSaveResult(finalResult, plan.TargetVideoPath, videoMoved);
         }
         catch (Exception exception)
         {
+            timing.Begin("rollback");
             AppLog.Error("保存计划失败，开始恢复文件", exception);
-            var rollbackErrors = Rollback(
+            var rollbackErrors = await RollbackAsync(
                 plan,
                 videoMoved,
                 crossVolumeCopy,
@@ -539,6 +688,372 @@ public sealed class FileOrganizationService
         }
         finally
         {
+            timing.Begin("cleanup");
+            if (rollbackSucceeded)
+            {
+                TryDeleteDirectory(sourceStagingRoot);
+                if (!PathsEqual(sourceStagingRoot, targetStagingRoot))
+                {
+                    TryDeleteDirectory(targetStagingRoot);
+                }
+                if (!operationSucceeded && createdTargetDirectory)
+                {
+                    TryDeleteEmptyTree(plan.TargetDirectory);
+                }
+            }
+        }
+    }
+
+    private async Task<OrganizedSaveResult> ExecuteMultipartAsync(
+        SavePlan plan,
+        MovieMetadata metadata,
+        bool allowOverwrite,
+        CancellationToken cancellationToken,
+        IProgress<FileTransactionProgress>? progress)
+    {
+        progress?.Report(new FileTransactionProgress(
+            FileTransactionStage.Preparing,
+            "正在准备多分段影片与 metadata 安全事务…"));
+        if (plan.HasBlockingConflicts)
+        {
+            throw new IOException(string.Join(Environment.NewLine, plan.BlockingConflicts));
+        }
+
+        foreach (var transfer in plan.VideoTransfers)
+        {
+            if (!File.Exists(transfer.SourcePath))
+            {
+                throw new FileNotFoundException("执行前找不到原影片分段，未进行任何更改。", transfer.SourcePath);
+            }
+            if (transfer.WillMove && (File.Exists(transfer.TargetPath) || Directory.Exists(transfer.TargetPath)))
+            {
+                throw new IOException($"目标影片分段已经存在，未进行任何更改：{transfer.TargetPath}");
+            }
+        }
+
+        ValidateSourceExpectations(plan.SourceFileExpectations);
+        var currentConflicts = GetPlannedWritePaths(plan, metadata).Where(File.Exists).ToArray();
+        if (currentConflicts.Length > 0 && !allowOverwrite)
+        {
+            throw new IOException(
+                $"以下 metadata 文件已经存在：{Environment.NewLine}{string.Join(Environment.NewLine, currentConflicts)}");
+        }
+
+        var sourceDirectory = Path.GetDirectoryName(plan.SourceVideoPath)!;
+        var operationId = Guid.NewGuid().ToString("N");
+        var sourceStagingRoot = Path.Combine(sourceDirectory, $".JavMetaLite-{operationId}.tmp");
+        var stagingOutputAnchorPath = Path.Combine(
+            sourceStagingRoot,
+            plan.TargetBaseName + Path.GetExtension(plan.OutputAnchorPath));
+        var crossVolumeCopy = plan.RequiresVerifiedVideoCopy || plan.VideoTransfers.Any(transfer =>
+            transfer.WillMove && transfer.RequiresVerifiedCopy);
+        var fullVerification = crossVolumeCopy &&
+                               plan.OrganizationOptions.CrossVolumeVerification is
+                                   CrossVolumeVerificationMode.FullSha256;
+        var targetStagingRoot = crossVolumeCopy
+            ? Path.Combine(plan.TargetDirectory, $".JavMetaLite-target-{operationId}.tmp")
+            : sourceStagingRoot;
+        var targetPayloadRoot = crossVolumeCopy
+            ? Path.Combine(targetStagingRoot, "payload")
+            : sourceStagingRoot;
+        var backupRoot = Path.Combine(targetStagingRoot, "backup");
+        var sourceRetireRoot = Path.Combine(sourceStagingRoot, "retired");
+        var committedOutputs = new List<string>();
+        var backups = new List<(string BackupPath, string OriginalPath)>();
+        var committedVideoTargets = new List<string>();
+        var retiredVideoSources = new List<(string BackupPath, string OriginalPath)>();
+        var sameVolumeMoves = new List<VideoFileTransfer>();
+        var createdTargetDirectory = false;
+        var operationSucceeded = false;
+        var rollbackSucceeded = false;
+        using var timing = new SaveTimingLog("transaction-multipart", metadata.Id);
+        timing.Begin("metadataPrepare");
+
+        if (crossVolumeCopy)
+        {
+            EnsureTargetCapacity(
+                plan.VideoTransfers.Where(transfer => transfer.WillMove).Select(transfer => transfer.SourcePath),
+                plan.TargetDirectory);
+        }
+
+        AppLog.Info(
+            $"开始执行多分段保存计划 parts={plan.VideoTransfers.Count} source={plan.SourceVideoPath} " +
+            $"target={plan.TargetDirectory} roundTrip={plan.NfoWriteContext?.LocalBundle is not null} " +
+            $"crossVolumeCopy={crossVolumeCopy} verification={plan.OrganizationOptions.CrossVolumeVerification}");
+
+        try
+        {
+            Directory.CreateDirectory(sourceStagingRoot);
+            var stagedResult = HasOutputs(plan.OutputGenerationOptions)
+                ? await _outputService.SaveAsync(
+                    plan.SourceVideoPath,
+                    stagingOutputAnchorPath,
+                    metadata,
+                    plan.OutputGenerationOptions with { OverwriteExisting = true },
+                    plan.NfoWriteContext,
+                    plan.OutputNamingMode,
+                    cancellationToken,
+                    plan.ExtrafanartSourceLocations)
+                : new SaveResult(null, null, null, [], false);
+
+            timing.Begin("stageAndVerify");
+            ValidateSourceExpectations(plan.SourceFileExpectations);
+            var stagedPaths = new[] { stagedResult.NfoPath, stagedResult.PosterPath, stagedResult.FanartPath }
+                .Where(path => path is not null)
+                .Select(path => path!)
+                .Concat(stagedResult.ExtrafanartPaths)
+                .ToList();
+            foreach (var transfer in plan.SidecarTransfers)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (PathsEqual(transfer.SourcePath, transfer.DestinationPath))
+                {
+                    continue;
+                }
+                var relativePath = Path.GetRelativePath(plan.TargetDirectory, transfer.DestinationPath);
+                if (relativePath.StartsWith("..", StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("sidecar 目标超出影片目标目录。 ");
+                }
+                var stagedPath = Path.Combine(sourceStagingRoot, relativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(stagedPath)!);
+                File.Copy(transfer.SourcePath, stagedPath, overwrite: false);
+                stagedPaths.Add(stagedPath);
+            }
+
+            if (!Directory.Exists(plan.TargetDirectory))
+            {
+                Directory.CreateDirectory(plan.TargetDirectory);
+                createdTargetDirectory = true;
+            }
+
+            IReadOnlyList<string> commitStagedPaths = stagedPaths;
+            var stagedVideos = new List<(VideoFileTransfer Transfer, string StagedPath)>();
+            if (crossVolumeCopy)
+            {
+                Directory.CreateDirectory(targetPayloadRoot);
+                var targetCopies = new List<string>(stagedPaths.Count);
+                foreach (var stagedPath in stagedPaths)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var relativePath = Path.GetRelativePath(sourceStagingRoot, stagedPath);
+                    var targetStagedPath = Path.Combine(targetPayloadRoot, relativePath);
+                    Directory.CreateDirectory(Path.GetDirectoryName(targetStagedPath)!);
+                    File.Copy(stagedPath, targetStagedPath, overwrite: false);
+                    targetCopies.Add(targetStagedPath);
+                }
+                commitStagedPaths = targetCopies;
+
+                var movingTransfers = plan.VideoTransfers.Where(transfer => transfer.WillMove).ToArray();
+                for (var index = 0; index < movingTransfers.Length; index++)
+                {
+                    var transfer = movingTransfers[index];
+                    var stagedVideoPath = Path.Combine(
+                        targetStagingRoot,
+                        "movie",
+                        $"{index:D2}-{Path.GetFileName(transfer.TargetPath)}");
+                    var sourceLength = new FileInfo(transfer.SourcePath).Length;
+                    var sourceHash = await CopyMovieAsync(
+                        transfer.SourcePath,
+                        stagedVideoPath,
+                        fullVerification,
+                        progress,
+                        cancellationToken);
+                    var targetLength = new FileInfo(stagedVideoPath).Length;
+                    if (sourceLength != targetLength)
+                    {
+                        throw new IOException(
+                            $"目标影片分段大小检查失败；来源已保留：{Path.GetFileName(transfer.SourcePath)}");
+                    }
+                    if (fullVerification)
+                    {
+                        var targetHash = await ComputeSha256Async(stagedVideoPath, progress, cancellationToken);
+                        if (!string.Equals(sourceHash, targetHash, StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new IOException(
+                                $"目标影片分段 SHA-256 校验失败；来源已保留：{Path.GetFileName(transfer.SourcePath)}");
+                        }
+                    }
+                    stagedVideos.Add((transfer, stagedVideoPath));
+                }
+            }
+
+            var mappings = commitStagedPaths
+                .Select(path => (StagedPath: path, FinalPath: Path.Combine(
+                    plan.TargetDirectory,
+                    Path.GetRelativePath(targetPayloadRoot, path))))
+                .GroupBy(mapping => mapping.FinalPath, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.Single())
+                .ToArray();
+            var lateVideoConflicts = plan.VideoTransfers
+                .Where(transfer => transfer.WillMove)
+                .Select(transfer => transfer.TargetPath)
+                .Where(path => File.Exists(path) || Directory.Exists(path))
+                .ToArray();
+            if (lateVideoConflicts.Length > 0)
+            {
+                throw new IOException(
+                    $"目标影片分段在预览后被占用：{Environment.NewLine}{string.Join(Environment.NewLine, lateVideoConflicts)}");
+            }
+            var lateConflicts = mappings.Select(item => item.FinalPath).Where(File.Exists).ToArray();
+            if (lateConflicts.Length > 0 && !allowOverwrite)
+            {
+                throw new IOException(
+                    $"metadata 文件在预览后出现冲突：{Environment.NewLine}{string.Join(Environment.NewLine, lateConflicts)}");
+            }
+
+            timing.Begin("commit");
+            progress?.Report(new FileTransactionProgress(
+                FileTransactionStage.Committing,
+                "正在提交多分段影片与 metadata…"));
+            foreach (var mapping in mappings)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                Directory.CreateDirectory(Path.GetDirectoryName(mapping.FinalPath)!);
+                if (File.Exists(mapping.FinalPath))
+                {
+                    var backupPath = Path.Combine(
+                        backupRoot,
+                        "existing",
+                        Path.GetRelativePath(plan.TargetDirectory, mapping.FinalPath));
+                    Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
+                    await FileSharingRetry.MoveAsync(mapping.FinalPath, backupPath, cancellationToken);
+                    backups.Add((backupPath, mapping.FinalPath));
+                }
+                await FileSharingRetry.MoveAsync(mapping.StagedPath, mapping.FinalPath, cancellationToken);
+                committedOutputs.Add(mapping.FinalPath);
+            }
+
+            foreach (var stagedVideo in stagedVideos)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await FileSharingRetry.MoveAsync(stagedVideo.StagedPath, stagedVideo.Transfer.TargetPath, cancellationToken);
+                committedVideoTargets.Add(stagedVideo.Transfer.TargetPath);
+            }
+
+            for (var index = 0; index < plan.SourcePathsToRetire.Count; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var sourcePath = plan.SourcePathsToRetire[index];
+                if (!File.Exists(sourcePath) || mappings.Any(mapping => PathsEqual(mapping.FinalPath, sourcePath)))
+                {
+                    continue;
+                }
+                var backupPath = Path.Combine(sourceRetireRoot, $"sidecar-{index:D2}-{Path.GetFileName(sourcePath)}");
+                Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
+                await FileSharingRetry.MoveAsync(sourcePath, backupPath, cancellationToken);
+                backups.Add((backupPath, sourcePath));
+            }
+
+            var movingVideoTransfers = plan.VideoTransfers.Where(transfer => transfer.WillMove).ToArray();
+            if (crossVolumeCopy)
+            {
+                progress?.Report(new FileTransactionProgress(
+                    fullVerification ? FileTransactionStage.RetiringSource : FileTransactionStage.RetiringSourceFast,
+                    fullVerification
+                        ? "所有分段校验与提交完成，正在移除来源影片…"
+                        : "所有分段复制与提交完成，正在移除来源影片…"));
+                for (var index = 0; index < movingVideoTransfers.Length; index++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var transfer = movingVideoTransfers[index];
+                    var backupPath = Path.Combine(
+                        sourceRetireRoot,
+                        "movie",
+                        $"{index:D2}-{Path.GetFileName(transfer.SourcePath)}");
+                    Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
+                    await FileSharingRetry.MoveAsync(transfer.SourcePath, backupPath, cancellationToken);
+                    retiredVideoSources.Add((backupPath, transfer.SourcePath));
+                }
+            }
+            else
+            {
+                foreach (var transfer in movingVideoTransfers)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await FileSharingRetry.MoveAsync(transfer.SourcePath, transfer.TargetPath, cancellationToken);
+                    sameVolumeMoves.Add(transfer);
+                }
+            }
+
+            var finalResult = new SaveResult(
+                ResolveFinalPath(stagedResult.NfoPath, sourceStagingRoot, plan.TargetDirectory),
+                ResolveFinalPath(stagedResult.PosterPath, sourceStagingRoot, plan.TargetDirectory),
+                ResolveFinalPath(stagedResult.FanartPath, sourceStagingRoot, plan.TargetDirectory),
+                stagedResult.ExtrafanartPaths
+                    .Select(path => ResolveFinalPath(path, sourceStagingRoot, plan.TargetDirectory)!)
+                    .ToArray(),
+                stagedResult.FanartUsedFullCover);
+            var targetVideoPaths = plan.VideoTransfers.Select(transfer => transfer.TargetPath).ToArray();
+            AppLog.Info(
+                $"多分段保存计划完成 parts={targetVideoPaths.Length} outputs={committedOutputs.Count} " +
+                $"moved={movingVideoTransfers.Length > 0}");
+            progress?.Report(new FileTransactionProgress(
+                FileTransactionStage.Completed,
+                "多分段影片与共用 metadata 已安全保存"));
+            operationSucceeded = true;
+            rollbackSucceeded = true;
+            timing.Complete();
+            return new OrganizedSaveResult(finalResult, targetVideoPaths[0], movingVideoTransfers.Length > 0)
+            {
+                VideoPaths = targetVideoPaths
+            };
+        }
+        catch (Exception exception)
+        {
+            timing.Begin("rollback");
+            AppLog.Error("多分段保存计划失败，开始恢复文件", exception);
+            var rollbackErrors = new List<Exception>();
+            foreach (var transfer in sameVolumeMoves.AsEnumerable().Reverse())
+            {
+                await TryRollbackAsync(() => FileSharingRetry.MoveAsync(transfer.TargetPath, transfer.SourcePath), rollbackErrors);
+            }
+            foreach (var retired in retiredVideoSources.AsEnumerable().Reverse())
+            {
+                await TryRollbackAsync(() => FileSharingRetry.MoveAsync(retired.BackupPath, retired.OriginalPath), rollbackErrors);
+            }
+            foreach (var targetPath in committedVideoTargets.AsEnumerable().Reverse())
+            {
+                var matchingSource = plan.VideoTransfers.First(transfer =>
+                    PathsEqual(transfer.TargetPath, targetPath)).SourcePath;
+                if (File.Exists(matchingSource))
+                {
+                    await TryRollbackAsync(() => FileSharingRetry.DeleteAsync(targetPath), rollbackErrors);
+                }
+                else
+                {
+                    rollbackErrors.Add(new IOException($"来源分段尚未恢复，因此保留目标分段：{targetPath}"));
+                }
+            }
+            foreach (var outputPath in committedOutputs.AsEnumerable().Reverse())
+            {
+                await TryRollbackAsync(() => FileSharingRetry.DeleteAsync(outputPath), rollbackErrors);
+            }
+            foreach (var backup in backups.AsEnumerable().Reverse())
+            {
+                await TryRollbackAsync(async () =>
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(backup.OriginalPath)!);
+                    await FileSharingRetry.MoveAsync(backup.BackupPath, backup.OriginalPath);
+                }, rollbackErrors);
+            }
+
+            rollbackSucceeded = rollbackErrors.Count == 0;
+            if (!rollbackSucceeded)
+            {
+                var recoveryPaths = crossVolumeCopy
+                    ? $"{sourceStagingRoot}；{targetStagingRoot}"
+                    : sourceStagingRoot;
+                throw new IOException(
+                    $"多分段保存失败且自动恢复不完整。请保留现场并检查：{recoveryPaths}",
+                    new AggregateException(new[] { exception }.Concat(rollbackErrors)));
+            }
+            AppLog.Info("多分段文件恢复完成，原影片和 sidecar 保持不变");
+            throw;
+        }
+        finally
+        {
+            timing.Begin("cleanup");
             if (rollbackSucceeded)
             {
                 TryDeleteDirectory(sourceStagingRoot);
@@ -629,10 +1144,16 @@ public sealed class FileOrganizationService
         string? sourcePath,
         string targetDirectory,
         string targetBaseName,
-        string suffix) =>
+        string suffix,
+        OutputNamingMode namingMode,
+        string folderBaseName) =>
         sourcePath is null
             ? null
-            : Path.Combine(targetDirectory, targetBaseName + suffix + Path.GetExtension(sourcePath).ToLowerInvariant());
+            : Path.Combine(
+                targetDirectory,
+                (namingMode is OutputNamingMode.MovieFolder
+                    ? folderBaseName
+                    : targetBaseName + suffix) + Path.GetExtension(sourcePath).ToLowerInvariant());
 
     private static void AddExpectation(
         string? path,
@@ -675,7 +1196,12 @@ public sealed class FileOrganizationService
     }
 
     private static IReadOnlyList<string> GetPlannedWritePaths(SavePlan plan, MovieMetadata metadata) =>
-        OutputService.GetExpectedOutputFiles(plan.TargetVideoPath, metadata, plan.OutputGenerationOptions)
+        OutputService.GetExpectedOutputFiles(
+                plan.OutputAnchorPath,
+                metadata,
+                plan.OutputGenerationOptions,
+                plan.OutputNamingMode,
+                OutputService.SelectScreenshotLocations(plan.ExtrafanartSourceLocations ?? metadata.ScreenshotUrls).Count)
             .Concat(plan.SidecarTransfers
                 .Where(transfer => !PathsEqual(transfer.SourcePath, transfer.DestinationPath))
                 .Select(transfer => transfer.DestinationPath))
@@ -706,6 +1232,11 @@ public sealed class FileOrganizationService
 
     private static void EnsureTargetCapacity(string sourceVideoPath, string targetDirectory)
     {
+        EnsureTargetCapacity([sourceVideoPath], targetDirectory);
+    }
+
+    private static void EnsureTargetCapacity(IEnumerable<string> sourceVideoPaths, string targetDirectory)
+    {
         const long metadataReserve = 32L * 1024 * 1024;
         var targetRoot = Path.GetPathRoot(Path.GetFullPath(targetDirectory));
         if (string.IsNullOrWhiteSpace(targetRoot) || targetRoot.StartsWith("\\\\", StringComparison.Ordinal))
@@ -721,7 +1252,11 @@ public sealed class FileOrganizationService
                 throw new IOException($"目标磁盘当前不可用：{targetRoot}");
             }
 
-            var videoLength = new FileInfo(sourceVideoPath).Length;
+            var videoLength = sourceVideoPaths.Aggregate(0L, (total, sourcePath) =>
+            {
+                var length = new FileInfo(sourcePath).Length;
+                return total > long.MaxValue - length ? long.MaxValue : total + length;
+            });
             var required = videoLength > long.MaxValue - metadataReserve
                 ? long.MaxValue
                 : videoLength + metadataReserve;
@@ -865,7 +1400,7 @@ public sealed class FileOrganizationService
     private static bool HasOutputs(SaveOptions options) =>
         options.WriteNfo || options.DownloadPoster || options.DownloadFanart || options.DownloadExtrafanart;
 
-    private static List<Exception> Rollback(
+    private static async Task<List<Exception>> RollbackAsync(
         SavePlan plan,
         bool videoMoved,
         bool verifiedCopy,
@@ -886,7 +1421,7 @@ public sealed class FileOrganizationService
                 }
                 else
                 {
-                    TryRollback(() => File.Move(sourceVideoBackupPath, plan.SourceVideoPath), errors);
+                    await TryRollbackAsync(() => FileSharingRetry.MoveAsync(sourceVideoBackupPath, plan.SourceVideoPath), errors);
                 }
             }
 
@@ -894,7 +1429,7 @@ public sealed class FileOrganizationService
             {
                 if (File.Exists(plan.SourceVideoPath))
                 {
-                    TryRollback(() => File.Delete(plan.TargetVideoPath), errors);
+                    await TryRollbackAsync(() => FileSharingRetry.DeleteAsync(plan.TargetVideoPath), errors);
                 }
                 else
                 {
@@ -904,28 +1439,29 @@ public sealed class FileOrganizationService
         }
         else if (videoMoved)
         {
-            TryRollback(() => File.Move(plan.TargetVideoPath, plan.SourceVideoPath), errors);
+            await TryRollbackAsync(() => FileSharingRetry.MoveAsync(plan.TargetVideoPath, plan.SourceVideoPath), errors);
         }
         foreach (var outputPath in committedOutputs.Reverse())
         {
-            TryRollback(() => File.Delete(outputPath), errors);
+            await TryRollbackAsync(() => FileSharingRetry.DeleteAsync(outputPath), errors);
         }
         foreach (var backup in backups.Reverse())
         {
-            TryRollback(() =>
+            await TryRollbackAsync(async () =>
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(backup.OriginalPath)!);
-                File.Move(backup.BackupPath, backup.OriginalPath);
+                await FileSharingRetry.MoveAsync(backup.BackupPath, backup.OriginalPath);
             }, errors);
         }
         return errors;
     }
 
-    private static void TryRollback(Action action, ICollection<Exception> errors)
+    // Recovery deliberately does not inherit the canceled foreground-operation token.
+    private static async Task TryRollbackAsync(Func<Task> action, ICollection<Exception> errors)
     {
         try
         {
-            action();
+            await action();
         }
         catch (Exception exception)
         {

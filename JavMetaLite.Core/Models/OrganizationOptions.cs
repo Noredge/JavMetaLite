@@ -81,7 +81,8 @@ public enum PlannedChangeKind
     OverwriteFile,
     UpdateFile,
     KeepFile,
-    ReplaceImage
+    ReplaceImage,
+    RemoveFile
 }
 
 public sealed record PlannedFileChange(
@@ -91,6 +92,16 @@ public sealed record PlannedFileChange(
     string? SourcePath = null,
     bool RequiresOverwrite = false,
     bool IsBlocking = false);
+
+public sealed record VideoFileTransfer(
+    string SourcePath,
+    string TargetPath,
+    int? PartNumber,
+    bool RequiresVerifiedCopy)
+{
+    public bool WillMove => !Path.GetFullPath(SourcePath)
+        .Equals(Path.GetFullPath(TargetPath), StringComparison.OrdinalIgnoreCase);
+}
 
 public sealed record SavePlan(
     string SourceVideoPath,
@@ -109,18 +120,26 @@ public sealed record SavePlan(
 
     public NfoWriteContext? NfoWriteContext { get; init; }
 
+    public string OutputAnchorPath { get; init; } = TargetVideoPath;
+
+    public OutputNamingMode OutputNamingMode { get; init; } = OutputNamingMode.VideoBase;
+
+    public IReadOnlyList<VideoFileTransfer> VideoTransfers { get; init; } =
+        [new(SourceVideoPath, TargetVideoPath, null, false)];
+
     public IReadOnlyList<LocalSidecarTransfer> SidecarTransfers { get; init; } = [];
 
     public IReadOnlyList<SourceFileExpectation> SourceFileExpectations { get; init; } = [];
 
     public IReadOnlyList<string> SourcePathsToRetire { get; init; } = [];
 
+    public IReadOnlyList<string>? ExtrafanartSourceLocations { get; init; }
+
     public bool RequiresVerifiedVideoCopy { get; init; }
 
     public bool HasBlockingConflicts => BlockingConflicts.Count > 0;
 
-    public bool VideoWillMove =>
-        !string.Equals(SourceVideoPath, TargetVideoPath, StringComparison.OrdinalIgnoreCase);
+    public bool VideoWillMove => VideoTransfers.Any(transfer => transfer.WillMove);
 
     public bool HasActualChanges => VideoWillMove || Changes.Any(change =>
         change.Kind is not PlannedChangeKind.KeepFile);
@@ -129,13 +148,19 @@ public sealed record SavePlan(
 public sealed record LocalSaveContext(
     LocalMetadataBundle? MetadataBundle,
     ArtworkCoverCandidate? LocalArtwork,
-    ArtworkCoverCandidate? SelectedArtwork);
+    ArtworkCoverCandidate? SelectedArtwork)
+{
+    public IReadOnlyList<string> LocalExtrafanartPaths { get; init; } = [];
+
+    public bool CanReplaceLocalExtrafanart { get; init; }
+}
 
 public enum LocalSidecarRole
 {
     Nfo,
     Poster,
-    Fanart
+    Fanart,
+    Extrafanart
 }
 
 public sealed record LocalSidecarTransfer(
@@ -152,7 +177,10 @@ public sealed record SourceFileExpectation(
 public sealed record OrganizedSaveResult(
     SaveResult Outputs,
     string VideoPath,
-    bool VideoMoved);
+    bool VideoMoved)
+{
+    public IReadOnlyList<string> VideoPaths { get; init; } = [VideoPath];
+}
 
 public enum FileTransactionStage
 {

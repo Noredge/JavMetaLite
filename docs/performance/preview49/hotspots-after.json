@@ -1,0 +1,458 @@
+{
+  "Version": "1.2.0-preview.49",
+  "Runtime": "10.0.11",
+  "TimestampUtc": "2026-09-05T01:13:11.7646966Z",
+  "Notes": "100 direct delegate calls per row, 1000 synthetic jobs, 3 repetitions. UI-thread allocations only; no dispatcher pumping inside each measured interval, no actual HTTP/files. Call costs are not additive or representative call counts for an entire search. Use the separate end-to-end fake-HTTP benchmark for overall impact.",
+  "Rows": [
+    {
+      "State": "searchable",
+      "Operation": "issue-check",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 6.8114,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "searchable",
+      "Operation": "issue-check",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 6.2699,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "searchable",
+      "Operation": "issue-check",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 5.8871,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "searchable",
+      "Operation": "batch-search-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 3.399,
+      "AllocatedBytes": 0,
+      "Result": 100000
+    },
+    {
+      "State": "searchable",
+      "Operation": "batch-search-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 3.0995,
+      "AllocatedBytes": 0,
+      "Result": 100000
+    },
+    {
+      "State": "searchable",
+      "Operation": "batch-search-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 3.0922,
+      "AllocatedBytes": 0,
+      "Result": 100000
+    },
+    {
+      "State": "searchable",
+      "Operation": "retry-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 5.8672,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "searchable",
+      "Operation": "retry-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 5.419,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "searchable",
+      "Operation": "retry-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 6.1576,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "searchable",
+      "Operation": "retry-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 5.2913,
+      "AllocatedBytes": 93600,
+      "Result": 0
+    },
+    {
+      "State": "searchable",
+      "Operation": "retry-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 5.3272,
+      "AllocatedBytes": 93600,
+      "Result": 0
+    },
+    {
+      "State": "searchable",
+      "Operation": "retry-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 4.7676,
+      "AllocatedBytes": 93600,
+      "Result": 0
+    },
+    {
+      "State": "searchable",
+      "Operation": "queue-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 25.5584,
+      "AllocatedBytes": 265152,
+      "Result": 0
+    },
+    {
+      "State": "searchable",
+      "Operation": "queue-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 14.6299,
+      "AllocatedBytes": 236000,
+      "Result": 0
+    },
+    {
+      "State": "searchable",
+      "Operation": "queue-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 14.6214,
+      "AllocatedBytes": 236000,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "issue-check",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 5.8826,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "issue-check",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 5.7451,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "issue-check",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 5.8982,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "batch-search-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 1.4992,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "batch-search-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 1.4962,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "batch-search-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 1.5832,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "retry-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 8.2108,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "retry-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 8.466,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "retry-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 8.684,
+      "AllocatedBytes": 0,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "retry-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 7.7482,
+      "AllocatedBytes": 93600,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "retry-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 8.0793,
+      "AllocatedBytes": 93600,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "retry-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 7.8351,
+      "AllocatedBytes": 93600,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "queue-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 19.2095,
+      "AllocatedBytes": 236000,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "queue-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 20.2069,
+      "AllocatedBytes": 236000,
+      "Result": 0
+    },
+    {
+      "State": "completed",
+      "Operation": "queue-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 19.1889,
+      "AllocatedBytes": 236000,
+      "Result": 0
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "issue-check",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 7.5577,
+      "AllocatedBytes": 0,
+      "Result": 25000
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "issue-check",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 8.094,
+      "AllocatedBytes": 0,
+      "Result": 25000
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "issue-check",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 7.9105,
+      "AllocatedBytes": 0,
+      "Result": 25000
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "batch-search-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 2.3582,
+      "AllocatedBytes": 0,
+      "Result": 25000
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "batch-search-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 2.2548,
+      "AllocatedBytes": 0,
+      "Result": 25000
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "batch-search-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 2.0542,
+      "AllocatedBytes": 0,
+      "Result": 25000
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "retry-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 24.6167,
+      "AllocatedBytes": 7400000,
+      "Result": 25000
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "retry-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 22.8607,
+      "AllocatedBytes": 7400000,
+      "Result": 25000
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "retry-eligibility",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 22.403,
+      "AllocatedBytes": 7400000,
+      "Result": 25000
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "retry-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 36.1574,
+      "AllocatedBytes": 7503200,
+      "Result": 0
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "retry-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 18.8422,
+      "AllocatedBytes": 7503200,
+      "Result": 0
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "retry-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 17.292,
+      "AllocatedBytes": 7503200,
+      "Result": 0
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "queue-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 1,
+      "ElapsedMs": 27.2197,
+      "AllocatedBytes": 7646400,
+      "Result": 0
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "queue-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 2,
+      "ElapsedMs": 26.8756,
+      "AllocatedBytes": 7646400,
+      "Result": 0
+    },
+    {
+      "State": "mixed-failures",
+      "Operation": "queue-ui",
+      "Count": 1000,
+      "Repeats": 100,
+      "Iteration": 3,
+      "ElapsedMs": 28.4457,
+      "AllocatedBytes": 7646400,
+      "Result": 0
+    }
+  ]
+}

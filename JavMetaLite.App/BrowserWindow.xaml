@@ -10,6 +10,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -22,16 +23,32 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel>
-                    <TextBlock Text="{DynamicResource Browser.Instruction}" FontWeight="SemiBold" FontSize="14" TextWrapping="Wrap" />
+                    <TextBlock x:Name="BrowserInstruction" Text="{DynamicResource Browser.Instruction}" FontWeight="SemiBold" FontSize="14" TextWrapping="Wrap" />
                     <TextBlock x:Name="UrlText" Foreground="{StaticResource MutedBrush}" FontFamily="Segoe UI" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
                 </StackPanel>
                 <Button x:Name="ImportButton" Grid.Column="2" Style="{StaticResource PrimaryButton}" Content="{DynamicResource Browser.ReadCurrent}" Click="Import_Click" />
             </Grid>
         </Border>
 
-        <wv2:WebView2 x:Name="Browser" Grid.Row="1" NavigationCompleted="Browser_NavigationCompleted" />
+        <Border x:Name="BrowserStatusPanel"
+                Grid.Row="1"
+                Visibility="Collapsed"
+                Background="#2D271D"
+                BorderBrush="#9C6B2A"
+                BorderThickness="0,0,0,1"
+                Padding="18,10">
+            <TextBlock x:Name="BrowserStatusText"
+                       Foreground="#FFD08A"
+                       FontSize="12"
+                       TextWrapping="Wrap" />
+        </Border>
 
-        <Border Grid.Row="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="18,10">
+        <wv2:WebView2 x:Name="Browser"
+                      Grid.Row="2"
+                      NavigationStarting="Browser_NavigationStarting"
+                      NavigationCompleted="Browser_NavigationCompleted" />
+
+        <Border Grid.Row="3" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="18,10">
             <TextBlock Text="{DynamicResource Browser.Privacy}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" />
         </Border>
     </Grid>

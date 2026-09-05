@@ -127,7 +127,6 @@ public static class NfoReader
             Actors = actors,
             ActorsText = JoinValues(actors.Select(actor => actor.Name)),
             Label = FindPrefixedTag(tags, "Label:"),
-            Series = FindPrefixedTag(tags, "Series:"),
             SourceUrl = ElementValue(root, "website"),
             SourceName = "local-nfo",
             SourceDisplayName = "本地 NFO"
@@ -160,6 +159,12 @@ public static class NfoReader
 
         foreach (var element in document.Descendants())
         {
+            if (string.Equals(element.Name.LocalName, "tag", StringComparison.OrdinalIgnoreCase) &&
+                Normalize(element.Value).StartsWith("Series:", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
             if (!StandardElementNames.Contains(element.Name.LocalName))
             {
                 return true;

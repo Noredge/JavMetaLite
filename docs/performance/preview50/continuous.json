@@ -1,0 +1,74 @@
+{
+  "Version": "1.2.0-preview.50",
+  "Runtime": "10.0.11",
+  "TimestampUtc": "2026-09-05T01:43:03.8826515Z",
+  "SameWindow": true,
+  "Notes": "Synthetic NFO/JPEG import, duplicate import, 36 real queue selections, full viewer, four languages, canceled DMM search, 10% HTTP500 then failed-source retry, clear queue per round. No live HTTP or media saves. GC after timing; working set/handles are diagnostic, not leak assertions.",
+  "Rows": [
+    {
+      "Round": 1,
+      "Count": 1000,
+      "ElapsedMs": 39181.89,
+      "MaxCacheCount": 10,
+      "MaxCacheBytes": 30720000,
+      "RetainedRemovedJobs": 0,
+      "InFlightRequests": 0,
+      "RetainedManagedBytes": 5749040,
+      "WorkingSetBytes": 271626240,
+      "Handles": 859,
+      "CumulativeDmmCalls": 1102
+    },
+    {
+      "Round": 2,
+      "Count": 1000,
+      "ElapsedMs": 39192.35,
+      "MaxCacheCount": 10,
+      "MaxCacheBytes": 30720000,
+      "RetainedRemovedJobs": 0,
+      "InFlightRequests": 0,
+      "RetainedManagedBytes": 5861360,
+      "WorkingSetBytes": 276553728,
+      "Handles": 866,
+      "CumulativeDmmCalls": 2204
+    },
+    {
+      "Round": 3,
+      "Count": 1000,
+      "ElapsedMs": 41077.53,
+      "MaxCacheCount": 10,
+      "MaxCacheBytes": 30720000,
+      "RetainedRemovedJobs": 0,
+      "InFlightRequests": 0,
+      "RetainedManagedBytes": 5909040,
+      "WorkingSetBytes": 282738688,
+      "Handles": 864,
+      "CumulativeDmmCalls": 3306
+    },
+    {
+      "Round": 4,
+      "Count": 1000,
+      "ElapsedMs": 43890.09,
+      "MaxCacheCount": 10,
+      "MaxCacheBytes": 30720000,
+      "RetainedRemovedJobs": 0,
+      "InFlightRequests": 0,
+      "RetainedManagedBytes": 5934328,
+      "WorkingSetBytes": 276647936,
+      "Handles": 858,
+      "CumulativeDmmCalls": 4408
+    },
+    {
+      "Round": 5,
+      "Count": 1000,
+      "ElapsedMs": 44737.95,
+      "MaxCacheCount": 10,
+      "MaxCacheBytes": 30720000,
+      "RetainedRemovedJobs": 0,
+      "InFlightRequests": 0,
+      "RetainedManagedBytes": 5989752,
+      "WorkingSetBytes": 277426176,
+      "Handles": 859,
+      "CumulativeDmmCalls": 5510
+    }
+  ]
+}

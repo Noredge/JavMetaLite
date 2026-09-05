@@ -156,6 +156,21 @@ internal static class TestImageFactory
     }
 }
 
+internal sealed class SelectiveImageHandler(byte[] imageBytes) : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request, CancellationToken cancellationToken) =>
+        Task.FromResult(request.RequestUri?.AbsolutePath == "/ok.jpg"
+            ? new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(imageBytes)
+                {
+                    Headers = { ContentType = new MediaTypeHeaderValue("image/jpeg") }
+                }
+            }
+            : new HttpResponseMessage(HttpStatusCode.NotFound));
+}
+
 internal sealed class StaticImageHandler(byte[] imageBytes) : HttpMessageHandler
 {
     protected override Task<HttpResponseMessage> SendAsync(

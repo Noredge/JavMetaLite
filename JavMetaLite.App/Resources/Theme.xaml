@@ -17,6 +17,28 @@
         <Setter Property="FontFamily" Value="{DynamicResource Ui.FontFamily}" />
     </Style>
 
+    <Style x:Key="DisclosureChevronPath" TargetType="Path">
+        <Setter Property="Data" Value="M 1 1 L 6 6 L 1 11" />
+        <Setter Property="Width" Value="7" />
+        <Setter Property="Height" Value="12" />
+        <Setter Property="Stretch" Value="Uniform" />
+        <Setter Property="Stroke" Value="{StaticResource MutedBrush}" />
+        <Setter Property="StrokeThickness" Value="1.8" />
+        <Setter Property="StrokeStartLineCap" Value="Round" />
+        <Setter Property="StrokeEndLineCap" Value="Round" />
+        <Setter Property="StrokeLineJoin" Value="Round" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type Button}}}" Value="True">
+                <Setter Property="Stroke" Value="{StaticResource AccentBorderBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsKeyboardFocused, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type Button}}}" Value="True">
+                <Setter Property="Stroke" Value="{StaticResource AccentBorderBrush}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
     <Style TargetType="Label">
         <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
         <Setter Property="FontFamily" Value="{DynamicResource Ui.FontFamily}" />
@@ -79,6 +101,11 @@
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
         <Setter Property="Background" Value="{StaticResource AccentBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+    </Style>
+
+    <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="Background" Value="#6B252D" />
+        <Setter Property="BorderBrush" Value="#A9414D" />
     </Style>
 
     <Style TargetType="TextBox">

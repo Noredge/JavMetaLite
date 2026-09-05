@@ -75,7 +75,6 @@ public static class LocalMetadataReviewComposer
         Director = source.Director,
         Maker = source.Maker,
         Label = source.Label,
-        Series = source.Series,
         RuntimeMinutes = source.RuntimeMinutes,
         ActorsText = source.ActorsText,
         GenresText = source.GenresText,

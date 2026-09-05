@@ -11,12 +11,13 @@ public static class NfoWriter
         MovieMetadata metadata,
         string? posterFileName,
         string? fanartFileName,
+        bool includeIdInTitle,
         bool overwrite,
         CancellationToken cancellationToken = default)
     {
         if (File.Exists(destinationPath) && !overwrite)
         {
-            throw new IOException($"NFO 已存在：{destinationPath}\n请勾选“直接保存并覆盖（跳过预览）”后重试。 ");
+            throw new IOException($"NFO 已存在：{destinationPath}\n请重新保存并在安全预览中确认覆盖。 ");
         }
 
         var directory = Path.GetDirectoryName(destinationPath)
@@ -41,17 +42,27 @@ public static class NfoWriter
                 await writer.WriteStartDocumentAsync();
                 await writer.WriteStartElementAsync(null, "movie", null);
 
-                await WriteElementAsync(writer, "title", metadata.Title);
+                var canonicalId = MovieIdParser.Normalize(metadata.Id);
+                await WriteElementAsync(
+                    writer,
+                    "title",
+                    JellyfinTitleFormatter.Format(canonicalId, metadata.Title, includeIdInTitle));
                 await WriteElementAsync(writer, "originaltitle", metadata.OriginalTitle);
-                await WriteElementAsync(writer, "id", metadata.Id);
+                await WriteElementAsync(writer, "id", canonicalId);
 
-                if (!string.IsNullOrWhiteSpace(metadata.Id))
+                if (!string.IsNullOrWhiteSpace(canonicalId))
                 {
-                    await writer.WriteStartElementAsync(null, "uniqueid", null);
-                    await writer.WriteAttributeStringAsync(null, "type", null, NormalizeProviderName(metadata.SourceName));
-                    await writer.WriteAttributeStringAsync(null, "default", null, "true");
-                    await writer.WriteStringAsync(metadata.Id.Trim());
-                    await writer.WriteEndElementAsync();
+                    await WriteUniqueIdAsync(writer, "javnumber", canonicalId, isDefault: true);
+
+                    var contentId = metadata.ContentId.Trim();
+                    var providerName = NormalizeProviderName(metadata.SourceName);
+                    if (contentId.Length > 0 &&
+                        !contentId.Equals(canonicalId, StringComparison.OrdinalIgnoreCase) &&
+                        !providerName.Equals("javnumber", StringComparison.OrdinalIgnoreCase) &&
+                        !providerName.Equals("local-nfo", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await WriteUniqueIdAsync(writer, providerName, contentId, isDefault: false);
+                    }
                 }
 
                 await WriteElementAsync(writer, "premiered", metadata.ReleaseDate);
@@ -85,11 +96,6 @@ public static class NfoWriter
                 if (!string.IsNullOrWhiteSpace(metadata.Label))
                 {
                     await WriteElementAsync(writer, "tag", $"Label: {metadata.Label.Trim()}");
-                }
-
-                if (!string.IsNullOrWhiteSpace(metadata.Series))
-                {
-                    await WriteElementAsync(writer, "tag", $"Series: {metadata.Series.Trim()}");
                 }
 
                 if (!string.IsNullOrWhiteSpace(posterFileName))
@@ -131,6 +137,22 @@ public static class NfoWriter
         {
             await writer.WriteElementStringAsync(null, name, null, value.Trim());
         }
+    }
+
+    private static async Task WriteUniqueIdAsync(
+        XmlWriter writer,
+        string providerName,
+        string value,
+        bool isDefault)
+    {
+        await writer.WriteStartElementAsync(null, "uniqueid", null);
+        await writer.WriteAttributeStringAsync(null, "type", null, providerName);
+        if (isDefault)
+        {
+            await writer.WriteAttributeStringAsync(null, "default", null, "true");
+        }
+        await writer.WriteStringAsync(value);
+        await writer.WriteEndElementAsync();
     }
 
     private static string ExtractYear(string? releaseDate) =>

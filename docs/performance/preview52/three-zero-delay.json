@@ -1,0 +1,68 @@
+{
+  "runtime": "10.0.11",
+  "count": 12,
+  "rounds": 1,
+  "delayMs": 0,
+  "imageWidths": "1500..1620",
+  "imageHeight": 1000,
+  "format": "JPEG",
+  "note": "Offline fake HTTP with deterministic latency; round 0 warmup excluded; memory sampled every 10 ms, not a hard upper bound.",
+  "rows": [
+    {
+      "round": 0,
+      "warmup": true,
+      "movies": 1,
+      "elapsedMs": 157.0709,
+      "cpuMs": 234.375,
+      "allocationBytes": 1498552,
+      "peakWorkingSet": 57380864,
+      "peakManaged": 1182480,
+      "imageRequests": 13,
+      "peakImageRequests": 1,
+      "peakMovies": 1,
+      "pendingAfter": 0,
+      "stages": {
+        "metadata.totalMs": 120.97,
+        "metadata.coverReadMs": 19.48,
+        "metadata.samplesReadMs": 30.17,
+        "metadata.prepareOutputsMs": 1.46,
+        "metadata.imageProcessMs": 39.25,
+        "metadata.imageWriteMs": 16.93,
+        "metadata.nfoWriteMs": 12.17,
+        "transaction.totalMs": 148.55,
+        "transaction.metadataPrepareMs": 132.91,
+        "transaction.stageAndVerifyMs": 7.31,
+        "transaction.commitMs": 7.22,
+        "transaction.cleanupMs": 0.94
+      }
+    },
+    {
+      "round": 1,
+      "warmup": false,
+      "movies": 12,
+      "elapsedMs": 1178.6539,
+      "cpuMs": 1687.5,
+      "allocationBytes": 17259480,
+      "peakWorkingSet": 71798784,
+      "peakManaged": 1425928,
+      "imageRequests": 156,
+      "peakImageRequests": 1,
+      "peakMovies": 1,
+      "pendingAfter": 0,
+      "stages": {
+        "metadata.totalMs": 1052.28,
+        "metadata.coverReadMs": 38.91,
+        "metadata.samplesReadMs": 367.28,
+        "metadata.prepareOutputsMs": 0.29,
+        "metadata.imageProcessMs": 457.24999999999994,
+        "metadata.imageWriteMs": 167.33999999999997,
+        "metadata.nfoWriteMs": 19.250000000000004,
+        "transaction.totalMs": 1169.4,
+        "transaction.metadataPrepareMs": 1064.06,
+        "transaction.stageAndVerifyMs": 6.920000000000001,
+        "transaction.commitMs": 90.80000000000001,
+        "transaction.cleanupMs": 7.449999999999999
+      }
+    }
+  ]
+}

@@ -36,7 +36,6 @@ public sealed class MetadataSourceSnapshot
             [MetadataField.Maker] = metadata.Maker,
             [MetadataField.Director] = metadata.Director,
             [MetadataField.Label] = metadata.Label,
-            [MetadataField.Series] = metadata.Series,
             [MetadataField.Actors] = metadata.ActorsText,
             [MetadataField.Genres] = metadata.GenresText,
             [MetadataField.Plot] = metadata.Plot,

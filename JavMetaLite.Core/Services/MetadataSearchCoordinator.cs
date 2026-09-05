@@ -31,6 +31,86 @@ public static class MetadataSearchCoordinator
         throw new InvalidOperationException("来源搜索没有返回结果。 ");
     }
 
+    public static Task<MetadataSourceSearchAttempt> SearchAttemptAsync(
+        string rawId,
+        IMetadataProvider provider,
+        CancellationToken cancellationToken = default,
+        TimeSpan? providerTimeout = null)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        var id = MovieIdParser.Normalize(rawId);
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            throw new ArgumentException("请先输入影片番号。", nameof(rawId));
+        }
+
+        return RunProviderAsync(
+            id,
+            provider,
+            "retry",
+            cancellationToken,
+            ValidateTimeout(providerTimeout));
+    }
+
+    public static async Task<MultiSourceSearchResult> RetryFailedAsync(
+        string rawId,
+        IReadOnlyList<MetadataSourceSearchAttempt> previousAttempts,
+        IReadOnlyList<IMetadataProvider> failedProviders,
+        CancellationToken cancellationToken = default,
+        TimeSpan? providerTimeout = null)
+    {
+        ArgumentNullException.ThrowIfNull(previousAttempts);
+        ArgumentNullException.ThrowIfNull(failedProviders);
+        var id = MovieIdParser.Normalize(rawId);
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            throw new ArgumentException("请先输入影片番号。", nameof(rawId));
+        }
+
+        var providersByName = failedProviders.ToDictionary(
+            provider => provider.Name,
+            StringComparer.OrdinalIgnoreCase);
+        var timeout = ValidateTimeout(providerTimeout);
+        var attemptTasks = previousAttempts.Select(previousAttempt =>
+        {
+            if (previousAttempt.Success)
+            {
+                return Task.FromResult(previousAttempt);
+            }
+
+            if (!providersByName.TryGetValue(previousAttempt.SourceName, out var provider))
+            {
+                // Retry is explicitly scoped by the caller. Keep excluded failures as history,
+                // without silently contacting another source or discarding its prior outcome.
+                return Task.FromResult(previousAttempt);
+            }
+
+            return RunProviderAsync(id, provider, "retry", cancellationToken, timeout);
+        });
+        var attempts = await Task.WhenAll(attemptTasks);
+        var successfulMetadata = attempts
+            .Where(attempt => attempt.Success)
+            .Select(attempt => attempt.Metadata!)
+            .ToArray();
+        if (successfulMetadata.Length == 0)
+        {
+            throw new MultiSourceSearchException(id, attempts);
+        }
+
+        try
+        {
+            var merged = successfulMetadata
+                .Skip(1)
+                .Aggregate(successfulMetadata[0], MetadataMerger.Merge);
+            return new MultiSourceSearchResult(merged, successfulMetadata, attempts);
+        }
+        catch (InvalidDataException exception)
+        {
+            AppLog.Error($"失败来源重试合并被拒绝 id={id}", exception);
+            throw new MultiSourceMergeException(id, attempts, exception);
+        }
+    }
+
     public static async Task<MultiSourceSearchResult> SearchAllAsync(
         string rawId,
         IMetadataProvider primaryProvider,
@@ -82,7 +162,7 @@ public static class MetadataSearchCoordinator
             AppLog.Error(
                 $"多来源合并被拒绝 id={id} primary={primaryProvider.Name} secondary={secondaryProvider.Name}",
                 exception);
-            throw;
+            throw new MultiSourceMergeException(id, attempts, exception);
         }
     }
 
@@ -95,10 +175,15 @@ public static class MetadataSearchCoordinator
     {
         var stopwatch = Stopwatch.StartNew();
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutSource.CancelAfter(providerTimeout);
+        if (provider is not IRequestScheduledMetadataProvider)
+        {
+            timeoutSource.CancelAfter(providerTimeout);
+        }
         try
         {
-            var metadata = await provider.SearchAsync(id, timeoutSource.Token);
+            var metadata = provider is IRequestScheduledMetadataProvider scheduled
+                ? await scheduled.SearchWithRequestTimeoutAsync(id, providerTimeout, cancellationToken)
+                : await provider.SearchAsync(id, timeoutSource.Token);
             stopwatch.Stop();
             var fieldCount = CountCandidateFields(metadata);
             AppLog.Info(

@@ -11,7 +11,6 @@ public static class MetadataMerger
         string.IsNullOrWhiteSpace(metadata.Director) ||
         string.IsNullOrWhiteSpace(metadata.Maker) ||
         string.IsNullOrWhiteSpace(metadata.Label) ||
-        string.IsNullOrWhiteSpace(metadata.Series) ||
         string.IsNullOrWhiteSpace(metadata.ActorsText) ||
         string.IsNullOrWhiteSpace(metadata.GenresText) ||
         string.IsNullOrWhiteSpace(metadata.Plot) ||
@@ -76,7 +75,6 @@ public static class MetadataMerger
             Director = Pick(primary.Director, fallback.Director),
             Maker = Pick(primary.Maker, fallback.Maker),
             Label = Pick(primary.Label, fallback.Label),
-            Series = Pick(primary.Series, fallback.Series),
             ActorsText = Pick(primary.ActorsText, fallback.ActorsText),
             Actors = actors,
             GenresText = Pick(primary.GenresText, fallback.GenresText),

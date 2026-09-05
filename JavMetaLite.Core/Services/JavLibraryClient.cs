@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text.RegularExpressions;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 using JavMetaLite.Core.Models;
@@ -10,6 +11,10 @@ namespace JavMetaLite.Core.Services;
 
 public sealed class JavLibraryClient : IMetadataProvider
 {
+    private static readonly Regex RatingNumberPattern = new(
+        @"(?<!\d)(?<number>\d+(?:[.,]\d+)?)(?!\d)",
+        RegexOptions.CultureInvariant);
+
     private readonly HttpClient _httpClient;
     private readonly HtmlParser _parser = new();
     private readonly bool _ownsClient;
@@ -116,7 +121,6 @@ public sealed class JavLibraryClient : IMetadataProvider
             Director = Text(document, "#video_director .text"),
             Maker = Text(document, "#video_maker .text"),
             Label = Text(document, "#video_label .text"),
-            Series = Text(document, "#video_series .text"),
             ActorsText = JoinDistinct(document.QuerySelectorAll("#video_cast .star a, #video_cast .star")),
             GenresText = JoinDistinct(document.QuerySelectorAll("#video_genres .genre a, #video_genres .genre")),
             Plot = description,
@@ -179,15 +183,39 @@ public sealed class JavLibraryClient : IMetadataProvider
 
     private static string ExtractRating(IDocument document)
     {
-        var value = Text(document, "#video_rating .score");
-        if (string.IsNullOrWhiteSpace(value))
+        foreach (var selector in new[]
+                 {
+                     "#video_review .text .score",
+                     "#video_rating .score",
+                     "#video_rating .text"
+                 })
         {
-            value = Text(document, "#video_rating .text");
+            var rating = NormalizeRating(Text(document, selector));
+            if (!string.IsNullOrWhiteSpace(rating))
+            {
+                return rating;
+            }
         }
 
-        var token = value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .FirstOrDefault(part => double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _));
-        return token ?? string.Empty;
+        return string.Empty;
+    }
+
+    private static string NormalizeRating(string value)
+    {
+        var match = RatingNumberPattern.Match(value);
+        if (!match.Success)
+        {
+            return string.Empty;
+        }
+
+        var token = match.Groups["number"].Value.Replace(',', '.');
+        return decimal.TryParse(
+            token,
+            NumberStyles.AllowDecimalPoint,
+            CultureInfo.InvariantCulture,
+            out var rating)
+            ? rating.ToString("0.############################", CultureInfo.InvariantCulture)
+            : string.Empty;
     }
 
     private static string AbsoluteUrl(string? value, string baseUrl)

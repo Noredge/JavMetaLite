@@ -3,7 +3,8 @@ param(
     [string]$DotNet = "dotnet",
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
-    [switch]$NoRestore
+    [switch]$NoRestore,
+    [string]$BuildOutputDirectory
 )
 
 Set-StrictMode -Version Latest
@@ -18,6 +19,8 @@ $projects = @(
 
 Push-Location $repositoryRoot
 try {
+    Write-Host "`n==> Release package validation" -ForegroundColor Cyan
+    & (Join-Path $PSScriptRoot "Test-ReleasePackage.ps1")
     foreach ($project in $projects) {
         Write-Host "`n==> $($project.Name)" -ForegroundColor Cyan
         $arguments = @(
@@ -27,6 +30,9 @@ try {
         )
         if ($NoRestore) {
             $arguments += "--no-restore"
+        }
+        if (-not [string]::IsNullOrWhiteSpace($BuildOutputDirectory)) {
+            $arguments += "-p:OutputPath=$BuildOutputDirectory"
         }
 
         & $DotNet @arguments

@@ -6,102 +6,42 @@
 
 [![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 
-JavMetaLite is a lightweight Windows metadata editor that handles one movie at a time. Select a movie, or drop one movie file or single-movie ID folder, then search selected sources, review and edit every field, and preview all file changes before saving. JavMetaLite does not scan a media library or write or move a movie before the user confirms the operation.
+> Current version: **1.2.0**.
 
-![JavMetaLite v1.0.0 main window](docs/images/javmetalite-v1.0.0-main.en.png)
+A Windows app for reviewing and organizing local movie metadata, individually or in batches, with Jellyfin-compatible output.
+
+![Single-movie workspace, v1.2.0](docs/images/javmetalite-v1.2.0-main-single.en.png)
+
+Synthetic demo data. [More screenshots](docs/SCREENSHOTS-v1.2.0.md).
 
 ## Features
 
-- Handles only the selected movie, with no batch scraping or library scan.
-- Uses LibreDMM for Japanese metadata, R18.dev for English metadata, and JAVLibrary as a manual browser fallback.
-- Lets the user choose a source for each field after a multi-source search and continue editing manually.
-- Reads and safely updates local NFO, poster, and fanart files while preserving unknown XML.
-- Produces Jellyfin-compatible NFO, poster, fanart, and optional `extrafanart/` files.
-- Keeps the movie in place, creates an ID folder beside it, or organizes it under a custom destination root.
-- Uses safe staged copies for cross-volume or UNC destinations. Full SHA-256 verification remains the default; an explicit faster file-size-only mode is available at the user's own risk.
-- Shows the actual file changes before saving by default and always blocks conflicting target movies.
-- Ships as a portable, self-contained Windows x64 executable with no .NET Runtime installation required.
+- Add movies or scan folders; group CD1/CD2 parts and review movies in a batch queue.
+- Search with LibreDMM (recommended default), R18.dev or custom multi-source rules. JAVLibrary is manual web lookup only.
+- Edit local NFO metadata, choose artwork sources and samples, and export NFO, poster, fanart and optional Extra Fanart.
+- Compare and delete local images in the viewer; the main window flags low-resolution covers for review.
+- Preview file changes before saving; keep movies in place or organize them into a chosen folder. Four UI languages supported.
 
 ## Quick start
 
-1. Download `JavMetaLite-v1.1.1-win-x64-portable.zip` from [GitHub Releases](https://github.com/Noredge/JavMetaLite/releases).
-2. Verify the archive against `SHA256SUMS.txt` from the same release, then extract it.
-3. Run `JavMetaLite.exe`, then choose a movie or drop one movie file or single-movie ID folder.
-4. Verify the detected ID, search for metadata, and choose suitable text and cover sources.
-5. Edit any fields and choose the outputs and destination.
-6. Review the save preview and confirm the operation.
+Windows 10/11 x64. No separate .NET Runtime installation; the embedded browser requires Microsoft Edge WebView2 Runtime.
 
-Windows may show a SmartScreen warning for the unsigned executable on first launch. Download only from this repository's official releases and verify the SHA-256 checksum.
+1. Get a published portable ZIP from [Releases](https://github.com/Noredge/JavMetaLite/releases), or use the supplied local build. Verify its SHA-256 and extract it.
+2. Run `JavMetaLite.exe`, then choose or drop movies/folders.
+3. Check IDs, search and adjust metadata, images and save settings as needed.
+4. Click Save and review the changes. Batch saving does not require opening every movie's preview.
 
-## Output example
+## Keep in mind
 
-```text
-Destination root/
-  IPX-123/
-    IPX-123.mp4
-    IPX-123.nfo
-    IPX-123-poster.jpg
-    IPX-123-fanart.jpg
-    extrafanart/       # optional
-      fanart1.jpg
-      fanart2.jpg
-```
+- LibreDMM is recommended for batches. R18 rate limits can slow searches.
+- The queue is not restored after closing. Removing queue entries does not delete movie files; confirmed local-image deletion is immediate.
+- Back up important media. Saves stop on failure or cancellation; keep recovery folders if restoration fails.
+- Sources may contain adult material. Respect their terms and applicable age/legal requirements.
 
-## Metadata sources
+## More
 
-| Source | Primary use | Notes |
-| --- | --- | --- |
-| LibreDMM | Japanese metadata, full cover, sample images | Recommended Japanese source |
-| R18.dev | English metadata, full cover, Gallery | English output and supporting source |
-| JAVLibrary | Manual browser import | Use when verification is required or automatic sources fail |
+[Release notes](docs/RELEASE-NOTES-v1.2.0.md) · [Delivery checklist (简体中文)](docs/RELEASE-v1.2.0.zh-Hans.md) · [Changelog](CHANGELOG.md) · [Development and testing](TESTING.md)
 
-Source sites can change or become temporarily unavailable. Multi-source search limits how long each source may wait; switch sources or enter data manually if a source fails instead of restarting the application repeatedly.
+Building requires the .NET SDK 10.0.400. Logs and preferences are under `%LOCALAPPDATA%\JavMetaLite`.
 
-## Safety model
-
-- Does not move the movie or directly overwrite metadata by default.
-- The preview lists files that will be created, updated, moved, or left unchanged.
-- Never overwrites another movie when the target movie already exists.
-- By default, verifies file size and SHA-256 before removing the source during cross-volume transfers. The optional fast mode skips content verification but keeps staging, size checks, conflict protection, and rollback.
-- Restores overwritten metadata and attempts to preserve the original movie location if a commit fails.
-- Searching sends the detected movie ID to the selected metadata sources. Selecting a movie and reading local NFO data does not automatically write anything online or locally.
-- Manual JAVLibrary import reads only the current movie page; its embedded WebView2 browser may retain cookies used for site verification.
-
-No file organizer replaces a backup. Back up important media and use a test copy the first time you use a custom destination.
-
-## Requirements and limits
-
-- Windows 10/11 x64.
-- On first launch, follows supported Simplified Chinese, Traditional Chinese, English, or Japanese Windows display languages; other system languages fall back to English. Later launches remember the user's selection.
-- The embedded browser requires Microsoft Edge WebView2 Runtime, normally already installed on Windows 10/11.
-- Supports selecting MP4, MKV, AVI, and WMV movies; does not write metadata inside the media container.
-- Does not scan a library, process movies in batches, or automatically move unknown subtitle or companion files.
-- Does not currently create `actors/`; actor images are provided through remote `thumb` entries in the NFO.
-- Network-share speed, permissions, and availability depend on Windows and the destination server.
-- Follow each source site's terms and query only at a reasonable rate.
-- Metadata sources may contain adult material. Use the application only where it is legal and appropriate for your age and location.
-
-Logs are stored in `%LOCALAPPDATA%\JavMetaLite\Logs` and kept for 14 days by default. User preferences are stored in `%LOCALAPPDATA%\JavMetaLite\settings.json`.
-
-## Development and testing
-
-.NET 10 SDK is required:
-
-```powershell
-dotnet build .\JavMetaLite.App\JavMetaLite.App.csproj
-.\scripts\Test-Automated.ps1
-```
-
-Create a clean Windows x64 portable package and SHA-256 checksum:
-
-```powershell
-.\scripts\New-ReleasePackage.ps1
-```
-
-See [TESTING.md](TESTING.md) for the automated test layers and [CHANGELOG.md](CHANGELOG.md) for version history.
-
-## License
-
-JavMetaLite is available under the [MIT License](LICENSE), copyright © 2026 Noredge. Third-party components remain under their respective terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-JavMetaLite is not affiliated with the metadata source sites it reads. The project's MIT License does not relicense data provided by those sites.
+[MIT License](LICENSE) · © 2026 Noredge · [Third-party notices](THIRD_PARTY_NOTICES.md). Not affiliated with source sites; their data is not covered by this project's license.

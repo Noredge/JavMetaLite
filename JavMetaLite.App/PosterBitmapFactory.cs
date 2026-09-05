@@ -5,7 +5,7 @@ namespace JavMetaLite.App;
 
 public static class PosterBitmapFactory
 {
-    public static BitmapImage CreateFrozen(byte[] imageBytes)
+    public static BitmapImage CreateFrozen(byte[] imageBytes, int decodePixelWidth = 0)
     {
         ArgumentNullException.ThrowIfNull(imageBytes);
         if (imageBytes.Length == 0)
@@ -17,6 +17,10 @@ public static class PosterBitmapFactory
         var bitmap = new BitmapImage();
         bitmap.BeginInit();
         bitmap.CacheOption = BitmapCacheOption.OnLoad;
+        if (decodePixelWidth > 0)
+        {
+            bitmap.DecodePixelWidth = decodePixelWidth;
+        }
         bitmap.StreamSource = stream;
         bitmap.EndInit();
         bitmap.Freeze();

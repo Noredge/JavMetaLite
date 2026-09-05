@@ -13,7 +13,8 @@ public static class NfoRoundTripWriter
         bool updatePosterReference,
         string? posterFileName,
         bool updateFanartReference,
-        string? fanartFileName)
+        string? fanartFileName,
+        bool includeIdInTitle)
     {
         ArgumentNullException.ThrowIfNull(bundle);
         ArgumentNullException.ThrowIfNull(metadata);
@@ -27,16 +28,15 @@ public static class NfoRoundTripWriter
         }
 
         var original = bundle.Metadata;
-        UpdateScalarWhenChanged(root, "title", original.Title, metadata.Title);
+        var canonicalId = MovieIdParser.Normalize(metadata.Id);
+        var jellyfinTitle = JellyfinTitleFormatter.Format(canonicalId, metadata.Title, includeIdInTitle);
+        UpdateScalarWhenChanged(root, "title", original.Title, jellyfinTitle);
         UpdateScalarWhenChanged(root, "originaltitle", original.OriginalTitle, metadata.OriginalTitle);
-        if (Changed(original.Id, metadata.Id))
+        if (Changed(original.Id, canonicalId))
         {
-            SetScalar(root, "id", metadata.Id);
+            SetScalar(root, "id", canonicalId);
         }
-        if (Changed(original.ContentId, metadata.ContentId) || Changed(original.Id, metadata.Id))
-        {
-            UpdateDefaultUniqueId(root, metadata);
-        }
+        UpdateUniqueIds(root, metadata, canonicalId);
         if (Changed(original.ReleaseDate, metadata.ReleaseDate))
         {
             SetScalar(root, "premiered", metadata.ReleaseDate);
@@ -63,10 +63,6 @@ public static class NfoRoundTripWriter
         {
             SetPrefixedTag(root, "Label:", metadata.Label);
         }
-        if (Changed(original.Series, metadata.Series))
-        {
-            SetPrefixedTag(root, "Series:", metadata.Series);
-        }
         if (updatePosterReference)
         {
             SetPosterReference(root, posterFileName);
@@ -85,7 +81,8 @@ public static class NfoRoundTripWriter
         bool updatePosterReference,
         string? posterFileName,
         bool updateFanartReference,
-        string? fanartFileName) =>
+        string? fanartFileName,
+        bool includeIdInTitle) =>
         !XNode.DeepEquals(
             bundle.CloneOriginalDocument(),
             CreateUpdatedDocument(
@@ -94,7 +91,8 @@ public static class NfoRoundTripWriter
                 updatePosterReference,
                 posterFileName,
                 updateFanartReference,
-                fanartFileName));
+                fanartFileName,
+                includeIdInTitle));
 
     public static async Task WriteAsync(
         string destinationPath,
@@ -104,6 +102,7 @@ public static class NfoRoundTripWriter
         string? posterFileName,
         bool updateFanartReference,
         string? fanartFileName,
+        bool includeIdInTitle,
         bool overwrite,
         CancellationToken cancellationToken = default)
     {
@@ -118,7 +117,8 @@ public static class NfoRoundTripWriter
             updatePosterReference,
             posterFileName,
             updateFanartReference,
-            fanartFileName);
+            fanartFileName,
+            includeIdInTitle);
         var directory = Path.GetDirectoryName(destinationPath)
             ?? throw new InvalidOperationException("无法确定 NFO 输出目录。");
         Directory.CreateDirectory(directory);
@@ -160,32 +160,61 @@ public static class NfoRoundTripWriter
         }
     }
 
-    private static void UpdateDefaultUniqueId(XElement root, MovieMetadata metadata)
+    private static void UpdateUniqueIds(XElement root, MovieMetadata metadata, string canonicalId)
     {
         var uniqueIds = Elements(root, "uniqueid").ToList();
-        var target = uniqueIds.FirstOrDefault(element => string.Equals(
-                         element.Attribute("default")?.Value,
-                         "true",
-                         StringComparison.OrdinalIgnoreCase))
-                     ?? uniqueIds.FirstOrDefault();
-        var value = FirstNonEmpty(metadata.ContentId, metadata.Id);
-        if (value.Length == 0)
+        var canonical = uniqueIds.FirstOrDefault(element => string.Equals(
+            element.Attribute("type")?.Value,
+            "javnumber",
+            StringComparison.OrdinalIgnoreCase));
+        if (canonicalId.Length == 0)
         {
-            if (target is not null)
+            if (canonical is not null)
             {
-                target.Remove();
+                canonical.Remove();
             }
             return;
         }
 
-        if (target is null)
+        if (canonical is null)
         {
-            target = NewElement(root, "uniqueid");
-            target.SetAttributeValue("type", NormalizeProviderName(metadata.SourceName));
-            target.SetAttributeValue("default", "true");
-            root.Add(target);
+            canonical = NewElement(root, "uniqueid");
+            root.Add(canonical);
         }
-        target.Value = value;
+        canonical.SetAttributeValue("type", "javnumber");
+        canonical.SetAttributeValue("default", "true");
+        canonical.Value = canonicalId;
+
+        foreach (var other in Elements(root, "uniqueid").Where(element => !ReferenceEquals(element, canonical)))
+        {
+            if (string.Equals(other.Attribute("default")?.Value, "true", StringComparison.OrdinalIgnoreCase))
+            {
+                other.SetAttributeValue("default", null);
+            }
+        }
+
+        var contentId = Normalize(metadata.ContentId);
+        var providerName = NormalizeProviderName(metadata.SourceName);
+        if (contentId.Length == 0 ||
+            contentId.Equals(canonicalId, StringComparison.OrdinalIgnoreCase) ||
+            providerName.Equals("javnumber", StringComparison.OrdinalIgnoreCase) ||
+            providerName.Equals("local-nfo", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var sourceId = Elements(root, "uniqueid").FirstOrDefault(element => string.Equals(
+            element.Attribute("type")?.Value,
+            providerName,
+            StringComparison.OrdinalIgnoreCase));
+        if (sourceId is null)
+        {
+            sourceId = NewElement(root, "uniqueid");
+            root.Add(sourceId);
+        }
+        sourceId.SetAttributeValue("type", providerName);
+        sourceId.SetAttributeValue("default", null);
+        sourceId.Value = contentId;
     }
 
     private static void SetScalar(XElement root, string localName, string? value)

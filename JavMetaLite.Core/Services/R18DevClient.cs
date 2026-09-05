@@ -6,21 +6,31 @@ using JavMetaLite.Core.Models;
 
 namespace JavMetaLite.Core.Services;
 
-public sealed class R18DevClient : IMetadataProvider
+public sealed class R18DevClient : IRequestScheduledMetadataProvider
 {
+    public const string HomePageUrl = "https://r18.dev/";
+
     private readonly HttpClient _httpClient;
     private readonly bool _ownsClient;
+    private readonly R18RequestScheduler _requestScheduler;
 
-    public R18DevClient(HttpClient? httpClient = null)
+    public R18DevClient(HttpClient? httpClient = null, R18RequestScheduler? requestScheduler = null)
     {
         _ownsClient = httpClient is null;
         _httpClient = httpClient ?? CreateClient();
+        _requestScheduler = requestScheduler ?? R18RequestScheduler.Shared;
     }
 
     public string Name => "r18dev";
     public string DisplayName => "R18.dev";
 
-    public async Task<MovieMetadata> SearchAsync(string rawId, CancellationToken cancellationToken = default)
+    public event Action<TimeSpan>? CoolingDown;
+
+    public Task<MovieMetadata> SearchAsync(string rawId, CancellationToken cancellationToken = default) =>
+        SearchWithRequestTimeoutAsync(rawId, TimeSpan.FromSeconds(10), cancellationToken);
+
+    public async Task<MovieMetadata> SearchWithRequestTimeoutAsync(
+        string rawId, TimeSpan requestTimeout, CancellationToken cancellationToken)
     {
         var id = MovieIdParser.Normalize(rawId);
         if (string.IsNullOrWhiteSpace(id))
@@ -28,13 +38,12 @@ public sealed class R18DevClient : IMetadataProvider
             throw new ArgumentException("请先输入影片番号。", nameof(rawId));
         }
 
-        var normalized = new string(id.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
         var guessedContentId = BuildCombinedContentId(id);
         Exception? lastError = null;
         if (!string.IsNullOrWhiteSpace(guessedContentId))
         {
             var guessedUrl = BuildCombinedUrl(guessedContentId);
-            var guessedResponse = await TryDownloadJsonAsync(guessedUrl, cancellationToken);
+            var guessedResponse = await TryDownloadJsonAsync(guessedUrl, cancellationToken, requestTimeout);
             lastError = guessedResponse.Error ?? lastError;
             if (guessedResponse.Json is not null)
             {
@@ -49,8 +58,8 @@ public sealed class R18DevClient : IMetadataProvider
             }
         }
 
-        var compactUrl = $"https://r18.dev/videos/vod/movies/detail/-/dvd_id={Uri.EscapeDataString(normalized)}/json";
-        var compactResponse = await TryDownloadJsonAsync(compactUrl, cancellationToken);
+        var compactUrl = BuildSearchUrl(id);
+        var compactResponse = await TryDownloadJsonAsync(compactUrl, cancellationToken, requestTimeout);
         lastError = compactResponse.Error ?? lastError;
         if (compactResponse.Json is not null)
         {
@@ -60,7 +69,7 @@ public sealed class R18DevClient : IMetadataProvider
             {
                 AppLog.Info($"R18.dev 从 dvd_id 解析实际 content_id id={id} contentId={discoveredContentId}");
                 var discoveredUrl = BuildCombinedUrl(discoveredContentId);
-                var discoveredResponse = await TryDownloadJsonAsync(discoveredUrl, cancellationToken);
+                var discoveredResponse = await TryDownloadJsonAsync(discoveredUrl, cancellationToken, requestTimeout);
                 lastError = discoveredResponse.Error ?? lastError;
                 if (discoveredResponse.Json is not null)
                 {
@@ -138,7 +147,6 @@ public sealed class R18DevClient : IMetadataProvider
             Director = FirstNonEmpty(GetPeople(root, "directors", "name_romaji", "name_kanji", "name"), GetString(root, "director")),
             Maker = FirstNonEmpty(GetString(root, "maker_name_en"), GetString(root, "maker_name_ja"), GetNestedName(root, "maker")),
             Label = FirstNonEmpty(GetString(root, "label_name_en"), GetString(root, "label_name_ja"), GetNestedName(root, "label")),
-            Series = FirstNonEmpty(GetString(root, "series_name_en"), GetString(root, "series_name_ja"), GetString(root, "series_name"), GetNestedName(root, "series")),
             ActorsText = string.Join(", ", actors.Select(actor => actor.Name)),
             Actors = actors,
             GenresText = GetCategories(root),
@@ -152,6 +160,53 @@ public sealed class R18DevClient : IMetadataProvider
             SourceUrl = sourceUrl,
             SourceDisplayName = DisplayName
         };
+    }
+
+    public static string BuildSearchUrl(string rawId)
+    {
+        var normalized = new string(MovieIdParser.Normalize(rawId).Where(char.IsLetterOrDigit).ToArray())
+            .ToLowerInvariant();
+        return $"https://r18.dev/videos/vod/movies/detail/-/dvd_id={Uri.EscapeDataString(normalized)}/json";
+    }
+
+    public static string BuildDetailPageUrl(string rawId)
+    {
+        var contentId = BuildCombinedContentId(rawId);
+        return string.IsNullOrWhiteSpace(contentId)
+            ? HomePageUrl
+            : BuildDetailPageUrlFromContentId(contentId);
+    }
+
+    internal static string BuildDetailPageUrlFromContentId(string contentId) =>
+        $"https://r18.dev/videos/vod/movies/detail/-/id={Uri.EscapeDataString(SanitizeContentId(contentId))}/";
+
+    public async Task<MovieMetadata> ImportDetailPageAsync(
+        string detailPageUrl,
+        string? fallbackId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var jsonUrl = BrowserImportRouting.BuildR18JsonUrl(detailPageUrl);
+        if (jsonUrl is null)
+        {
+            throw new InvalidDataException("R18.dev 当前页面不是可导入的影片详情页。 ");
+        }
+
+        var response = await TryDownloadJsonAsync(jsonUrl, cancellationToken);
+        if (response.Json is not null)
+        {
+            try
+            {
+                return ParseJson(response.Json, jsonUrl, fallbackId);
+            }
+            catch (Exception exception) when (exception is InvalidDataException or JsonException or MetadataNotFoundException)
+            {
+                throw new InvalidDataException("R18.dev 详情资料格式不正确。 ", exception);
+            }
+        }
+
+        throw response.Error is null
+            ? new MetadataNotFoundException(DisplayName, fallbackId ?? string.Empty)
+            : new InvalidDataException("R18.dev 暂时无法读取当前详情页。 ", response.Error);
     }
 
     private static IReadOnlyList<string> GetScreenshotUrls(JsonElement root, string contentId)
@@ -253,24 +308,14 @@ public sealed class R18DevClient : IMetadataProvider
 
     private async Task<(string? Json, Exception? Error)> TryDownloadJsonAsync(
         string url,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TimeSpan? requestTimeout = null)
     {
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Referrer = new Uri("https://r18.dev/");
-            using var response = await _httpClient.SendAsync(
-                request,
-                HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken);
-            if (response.StatusCode == HttpStatusCode.NotFound ||
-                response.Content.Headers.ContentType?.MediaType?.Contains("html", StringComparison.OrdinalIgnoreCase) == true)
-            {
-                return (null, null);
-            }
-
-            response.EnsureSuccessStatusCode();
-            return (await response.Content.ReadAsStringAsync(cancellationToken), null);
+            return (await _requestScheduler.DownloadJsonAsync(_httpClient, url,
+                requestTimeout ?? TimeSpan.FromSeconds(10), cancellationToken,
+                wait => CoolingDown?.Invoke(wait)), null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

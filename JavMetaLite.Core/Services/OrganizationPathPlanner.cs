@@ -4,6 +4,19 @@ namespace JavMetaLite.Core.Services;
 
 public static class OrganizationPathPlanner
 {
+    public static OrganizationOptions ResolveEffectiveOptions(
+        OrganizationOptions options,
+        bool usesMultipartNaming)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return usesMultipartNaming && options.TargetMode is OrganizationTargetMode.VideoDirectory
+            ? new OrganizationOptions(
+                OrganizationTargetMode.SourceNumberFolder,
+                options.RenameVideo,
+                crossVolumeVerification: options.CrossVolumeVerification)
+            : options;
+    }
+
     public static OrganizationPathPlan Resolve(
         string videoPath,
         string movieId,

@@ -206,7 +206,6 @@ public sealed class MetadataReviewSession : IDisposable
         MetadataField.Maker => metadata.Maker,
         MetadataField.Director => metadata.Director,
         MetadataField.Label => metadata.Label,
-        MetadataField.Series => metadata.Series,
         MetadataField.Actors => metadata.ActorsText,
         MetadataField.Genres => metadata.GenresText,
         MetadataField.Plot => metadata.Plot,
@@ -239,9 +238,6 @@ public sealed class MetadataReviewSession : IDisposable
             case MetadataField.Label:
                 metadata.Label = value;
                 break;
-            case MetadataField.Series:
-                metadata.Series = value;
-                break;
             case MetadataField.Actors:
                 metadata.ActorsText = value;
                 break;
@@ -270,7 +266,6 @@ public sealed class MetadataReviewSession : IDisposable
             nameof(MovieMetadata.Maker) => MetadataField.Maker,
             nameof(MovieMetadata.Director) => MetadataField.Director,
             nameof(MovieMetadata.Label) => MetadataField.Label,
-            nameof(MovieMetadata.Series) => MetadataField.Series,
             nameof(MovieMetadata.ActorsText) => MetadataField.Actors,
             nameof(MovieMetadata.GenresText) => MetadataField.Genres,
             nameof(MovieMetadata.Plot) => MetadataField.Plot,
@@ -285,7 +280,6 @@ public sealed class MetadataReviewSession : IDisposable
             nameof(MovieMetadata.Maker) or
             nameof(MovieMetadata.Director) or
             nameof(MovieMetadata.Label) or
-            nameof(MovieMetadata.Series) or
             nameof(MovieMetadata.ActorsText) or
             nameof(MovieMetadata.GenresText) or
             nameof(MovieMetadata.Plot) or

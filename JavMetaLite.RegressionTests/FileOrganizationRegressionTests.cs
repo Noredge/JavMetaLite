@@ -21,6 +21,7 @@ internal static class FileOrganizationRegressionTests
         new("target", "同卷自定义根目录安全执行并保持影片字节", TestSameVolumeCustomTargetExecution),
         new("target", "自定义根目录校验、冲突、跨盘符与 UNC 规划", TestCustomTargetValidation),
         new("transfer", "安全复制、SHA-256 校验并在提交后移除来源", TestVerifiedCopySuccess),
+        new("transfer", "多 CD 跨卷校验复制后共同提交", TestMultipartVerifiedCopySuccess),
         new("transfer", "快速跨盘复制仅检查大小并跳过内容校验", TestFastCrossVolumeCopySuccess),
         new("transfer", "复制期间取消会保留来源并清理目标", TestVerifiedCopyCancellation),
         new("transfer", "SHA-256 不一致会拒绝提交并保留来源", TestVerifiedCopyHashMismatch),
@@ -31,11 +32,17 @@ internal static class FileOrganizationRegressionTests
         new("roundtrip", "NFO 预览只在实际存在未知 XML 时提示保留", TestConditionalUnknownXmlPreview),
         new("roundtrip", "已有 NFO 无变化零写入，修改后保留未知 XML", TestRoundTripUpdate),
         new("roundtrip", "整理时迁移并重命名已知 sidecar", TestRoundTripOrganization),
+        new("roundtrip", "Preview 6 多 CD sidecar 自动迁移为 Jellyfin 文件夹命名", TestMultipartFolderSidecarMigration),
+        new("roundtrip", "Preview 28 本地 extrafanart 选择在保存事务中安全同步", TestLocalExtrafanartReconciliation),
+        new("roundtrip", "Preview 32 全面替换本地 extrafanart", TestReplaceLocalExtrafanart),
+        new("roundtrip", "Preview 41 未搜索时替换选项不得删除本地 extrafanart", TestReplaceLocalExtrafanartRequiresOnlineSearch),
+        new("roundtrip", "替换样张下载全部或部分失败时保留原文件", TestReplacementDownloadFailurePreservesFiles),
         new("conflict", "载入后的 NFO 被外部修改时拒绝保存", TestRoundTripExternalChange),
         new("conflict", "影片冲突即使允许覆盖也必须阻止", TestMovieConflict),
         new("conflict", "计划生成后出现 metadata 冲突必须重新检测", TestConflictAfterPlanning),
         new("rollback", "metadata 提交中断时恢复旧文件", TestLockedMetadataRollback),
         new("rollback", "影片移动失败时删除新输出并恢复现场", TestLockedVideoRollback),
+        new("rollback", "多 CD 第二分段移动失败时原子恢复全部分段", TestMultipartVideoRollback),
         new("validation", "无输出、无番号和文件占位目标均被拒绝", TestInvalidPlans)
     ];
 
@@ -376,6 +383,40 @@ internal static class FileOrganizationRegressionTests
         workspace.AssertNoTemporaryArtifacts();
     }
 
+    private static async Task TestMultipartVerifiedCopySuccess()
+    {
+        using var workspace = new TestWorkspace("multipart-verified-copy-success");
+        var cd1 = workspace.WriteFile("incoming/IPX-891-CD1.mkv", [.. VideoBytes, 0x11]);
+        var cd2 = workspace.WriteFile("incoming/IPX-891-CD2.mkv", [.. VideoBytes, 0x22]);
+        var cd1Hash = AssertEx.Sha256(cd1);
+        var cd2Hash = AssertEx.Sha256(cd2);
+        var customRoot = workspace.CreateDirectory("library");
+        var metadata = Metadata("IPX-891", "多分段安全复制");
+        var plan = FileOrganizationService.BuildPlan(
+            [cd1, cd2],
+            metadata,
+            NfoOnly(),
+            new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, true, customRoot)) with
+        {
+            RequiresVerifiedVideoCopy = true
+        };
+
+        using var outputService = new OutputService();
+        var result = await new FileOrganizationService(outputService)
+            .ExecuteAsync(plan, metadata, false);
+
+        AssertEx.Equal(2, result.VideoPaths.Count);
+        AssertEx.FileDoesNotExist(cd1);
+        AssertEx.FileDoesNotExist(cd2);
+        AssertEx.Equal(cd1Hash, AssertEx.Sha256(result.VideoPaths[0]));
+        AssertEx.Equal(cd2Hash, AssertEx.Sha256(result.VideoPaths[1]));
+        AssertEx.Equal(OutputNamingMode.MovieFolder, plan.OutputNamingMode);
+        AssertEx.FileExists(Path.Combine(plan.TargetDirectory, "movie.nfo"));
+        AssertEx.FileDoesNotExist(Path.Combine(plan.TargetDirectory, "IPX-891.nfo"));
+        AssertEx.FileDoesNotExist(Path.Combine(plan.TargetDirectory, "IPX-891-cd1.nfo"));
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
     private static async Task TestFastCrossVolumeCopySuccess()
     {
         using var workspace = new TestWorkspace("fast-cross-volume-copy-success");
@@ -664,7 +705,7 @@ internal static class FileOrganizationRegressionTests
             directOptions,
             new OrganizationOptions(false, false));
         await organizer.ExecuteAsync(directPlan, changedMetadata, true);
-        AssertEx.Equal("新标题", XDocument.Load(nfoPath).Root?.Element("title")?.Value);
+        AssertEx.Equal("IPX-321 · 新标题", XDocument.Load(nfoPath).Root?.Element("title")?.Value);
         workspace.AssertNoTemporaryArtifacts();
     }
 
@@ -682,7 +723,7 @@ internal static class FileOrganizationRegressionTests
             var plan = FileOrganizationService.BuildPlan(
                 sourcePath,
                 editable,
-                new SaveOptions(true, false, false, false, false),
+                new SaveOptions(true, false, false, false, true, false),
                 new OrganizationOptions(false, false),
                 new LocalSaveContext(bundle, null, null));
             return plan.Changes.Single(change => change.Kind == PlannedChangeKind.UpdateFile).Description;
@@ -708,9 +749,10 @@ internal static class FileOrganizationRegressionTests
             <?xml version="1.0" encoding="utf-8"?>
             <!--roundtrip-comment-->
             <movie custom="keep-root">
-              <title>旧标题</title>
+              <title>SNOS-255 · 旧标题</title>
               <id>SNOS-255</id>
-              <uniqueid type="jav" default="true">snos00255</uniqueid>
+              <uniqueid type="javnumber" default="true">SNOS-255</uniqueid>
+              <uniqueid type="jav">snos00255</uniqueid>
               <thumb aspect="poster">SNOS-255-poster.jpg</thumb>
               <fanart><thumb>SNOS-255-fanart.jpg</thumb></fanart>
               <unknown answer="42"><child>keep</child></unknown>
@@ -729,7 +771,7 @@ internal static class FileOrganizationRegressionTests
             posterPath,
             fanartPath);
         var context = new LocalSaveContext(bundle, localArtwork, localArtwork);
-        var options = new SaveOptions(true, true, true, false, false);
+        var options = new SaveOptions(true, true, true, false, true, false);
         var noChangePlan = FileOrganizationService.BuildPlan(
             sourcePath,
             editable,
@@ -764,8 +806,14 @@ internal static class FileOrganizationRegressionTests
         await organizer.ExecuteAsync(updatePlan, editable, true);
 
         var updated = XDocument.Load(nfoPath, LoadOptions.PreserveWhitespace);
-        AssertEx.Equal("更新后的标题", updated.Root?.Element("title")?.Value);
+        AssertEx.Equal("SNOS-255 · 更新后的标题", updated.Root?.Element("title")?.Value);
         AssertEx.Equal("新增简介", updated.Root?.Element("plot")?.Value);
+        var canonicalUniqueId = updated.Root?.Elements("uniqueid").Single(element =>
+            element.Attribute("type")?.Value == "javnumber");
+        AssertEx.Equal("SNOS-255", canonicalUniqueId?.Value);
+        AssertEx.Equal("true", canonicalUniqueId?.Attribute("default")?.Value);
+        AssertEx.Equal("snos00255", updated.Root?.Elements("uniqueid").Single(element =>
+            element.Attribute("type")?.Value == "jav").Value);
         AssertEx.Equal("keep-root", updated.Root?.Attribute("custom")?.Value);
         AssertEx.Equal("42", updated.Root?.Element("unknown")?.Attribute("answer")?.Value);
         AssertEx.Equal("keep", updated.Root?.Element("unknown")?.Element("child")?.Value);
@@ -799,7 +847,7 @@ internal static class FileOrganizationRegressionTests
         var plan = FileOrganizationService.BuildPlan(
             sourcePath,
             editable,
-            new SaveOptions(true, true, true, false, false),
+            new SaveOptions(true, true, true, false, true, false),
             new OrganizationOptions(true, true),
             new LocalSaveContext(bundle, localArtwork, localArtwork));
 
@@ -849,7 +897,7 @@ internal static class FileOrganizationRegressionTests
         var plan = FileOrganizationService.BuildPlan(
             sourcePath,
             editable,
-            new SaveOptions(true, true, true, false, false),
+            new SaveOptions(true, true, true, false, true, false),
             new OrganizationOptions(true, true),
             context);
 
@@ -881,6 +929,78 @@ internal static class FileOrganizationRegressionTests
         AssertEx.FileDoesNotExist(nfoPath);
         AssertEx.FileDoesNotExist(posterPath);
         AssertEx.FileDoesNotExist(fanartPath);
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestMultipartFolderSidecarMigration()
+    {
+        using var workspace = new TestWorkspace("multipart-folder-sidecar-migration");
+        var movieDirectory = workspace.CreateDirectory("OFJE-123");
+        var cd1 = workspace.WriteFile("OFJE-123/OFJE-123-cd1.mp4", [.. VideoBytes, 0x01]);
+        var cd2 = workspace.WriteFile("OFJE-123/OFJE-123-cd2.mp4", [.. VideoBytes, 0x02]);
+        var legacyNfo = workspace.PathOf("OFJE-123", "OFJE-123.nfo");
+        await File.WriteAllTextAsync(legacyNfo, """
+            <movie custom="keep">
+              <title>旧版多分段结构</title>
+              <id>OFJE-123</id>
+              <thumb aspect="poster">OFJE-123-poster.jpg</thumb>
+              <fanart><thumb>OFJE-123-fanart.jpg</thumb></fanart>
+              <unknown>preserve</unknown>
+            </movie>
+            """);
+        var legacyPoster = workspace.WriteFile(
+            "OFJE-123/OFJE-123-poster.jpg",
+            TestImageFactory.CreateJpeg(420, 600));
+        var legacyFanart = workspace.WriteFile(
+            "OFJE-123/OFJE-123-fanart.jpg",
+            TestImageFactory.CreateJpeg(800, 538));
+        var posterHash = AssertEx.Sha256(legacyPoster);
+        var fanartHash = AssertEx.Sha256(legacyFanart);
+
+        var located = LocalSidecarLocator.Locate(cd1, "OFJE-123", preferFolderSidecars: true);
+        AssertEx.Equal(legacyNfo, located.NfoPath);
+        AssertEx.Equal(legacyPoster, located.PosterPath);
+        AssertEx.Equal(legacyFanart, located.FanartPath);
+        var bundle = await NfoReader.ReadAsync(located);
+        var editable = LocalMetadataReviewComposer.CreateLocal(bundle.Metadata).Metadata;
+        var localArtwork = ArtworkCoverCandidate.CreateSidecarPair(
+            new MetadataCandidateSource("local-images", "本地图片", movieDirectory),
+            legacyPoster,
+            legacyFanart);
+        var plan = FileOrganizationService.BuildPlan(
+            [cd1, cd2],
+            editable,
+            new SaveOptions(true, true, true, false, true, false),
+            new OrganizationOptions(false, false),
+            new LocalSaveContext(bundle, localArtwork, localArtwork));
+
+        AssertEx.Equal(movieDirectory, plan.TargetDirectory);
+        AssertEx.Equal(OrganizationTargetMode.SourceNumberFolder, plan.OrganizationOptions.TargetMode);
+        AssertEx.Equal(OutputNamingMode.MovieFolder, plan.OutputNamingMode);
+        AssertEx.False(plan.VideoWillMove, "An existing ID folder should not be nested or move its CD files.");
+        AssertEx.True(plan.OutputGenerationOptions.WriteNfo, "Renamed image references should update movie.nfo.");
+        AssertEx.Equal(2, plan.SidecarTransfers.Count);
+        AssertEx.Equal(3, plan.SourcePathsToRetire.Count);
+
+        using var outputService = new OutputService();
+        var result = await new FileOrganizationService(outputService).ExecuteAsync(plan, editable, false);
+        var movieNfo = Path.Combine(movieDirectory, "movie.nfo");
+        var poster = Path.Combine(movieDirectory, "poster.jpg");
+        var fanart = Path.Combine(movieDirectory, "fanart.jpg");
+        AssertEx.Equal(2, result.VideoPaths.Count);
+        AssertEx.FileExists(cd1);
+        AssertEx.FileExists(cd2);
+        AssertEx.FileExists(movieNfo);
+        AssertEx.Equal(posterHash, AssertEx.Sha256(poster));
+        AssertEx.Equal(fanartHash, AssertEx.Sha256(fanart));
+        var migratedNfo = XDocument.Load(movieNfo);
+        AssertEx.Equal("poster.jpg", migratedNfo.Root?.Elements("thumb")
+            .Single(element => element.Attribute("aspect")?.Value == "poster").Value);
+        AssertEx.Equal("fanart.jpg", migratedNfo.Root?.Element("fanart")?.Element("thumb")?.Value);
+        AssertEx.Equal("preserve", migratedNfo.Root?.Element("unknown")?.Value);
+        AssertEx.FileDoesNotExist(legacyNfo);
+        AssertEx.FileDoesNotExist(legacyPoster);
+        AssertEx.FileDoesNotExist(legacyFanart);
         workspace.AssertNoTemporaryArtifacts();
     }
 
@@ -982,7 +1102,7 @@ internal static class FileOrganizationRegressionTests
             new MetadataCandidateSource("libredmm", "LibreDMM", "https://example.test/IPX-666"),
             metadata.CoverUrl);
         var context = new LocalSaveContext(bundle, localArtwork, onlineArtwork);
-        var options = new SaveOptions(true, true, false, false, true);
+        var options = new SaveOptions(true, true, false, false, true, true);
         var plan = FileOrganizationService.BuildPlan(
             sourcePath,
             metadata,
@@ -1004,6 +1124,239 @@ internal static class FileOrganizationRegressionTests
         AssertEx.Equal(posterHash, AssertEx.Sha256(posterPath), "The locked poster changed.");
         AssertEx.FileExists(sourcePath);
         workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestLocalExtrafanartReconciliation()
+    {
+        using var workspace = new TestWorkspace("local-extrafanart-sync");
+        var sourcePath = workspace.WriteFile("IPX-665.mp4", VideoBytes);
+        var extra1Path = workspace.WriteFile(
+            "extrafanart/fanart1.jpg",
+            TestImageFactory.CreateJpeg(800, 450));
+        var extra2Path = workspace.WriteFile(
+            "extrafanart/fanart2.jpg",
+            TestImageFactory.CreateJpeg(960, 540));
+        var metadata = Metadata("IPX-665", "本地剧照同步");
+        metadata.ScreenshotUrls = [extra1Path];
+        var context = new LocalSaveContext(null, null, null)
+        {
+            LocalExtrafanartPaths = [extra1Path, extra2Path],
+            CanReplaceLocalExtrafanart = true
+        };
+        var options = new SaveOptions(false, false, false, true, true, true);
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            options,
+            new OrganizationOptions(false, false),
+            context);
+
+        AssertEx.True(
+            plan.Changes.Any(change => change.Kind is PlannedChangeKind.RemoveFile &&
+                                       string.Equals(change.DestinationPath, extra2Path, StringComparison.OrdinalIgnoreCase)),
+            "The deselected local extrafanart was not shown as a removal.");
+        AssertEx.True(
+            plan.SourcePathsToRetire.Contains(extra2Path, StringComparer.OrdinalIgnoreCase),
+            "The deselected local extrafanart was not included in the safe transaction.");
+
+        using var outputService = new OutputService();
+        var result = await new FileOrganizationService(outputService)
+            .ExecuteAsync(plan, metadata, true);
+        AssertEx.Equal(1, result.Outputs.ExtrafanartPaths.Count);
+        AssertEx.FileExists(extra1Path);
+        AssertEx.FileDoesNotExist(extra2Path);
+        _ = PosterImageProcessor.GetDimensions(await File.ReadAllBytesAsync(extra1Path));
+        AssertEx.FileExists(sourcePath);
+
+        var movingSource = workspace.WriteFile("incoming/IPX-664.mp4", VideoBytes);
+        var preservedExtra = workspace.WriteFile(
+            "incoming/extrafanart/custom.webp",
+            TestImageFactory.CreateJpeg(640, 360));
+        var preservedHash = AssertEx.Sha256(preservedExtra);
+        var preserveContext = new LocalSaveContext(null, null, null)
+        {
+            LocalExtrafanartPaths = [preservedExtra]
+        };
+        var preservePlan = FileOrganizationService.BuildPlan(
+            movingSource,
+            Metadata("IPX-664", "保留本地剧照"),
+            NfoOnly(),
+            new OrganizationOptions(true, true),
+            preserveContext);
+        var preservedTarget = Path.Combine(preservePlan.TargetDirectory, "extrafanart", "custom.webp");
+        AssertEx.True(
+            preservePlan.SidecarTransfers.Any(transfer =>
+                transfer.Role is LocalSidecarRole.Extrafanart &&
+                string.Equals(transfer.DestinationPath, preservedTarget, StringComparison.OrdinalIgnoreCase)),
+            "Disabled extrafanart output did not preserve the existing local image during organization.");
+        var preserveResult = await new FileOrganizationService(outputService)
+            .ExecuteAsync(preservePlan, Metadata("IPX-664", "保留本地剧照"), false);
+        AssertEx.FileDoesNotExist(preservedExtra);
+        AssertEx.FileExists(preservedTarget);
+        AssertEx.Equal(preservedHash, AssertEx.Sha256(preservedTarget));
+        AssertEx.FileExists(preserveResult.VideoPath);
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestReplaceLocalExtrafanart()
+    {
+        using var workspace = new TestWorkspace("replace-local-extrafanart");
+        var sourcePath = workspace.WriteFile("IPX-666.mp4", VideoBytes);
+        var extra1Path = workspace.WriteFile(
+            "extrafanart/fanart1.jpg",
+            TestImageFactory.CreateJpeg(800, 450));
+        var extra2Path = workspace.WriteFile(
+            "extrafanart/fanart2.jpg",
+            TestImageFactory.CreateJpeg(960, 540));
+        var onlineSelection = workspace.WriteFile(
+            "download-cache/replacement.jpg",
+            TestImageFactory.CreateJpeg(1200, 675));
+        var metadata = Metadata("IPX-666", "全面替换本地剧照");
+        metadata.ScreenshotUrls = [extra1Path, extra2Path, onlineSelection];
+        var context = new LocalSaveContext(null, null, null)
+        {
+            LocalExtrafanartPaths = [extra1Path, extra2Path],
+            CanReplaceLocalExtrafanart = true
+        };
+        var options = new SaveOptions(false, false, false, true, true, true, ReplaceLocalExtrafanart: true);
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            options,
+            new OrganizationOptions(false, false),
+            context);
+
+        AssertEx.Equal(1, plan.ExtrafanartSourceLocations?.Count ?? -1);
+        AssertEx.Equal(Path.GetFullPath(onlineSelection), plan.ExtrafanartSourceLocations![0]);
+        AssertEx.True(
+            plan.SourcePathsToRetire.Contains(extra2Path, StringComparer.OrdinalIgnoreCase),
+            "Full replacement did not retire the trailing local extrafanart.");
+
+        using var outputService = new OutputService();
+        var result = await new FileOrganizationService(outputService)
+            .ExecuteAsync(plan, metadata, true);
+        AssertEx.Equal(1, result.Outputs.ExtrafanartPaths.Count);
+        AssertEx.FileExists(extra1Path);
+        AssertEx.FileDoesNotExist(extra2Path);
+        var dimensions = PosterImageProcessor.GetDimensions(await File.ReadAllBytesAsync(extra1Path));
+        AssertEx.Equal(1200, dimensions.Width);
+        AssertEx.Equal(675, dimensions.Height);
+
+        metadata.ScreenshotUrls = [];
+        var clearPlan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            options,
+            new OrganizationOptions(false, false),
+            new LocalSaveContext(null, null, null)
+            {
+                LocalExtrafanartPaths = [extra1Path],
+                CanReplaceLocalExtrafanart = true
+            });
+        AssertEx.Equal(0, clearPlan.ExtrafanartSourceLocations?.Count ?? -1);
+        var clearResult = await new FileOrganizationService(outputService)
+            .ExecuteAsync(clearPlan, metadata, true);
+        AssertEx.Equal(0, clearResult.Outputs.ExtrafanartPaths.Count);
+        AssertEx.FileDoesNotExist(extra1Path);
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestReplaceLocalExtrafanartRequiresOnlineSearch()
+    {
+        using var workspace = new TestWorkspace("replace-local-extrafanart-no-search");
+        var sourcePath = workspace.WriteFile("IPX-667.mp4", VideoBytes);
+        var extra1Path = workspace.WriteFile(
+            "extrafanart/fanart1.jpg",
+            TestImageFactory.CreateJpeg(800, 450));
+        var extra2Path = workspace.WriteFile(
+            "extrafanart/fanart2.jpg",
+            TestImageFactory.CreateJpeg(960, 540));
+        var extra1Hash = AssertEx.Sha256(extra1Path);
+        var extra2Hash = AssertEx.Sha256(extra2Path);
+        var metadata = Metadata("IPX-667", "未搜索不得替换本地剧照");
+        metadata.ScreenshotUrls = [extra1Path, extra2Path];
+        var context = new LocalSaveContext(null, null, null)
+        {
+            LocalExtrafanartPaths = [extra1Path, extra2Path],
+            CanReplaceLocalExtrafanart = false
+        };
+        var options = new SaveOptions(
+            false,
+            false,
+            false,
+            true,
+            true,
+            true,
+            ReplaceLocalExtrafanart: true);
+        var plan = FileOrganizationService.BuildPlan(
+            sourcePath,
+            metadata,
+            options,
+            new OrganizationOptions(false, false),
+            context);
+
+        AssertEx.True(!plan.OutputGenerationOptions.DownloadExtrafanart,
+            "The no-search save plan still enabled extrafanart generation.");
+        AssertEx.True(plan.ExtrafanartSourceLocations is null,
+            "The no-search save plan exposed replacement sources.");
+        AssertEx.True(!plan.Changes.Any(change => change.Kind is PlannedChangeKind.RemoveFile),
+            "The no-search save preview still proposed deleting local extrafanart.");
+        AssertEx.True(plan.Changes.Count(change =>
+            change.Kind is PlannedChangeKind.KeepFile &&
+            change.Description.Contains("extrafanart", StringComparison.OrdinalIgnoreCase)) == 2,
+            "The no-search save preview did not preserve every local extrafanart.");
+
+        using var outputService = new OutputService();
+        var result = await new FileOrganizationService(outputService)
+            .ExecuteAsync(plan, metadata, true);
+        AssertEx.Equal(0, result.Outputs.ExtrafanartPaths.Count);
+        AssertEx.FileExists(extra1Path);
+        AssertEx.FileExists(extra2Path);
+        AssertEx.Equal(extra1Hash, AssertEx.Sha256(extra1Path));
+        AssertEx.Equal(extra2Hash, AssertEx.Sha256(extra2Path));
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestReplacementDownloadFailurePreservesFiles()
+    {
+        foreach (var multipart in new[] { false, true })
+        foreach (var partialSuccess in new[] { false, true })
+        {
+            using var workspace = new TestWorkspace($"replacement-failure-{multipart}-{partialSuccess}");
+            var source = workspace.WriteFile(multipart ? "IPX-668-cd1.mp4" : "IPX-668.mp4", VideoBytes);
+            var videos = multipart
+                ? new[] { source, workspace.WriteFile("IPX-668-cd2.mp4", VideoBytes) }
+                : new[] { source };
+            var oldExtra = workspace.WriteFile("extrafanart/fanart1.jpg", TestImageFactory.CreateJpeg());
+            var oldNfo = workspace.WriteFile("keep.nfo", System.Text.Encoding.UTF8.GetBytes("<movie />"));
+            var originalHashes = videos.Append(oldExtra).Append(oldNfo)
+                .ToDictionary(path => path, AssertEx.Sha256);
+            var metadata = Metadata("IPX-668", "下载失败不应清除旧图");
+            metadata.ScreenshotUrls = partialSuccess
+                ? ["https://images.example.test/ok.jpg", "https://images.example.test/missing.jpg"]
+                : ["https://images.example.test/missing.jpg"];
+            var plan = FileOrganizationService.BuildPlan(
+                videos, metadata,
+                new SaveOptions(true, false, false, true, true, false, ReplaceLocalExtrafanart: true),
+                new OrganizationOptions(false, false),
+                new LocalSaveContext(null, null, null)
+                {
+                    LocalExtrafanartPaths = [oldExtra],
+                    CanReplaceLocalExtrafanart = true
+                });
+            using var client = new HttpClient(new SelectiveImageHandler(TestImageFactory.CreateJpeg(120, 80)));
+            using var output = new OutputService(client);
+            await AssertEx.ThrowsAsync<InvalidDataException>(
+                () => new FileOrganizationService(output).ExecuteAsync(plan, metadata, true),
+                "Failed replacement samples were treated as an intentional empty/partial selection.");
+            foreach (var (path, hash) in originalHashes)
+            {
+                AssertEx.FileExists(path);
+                AssertEx.Equal(hash, AssertEx.Sha256(path));
+            }
+            AssertEx.FileDoesNotExist(Path.Combine(plan.TargetDirectory, multipart ? "movie.nfo" : "IPX-668.nfo"));
+            workspace.AssertNoTemporaryArtifacts();
+        }
     }
 
     private static async Task TestLockedVideoRollback()
@@ -1034,11 +1387,46 @@ internal static class FileOrganizationRegressionTests
         workspace.AssertNoTemporaryArtifacts();
     }
 
+    private static async Task TestMultipartVideoRollback()
+    {
+        using var workspace = new TestWorkspace("multipart-locked-video");
+        var cd1 = workspace.WriteFile("incoming/IPX-900-CD1.mp4", [.. VideoBytes, 0x01]);
+        var cd2 = workspace.WriteFile("incoming/IPX-900-CD2.mp4", [.. VideoBytes, 0x02]);
+        var cd1Hash = AssertEx.Sha256(cd1);
+        var cd2Hash = AssertEx.Sha256(cd2);
+        var metadata = Metadata("IPX-900", "多分段回滚");
+        var plan = FileOrganizationService.BuildPlan(
+            [cd1, cd2],
+            metadata,
+            NfoOnly(),
+            new OrganizationOptions(true, true));
+        using var outputService = new OutputService();
+        var organizer = new FileOrganizationService(outputService);
+
+        using (var lockedCd2 = new FileStream(cd2, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            await AssertEx.ThrowsAsync<IOException>(
+                () => organizer.ExecuteAsync(plan, metadata, false),
+                "A locked second CD did not interrupt the multipart move.");
+        }
+
+        AssertEx.FileExists(cd1);
+        AssertEx.FileExists(cd2);
+        AssertEx.Equal(cd1Hash, AssertEx.Sha256(cd1));
+        AssertEx.Equal(cd2Hash, AssertEx.Sha256(cd2));
+        foreach (var transfer in plan.VideoTransfers)
+        {
+            AssertEx.FileDoesNotExist(transfer.TargetPath);
+        }
+        AssertEx.FileDoesNotExist(Path.Combine(plan.TargetDirectory, "movie.nfo"));
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
     private static async Task TestInvalidPlans()
     {
         using var workspace = new TestWorkspace("invalid-plans");
         var sourcePath = workspace.WriteFile("incoming/source.mp4", VideoBytes);
-        var noOutputs = new SaveOptions(false, false, false, false, false);
+        var noOutputs = new SaveOptions(false, false, false, false, true, false);
         AssertEx.Throws<InvalidOperationException>(
             () => FileOrganizationService.BuildPlan(
                 sourcePath,
@@ -1080,7 +1468,7 @@ internal static class FileOrganizationRegressionTests
     };
 
     private static SaveOptions NfoOnly(bool overwrite = false) =>
-        new(true, false, false, false, overwrite);
+        new(true, false, false, false, true, overwrite);
 
     private sealed record LayoutScenario(
         bool CreateFolder,

@@ -9,7 +9,6 @@ public enum MetadataField
     Maker,
     Director,
     Label,
-    Series,
     Actors,
     Genres,
     Plot,

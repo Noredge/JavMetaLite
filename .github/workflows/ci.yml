@@ -27,11 +27,33 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
 
-      - name: Set up .NET 10
+      - name: Set up the reviewed .NET SDK
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
+
+      - name: Show SDK identity
+        shell: pwsh
+        run: dotnet --info
 
       - name: Run automated release gate
         shell: pwsh
         run: .\scripts\Test-Automated.ps1 -Configuration Release
+
+      - name: Build and verify the portable package
+        shell: pwsh
+        run: |
+          .\scripts\New-ReleasePackage.ps1
+          .\scripts\Test-PortablePackage.ps1
+
+      - name: Upload the verified portable package
+        uses: actions/upload-artifact@v7
+        with:
+          name: portable-package
+          path: |
+            release/*portable.zip
+            release/*portable.zip.sha256
+            release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
