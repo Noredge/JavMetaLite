@@ -15,6 +15,8 @@ To repeat package validation after a successful gate:
 .\scripts\Test-PortablePackage.ps1
 ```
 
+Layout tests pin and verify their own window's actual width so a small CI desktop cannot silently narrow the requested 1120-DIP layout. Original clipping, source-switch stability and breakpoint assertions remain enabled. The full gate includes a constrained-host sizing regression; `dotnet run --project JavMetaLite.UiSmokeTests -- --layout` additionally repeats both four-language layout matrices with a 1040-DIP host limit, without changing display settings or production UI.
+
 ## Run the complete gate
 
 ```powershell

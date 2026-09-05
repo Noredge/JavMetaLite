@@ -12,12 +12,13 @@ namespace JavMetaLite.UiSmokeTests;
 
 internal static partial class Program
 {
-    private static void TestReadabilityCloseout()
+    private static void TestReadabilityCloseout(double hostMaximumWidth = double.PositiveInfinity)
     {
         var originalLanguage = LocalizationService.CurrentLanguageCode;
         var directory = Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "final-fix56", "readability");
         Directory.CreateDirectory(directory);
-        var window = new MainWindow(new AppPreferencesStore(Path.Combine(directory, "unused-settings.json")));
+        var window = new MainWindow(new AppPreferencesStore(Path.Combine(directory, "unused-settings.json")))
+            { MaxWidth = hostMaximumWidth };
         window.Show();
         var language = (ComboBox)window.FindName("LanguageComboBox");
         try
@@ -31,12 +32,12 @@ internal static partial class Program
                         .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     foreach (var width in new[] { 930d, 1120d })
                     {
-                        window.Width = width;
+                        SetLayoutTestWidth(window, width);
                         var source = (Button)window.FindName("ArtworkSourceButton");
                         source.Content = "LibreDMM ▾";
                         source.Visibility = Visibility.Visible;
                         window.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
-                        window.UpdateLayout();
+                        SetLayoutTestWidth(window, width);
                         var context = $"{code}/{(batch ? "batch" : "single")}/{width}";
                         var header = (Grid)window.FindName("ArtworkSourceHeader");
                         var heading = (TextBlock)window.FindName("ArtworkPreviewHeading");
@@ -56,7 +57,7 @@ internal static partial class Program
                         foreach (var item in target.Items.OfType<ComboBoxItem>())
                         {
                             target.SelectedItem = item;
-                            window.UpdateLayout();
+                            SetLayoutTestWidth(window, width);
                             var text = FindVisualChildren<TextBlock>(target)
                                 .FirstOrDefault(candidate => candidate.IsVisible && candidate.Text == item.Content?.ToString())
                                 ?? throw new InvalidOperationException($"Selected target text missing: {context}");

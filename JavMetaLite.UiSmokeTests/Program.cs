@@ -40,6 +40,8 @@ internal static partial class Program
                 return RunFinalReviewFixTests(args);
             if (args.FirstOrDefault() == "--version-display")
                 return RunVersionDisplayTests(args);
+            if (args.FirstOrDefault() == "--layout")
+                return RunLayoutTests();
             RunTests();
             return 0;
         }
@@ -78,6 +80,7 @@ internal static partial class Program
             Path.GetTempPath(), "JavMetaLite-queue-keyboard-" + Guid.NewGuid().ToString("N"))));
         Console.WriteLine("UI PASS canceledPreviewRevisit=True canceledSourcePreviewRevisit=True completedPreviewCache=True missingArtworkCache=True lateViewerImageIgnored=True viewerCloseCancels=True");
         TestSearchPredicateParity();
+        TestRestrictedLayoutHost();
         TestSearchToolbarLayout();
         TestReadabilityCloseout();
         TestVersionDisplay(Path.Combine(Path.GetTempPath(), "JavMetaLite-version-display-" + Guid.NewGuid().ToString("N")));

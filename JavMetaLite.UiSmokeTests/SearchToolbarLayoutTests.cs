@@ -11,10 +11,11 @@ namespace JavMetaLite.UiSmokeTests;
 
 internal static partial class Program
 {
-    private static void TestSearchToolbarLayout()
+    private static void TestSearchToolbarLayout(double hostMaximumWidth = double.PositiveInfinity)
     {
         var originalLanguage = LocalizationService.CurrentLanguageCode;
-        var window = new MainWindow();
+        var window = new MainWindow { MaxWidth = hostMaximumWidth };
+        var minimumWidth = window.MinWidth;
         window.Show();
         var language = (ComboBox)window.FindName("LanguageComboBox");
         var toolbar = (Border)window.FindName("SearchToolbar");
@@ -36,24 +37,22 @@ internal static partial class Program
                 {
                     ((RadioButton)window.FindName(batch ? "BatchModeButton" : "SingleModeButton"))
                         .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                    window.Width = 1120;
-                    window.UpdateLayout();
-                    var offset = window.Width - toolbar.ActualWidth;
+                    SetLayoutTestWidth(window, 1120);
+                    var offset = window.ActualWidth - toolbar.ActualWidth;
                     var widths = new[] { 930d, 1000, 1120, 1320 }
                         .Concat(new[] { 539d, 540, 541, 649, 650, 651, 719, 720, 721 }.Select(width => width + offset))
-                        .Where(width => width >= window.MinWidth).Distinct().Order().ToArray();
+                        .Where(width => width >= minimumWidth).Distinct().Order().ToArray();
                     foreach (var width in widths)
                     {
-                        window.Width = width;
-                        window.UpdateLayout();
+                        SetLayoutTestWidth(window, width);
                         var position = host.TranslatePoint(new Point(), layout);
                         var hostWidth = host.ActualWidth;
                         var row = Grid.GetRow(host);
                         foreach (var mode in MetadataSearchSourceModes.Supported)
                         {
                             source.SelectedItem = source.Items.OfType<ComboBoxItem>().Single(item => item.Tag?.ToString() == mode);
-                            window.UpdateLayout();
-                            var context = $"{code}/{(batch ? "batch" : "single")}/{width:0}/{mode} toolbar={toolbar.ActualWidth:0}";
+                            SetLayoutTestWidth(window, width);
+                            var context = $"{code}/{(batch ? "batch" : "single")}/{width:0}/{mode} actualWindow={window.ActualWidth:0} toolbar={toolbar.ActualWidth:0}";
                             if (Grid.GetRow(host) != row || Math.Abs(host.ActualWidth - hostWidth) > 0.5 ||
                                 (position - host.TranslatePoint(new Point(), layout)).Length > 0.5)
                                 throw new InvalidOperationException($"Source change rearranged toolbar: {context}");
@@ -111,7 +110,7 @@ internal static partial class Program
                             if (Math.Abs(width - 1120) < 0.5)
                             {
                                 source.IsDropDownOpen = true;
-                                window.UpdateLayout();
+                                SetLayoutTestWidth(window, width);
                                 var dmm = source.Items.OfType<ComboBoxItem>().Single(item => item.Tag?.ToString() == "libredmm");
                                 if (dmm.Content?.ToString() != LocalizationService.Get("Main.Source.LibreDmmRecommended") ||
                                     Grid.GetRow(host) != row || Math.Abs(host.ActualWidth - hostWidth) > 0.5)
