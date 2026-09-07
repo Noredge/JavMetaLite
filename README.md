@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 
-> Current version: **1.2.0**.
+> Current version: **1.2.1**.
 
 A Windows app for reviewing and organizing local movie metadata, individually or in batches, with Jellyfin-compatible output.
 
@@ -18,7 +18,8 @@ Synthetic demo data. [More screenshots](docs/SCREENSHOTS-v1.2.0.md).
 
 - Add movies or scan folders; group CD1/CD2 parts and review movies in a batch queue.
 - Search with LibreDMM (recommended default), R18.dev or custom multi-source rules. JAVLibrary is manual web lookup only.
-- Edit local NFO metadata, choose artwork sources and samples, and export NFO, poster, fanart and optional Extra Fanart.
+- Edit local NFO metadata, choose artwork sources and stills, and export NFO, poster, fanart and optional stills (`extrafanart`).
+- Read `movie.nfo` and folder-level artwork in dedicated movie folders; retain their names when saving in place.
 - Compare and delete local images in the viewer; the main window flags low-resolution covers for review.
 - Preview file changes before saving; keep movies in place or organize them into a chosen folder. Four UI languages supported.
 
@@ -40,7 +41,7 @@ Windows 10/11 x64. No separate .NET Runtime installation; the embedded browser r
 
 ## More
 
-[Release notes](docs/RELEASE-NOTES-v1.2.0.md) · [Delivery checklist (简体中文)](docs/RELEASE-v1.2.0.zh-Hans.md) · [Changelog](CHANGELOG.md) · [Development and testing](TESTING.md)
+[Release notes](docs/RELEASE-NOTES-v1.2.1.md) · [Delivery checklist (简体中文)](docs/RELEASE-v1.2.1.zh-Hans.md) · [Changelog](CHANGELOG.md) · [Development and testing](TESTING.md)
 
 Building requires the .NET SDK 10.0.400. Logs and preferences are under `%LOCALAPPDATA%\JavMetaLite`.
 

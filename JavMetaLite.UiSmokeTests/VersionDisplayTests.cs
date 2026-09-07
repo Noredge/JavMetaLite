@@ -48,7 +48,8 @@ internal static partial class Program
             }
             var informational = typeof(MainWindow).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
             var fileVersion = typeof(MainWindow).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()!.Version;
-            if (informational != MainWindow.ApplicationVersion || fileVersion != "1.2.0.0")
+            var expectedFileVersion = informational.Split('-', '+')[0] + ".0";
+            if (informational != MainWindow.ApplicationVersion || fileVersion != expectedFileVersion)
                 throw new InvalidOperationException("Assembly version identity is inconsistent.");
             Console.WriteLine($"UI PASS version={informational} fileVersion={fileVersion} releaseFooterFourLanguages=True previewFooterFourLanguages=True buildMetadataNotPrerelease=True languageSwitchRefresh=True");
         }

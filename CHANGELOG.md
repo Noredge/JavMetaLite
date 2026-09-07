@@ -1,6 +1,14 @@
 # Changelog
 
-v1.2.0 freezes the accepted preview.56 functionality. See the [release notes](docs/RELEASE-NOTES-v1.2.0.md), [delivery checklist](docs/RELEASE-v1.2.0.zh-Hans.md) and [finalization record](docs/FINAL-v1.2.0.zh-Hans.md).
+See the [1.2.1 release notes](docs/RELEASE-NOTES-v1.2.1.md) and [delivery checklist](docs/RELEASE-v1.2.1.zh-Hans.md).
+
+## v1.2.1
+
+- Read folder-level `movie.nfo`, `poster` and `fanart` for an unambiguous single-movie folder, while retaining filename-based lookup priority and existing multipart output rules.
+- Preserve folder-level names for single-movie in-place saves; keep existing naming rules when organizing into a new directory. Preserve PNG encoding when replacing PNG artwork.
+- Read an explicit NFO `cid` separately from the default movie number.
+- Remove only the empty source `extrafanart` directory involved in a successful move. Keep nonempty directories, parent folders and directories needed after cancellation or failure.
+- Use consistent still-image terminology across the four UI languages. No dependency or search-policy changes.
 
 ## v1.2.0
 

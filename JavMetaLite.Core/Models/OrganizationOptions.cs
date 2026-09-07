@@ -124,6 +124,8 @@ public sealed record SavePlan(
 
     public OutputNamingMode OutputNamingMode { get; init; } = OutputNamingMode.VideoBase;
 
+    public OutputFileNames? OutputFileNames { get; init; }
+
     public IReadOnlyList<VideoFileTransfer> VideoTransfers { get; init; } =
         [new(SourceVideoPath, TargetVideoPath, null, false)];
 

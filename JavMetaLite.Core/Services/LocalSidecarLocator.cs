@@ -34,6 +34,11 @@ public static class LocalSidecarLocator
             .Select(path => (Name: Path.GetFileName(path), Path: path))
             .Where(file => !string.IsNullOrWhiteSpace(file.Name))
             .ToDictionary(file => file.Name!, file => file.Path, StringComparer.OrdinalIgnoreCase);
+        // Directory-level metadata belongs to a movie only when every video is in its group.
+        var groupKey = MovieFileSet.GetGroupKey(fullVideoPath);
+        var canUseFolderSidecars = files.Values.Where(VideoFileSupport.HasSupportedExtension)
+            .All(path => MovieFileSet.GetGroupKey(path).Equals(groupKey, StringComparison.OrdinalIgnoreCase));
+        preferFolderSidecars &= canUseFolderSidecars;
         string? nfoPath = null;
         if (preferFolderSidecars)
         {
@@ -46,6 +51,9 @@ public static class LocalSidecarLocator
                     files.TryGetValue($"{videoBaseName}.nfo", out var legacyNfoPath)
             ? legacyNfoPath
             : null;
+
+        if (canUseFolderSidecars && nfoPath is null)
+            files.TryGetValue("movie.nfo", out nfoPath);
 
         var posterPath = (preferFolderSidecars
                              ? FindStandaloneArtwork(files, ["poster", "cover", "folder", "movie", "default"])
@@ -61,6 +69,11 @@ public static class LocalSidecarLocator
                          (!baseName.Equals(videoBaseName, StringComparison.OrdinalIgnoreCase)
                              ? FindArtwork(files, videoBaseName, "-fanart")
                              : null);
+        if (canUseFolderSidecars)
+        {
+            posterPath ??= FindStandaloneArtwork(files, ["poster"]);
+            fanartPath ??= FindStandaloneArtwork(files, ["fanart"]);
+        }
 
         return new LocalSidecarPaths(
             fullVideoPath,

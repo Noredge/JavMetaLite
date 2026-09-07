@@ -72,7 +72,8 @@ public sealed class OutputService : IDisposable
         NfoWriteContext? nfoWriteContext,
         OutputNamingMode namingMode,
         CancellationToken cancellationToken = default,
-        IReadOnlyList<string>? extrafanartSourceLocations = null)
+        IReadOnlyList<string>? extrafanartSourceLocations = null,
+        OutputFileNames? outputFileNames = null)
     {
         if (!File.Exists(sourceVideoPath))
         {
@@ -86,14 +87,15 @@ public sealed class OutputService : IDisposable
 
         var directory = Path.GetDirectoryName(outputVideoPath)!;
         var baseName = Path.GetFileNameWithoutExtension(outputVideoPath);
+        var names = outputFileNames ?? OutputFileNames.Create(baseName, namingMode);
         var nfoPath = options.WriteNfo
-            ? Path.Combine(directory, namingMode is OutputNamingMode.MovieFolder ? "movie.nfo" : $"{baseName}.nfo")
+            ? names.Resolve(directory, names.Nfo)
             : null;
         var posterPath = options.DownloadPoster
-            ? Path.Combine(directory, namingMode is OutputNamingMode.MovieFolder ? "poster.jpg" : $"{baseName}-poster.jpg")
+            ? names.Resolve(directory, names.Poster)
             : null;
         var fanartPath = options.DownloadFanart
-            ? Path.Combine(directory, namingMode is OutputNamingMode.MovieFolder ? "fanart.jpg" : $"{baseName}-fanart.jpg")
+            ? names.Resolve(directory, names.Fanart)
             : null;
 
         using var timing = new SaveTimingLog("metadata", metadata.Id);
@@ -191,9 +193,11 @@ public sealed class OutputService : IDisposable
         async Task ProcessAndWriteAsync(string path, DownloadedImage image, bool poster)
         {
             timing.Begin("imageProcess");
+            var png = Path.GetExtension(path).Equals(".png", StringComparison.OrdinalIgnoreCase);
             var bytes = poster
-                ? PosterImageProcessor.CreatePosterJpeg(image.Bytes)
-                : PosterImageProcessor.CreateFanartJpeg(image.Bytes);
+                ? PosterImageProcessor.CreatePoster(image.Bytes, png)
+                : png ? PosterImageProcessor.CreateFanartPng(image.Bytes)
+                    : PosterImageProcessor.CreateFanartJpeg(image.Bytes);
             timing.Begin("imageWrite");
             await WriteImageAsync(path, bytes, options.OverwriteExisting, cancellationToken);
         }
@@ -210,7 +214,8 @@ public sealed class OutputService : IDisposable
         MovieMetadata metadata,
         SaveOptions options,
         OutputNamingMode namingMode,
-        int? extrafanartCountOverride = null)
+        int? extrafanartCountOverride = null,
+        OutputFileNames? outputFileNames = null)
     {
         var directory = Path.GetDirectoryName(outputVideoPath);
         if (string.IsNullOrWhiteSpace(directory))
@@ -220,23 +225,18 @@ public sealed class OutputService : IDisposable
 
         var baseName = Path.GetFileNameWithoutExtension(outputVideoPath);
         var candidates = new List<string>();
+        var names = outputFileNames ?? OutputFileNames.Create(baseName, namingMode);
         if (options.WriteNfo)
         {
-            candidates.Add(Path.Combine(
-                directory,
-                namingMode is OutputNamingMode.MovieFolder ? "movie.nfo" : $"{baseName}.nfo"));
+            candidates.Add(names.Resolve(directory, names.Nfo));
         }
         if (options.DownloadPoster)
         {
-            candidates.Add(Path.Combine(
-                directory,
-                namingMode is OutputNamingMode.MovieFolder ? "poster.jpg" : $"{baseName}-poster.jpg"));
+            candidates.Add(names.Resolve(directory, names.Poster));
         }
         if (options.DownloadFanart)
         {
-            candidates.Add(Path.Combine(
-                directory,
-                namingMode is OutputNamingMode.MovieFolder ? "fanart.jpg" : $"{baseName}-fanart.jpg"));
+            candidates.Add(names.Resolve(directory, names.Fanart));
         }
         if (options.DownloadExtrafanart)
         {

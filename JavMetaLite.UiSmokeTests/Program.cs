@@ -606,7 +606,7 @@ internal static partial class Program
             viewer.FindName("SampleSelectionSummaryText") is not TextBlock
             {
                 Visibility: Visibility.Visible,
-                Text: "已选择 1 / 1 张样品图"
+                Text: "已选择 1 / 1 张剧照"
             } ||
             viewer.FindName("ApplySelectionButton") is not Button { Visibility: Visibility.Visible } applySelectionButton ||
             !FitsInside(deleteSelectedLocalButton, viewer) ||
@@ -821,7 +821,7 @@ internal static partial class Program
                 FindVisualChildren<CheckBox>(initialOnlinePanel).Count(box => box.IsChecked == true) != 2 ||
                 sourceComparisonViewer.FindName("SampleSelectionSummaryText") is not TextBlock
                 {
-                    Text: "已选择 2 / 2 张样品图"
+                    Text: "已选择 2 / 2 张剧照"
                 } ||
                 sourceComparisonViewer.FindName("ApplySelectionButton") is not Button
                 {
@@ -1057,7 +1057,7 @@ internal static partial class Program
         }
         if (replaceLocalExtrafanartCheckBox.IsChecked == true ||
             replaceLocalExtrafanartCheckBox.IsEnabled ||
-            replaceLocalExtrafanartCheckBox.Content?.ToString() != "替换本地 Extra Fanart" ||
+            replaceLocalExtrafanartCheckBox.Content?.ToString() != "替换本地剧照" ||
             string.IsNullOrWhiteSpace(replaceLocalExtrafanartCheckBox.ToolTip?.ToString()))
         {
             throw new InvalidOperationException("Preview 32 全面替换本地 Extra Fanart 没有保持安全默认值。 ");

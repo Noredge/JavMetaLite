@@ -110,11 +110,13 @@ public static class NfoReader
             .Select(element => Normalize(element.Value))
             .Where(value => value.Length > 0)
             .ToArray();
+        var contentId = Elements(root, "uniqueid").FirstOrDefault(element =>
+            string.Equals(element.Attribute("type")?.Value, "cid", StringComparison.OrdinalIgnoreCase));
 
         var metadata = new MovieMetadata
         {
             Id = FirstNonEmpty(ElementValue(root, "id"), Normalize(uniqueId?.Value)),
-            ContentId = Normalize(uniqueId?.Value),
+            ContentId = FirstNonEmpty(Normalize(contentId?.Value), Normalize(uniqueId?.Value)),
             Title = ElementValue(root, "title"),
             OriginalTitle = ElementValue(root, "originaltitle"),
             ReleaseDate = FirstNonEmpty(ElementValue(root, "premiered"), ElementValue(root, "releasedate")),

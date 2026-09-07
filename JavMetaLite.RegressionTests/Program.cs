@@ -10,7 +10,7 @@ internal static class Program
             return await SavePerformance.RunAsync(args.Skip(1).ToArray());
         IReadOnlyList<RegressionTestCase> tests = FileOrganizationRegressionTests.All
             .Concat(OutputDownloadRegressionTests.All).Concat(FileSharingRegressionTests.All)
-            .Concat(LocalSampleSafetyRegressionTests.All).ToArray();
+            .Concat(LocalSampleSafetyRegressionTests.All).Concat(FolderSidecarRegressionTests.All).ToArray();
         if (args.Contains("--list", StringComparer.OrdinalIgnoreCase))
         {
             foreach (var test in tests)

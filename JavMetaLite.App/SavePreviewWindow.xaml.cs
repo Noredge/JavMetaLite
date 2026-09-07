@@ -207,6 +207,7 @@ public partial class SavePreviewWindow : Window
     {
         var mappings = new (string Prefix, string Key)[]
         {
+            ("无法原地编码 WebP 图片，请保留本地图片或保存到新目录：", "Preview.Conflict.WebPReplacement"),
             ("自定义目标根目录路径已被文件占用：", "Preview.Conflict.CustomRootFile"),
             ("自定义目标根目录当前不可用，程序不会自动创建该根目录：", "Preview.Conflict.CustomRootUnavailable"),
             ("目标文件夹路径已被文件占用：", "Preview.Conflict.TargetFolderFile"),

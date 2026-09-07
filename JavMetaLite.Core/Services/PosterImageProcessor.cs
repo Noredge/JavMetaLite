@@ -6,7 +6,9 @@ namespace JavMetaLite.Core.Services;
 
 public static class PosterImageProcessor
 {
-    public static byte[] CreatePosterJpeg(byte[] sourceBytes)
+    public static byte[] CreatePosterJpeg(byte[] sourceBytes) => CreatePoster(sourceBytes, png: false);
+
+    public static byte[] CreatePoster(byte[] sourceBytes, bool png)
     {
         var source = Decode(sourceBytes);
         BitmapSource poster = source;
@@ -22,7 +24,7 @@ public static class PosterImageProcessor
             poster = new CroppedBitmap(source, crop);
         }
 
-        return EncodeJpeg(poster);
+        return png ? EncodePng(poster) : EncodeJpeg(poster);
     }
 
     public static byte[] CreateFanartJpeg(byte[] sourceBytes)
@@ -40,6 +42,17 @@ public static class PosterImageProcessor
     {
         var source = Decode(imageBytes);
         return (source.PixelWidth, source.PixelHeight);
+    }
+
+    public static byte[] CreateFanartPng(byte[] imageBytes) => EncodePng(Decode(imageBytes));
+
+    private static byte[] EncodePng(BitmapSource source)
+    {
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(source));
+        using var output = new MemoryStream();
+        encoder.Save(output);
+        return output.ToArray();
     }
 
     private static BitmapFrame Decode(byte[] imageBytes)

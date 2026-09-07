@@ -180,13 +180,35 @@ public sealed class FileOrganizationService
         var selectedLocalPair = localContext?.SelectedArtwork?.IsSidecarPair == true;
         var replacePoster = saveOptions.DownloadPoster && !selectedLocalPair;
         var replaceFanart = saveOptions.DownloadFanart && !selectedLocalPair;
-        var targetNfoPath = Path.Combine(
-            targetDirectory,
-            outputNamingMode is OutputNamingMode.MovieFolder ? "movie.nfo" : $"{targetBaseName}.nfo");
+        var inPlace = PathsEqual(sourceDirectory, targetDirectory);
+        var preserveExistingNames = inPlace && !fileSet.UsesMultipartNaming;
+        var folderNfo = string.Equals(Path.GetFileName(localNfoPath), "movie.nfo", StringComparison.OrdinalIgnoreCase);
+        var folderArtwork = new[] { localPosterPath, localFanartPath }.Any(path =>
+            Path.GetFileNameWithoutExtension(path)?.ToLowerInvariant() is "poster" or "fanart");
+        var defaults = OutputFileNames.Create(targetBaseName,
+            inPlace && (folderNfo || localNfoPath is null && folderArtwork)
+                ? OutputNamingMode.MovieFolder : outputNamingMode);
+        string ExistingNameOrDefault(string? path, string fallback)
+        {
+            if (!preserveExistingNames || path is null) return fallback;
+            if (!PathsEqual(Path.GetDirectoryName(path)!, sourceDirectory))
+                throw new InvalidOperationException("本地 sidecar 上下文不属于当前影片目录。");
+            // Keep directory-scoped names; filename-scoped sidecars still follow an explicit video rename.
+            var stem = Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
+            return !pathPlan.TargetBaseName.Equals(Path.GetFileNameWithoutExtension(sourceVideoPath), StringComparison.OrdinalIgnoreCase)
+                   && stem is not ("movie" or "poster" or "fanart" or "cover" or "folder" or "default" or "backdrop" or "background" or "art")
+                ? fallback : Path.GetFileName(path);
+        }
+        var outputFileNames = new OutputFileNames(
+            ExistingNameOrDefault(localNfoPath, defaults.Nfo),
+            ExistingNameOrDefault(localPosterPath, defaults.Poster),
+            ExistingNameOrDefault(localFanartPath, defaults.Fanart));
+        var targetNfoPath = outputFileNames.Resolve(targetDirectory, outputFileNames.Nfo);
         var targetPosterPath = replacePoster
-            ? Path.Combine(
-                targetDirectory,
-                outputNamingMode is OutputNamingMode.MovieFolder ? "poster.jpg" : $"{targetBaseName}-poster.jpg")
+            ? outputFileNames.Resolve(targetDirectory, outputFileNames.Poster)
+            : preserveExistingNames && localPosterPath is not null
+                ? outputFileNames.Resolve(targetDirectory, ExistingNameOrDefault(localPosterPath,
+                    Path.ChangeExtension(defaults.Poster, Path.GetExtension(localPosterPath))))
             : BuildPreservedTarget(
                 localPosterPath,
                 targetDirectory,
@@ -195,9 +217,10 @@ public sealed class FileOrganizationService
                 outputNamingMode,
                 "poster");
         var targetFanartPath = replaceFanart
-            ? Path.Combine(
-                targetDirectory,
-                outputNamingMode is OutputNamingMode.MovieFolder ? "fanart.jpg" : $"{targetBaseName}-fanart.jpg")
+            ? outputFileNames.Resolve(targetDirectory, outputFileNames.Fanart)
+            : preserveExistingNames && localFanartPath is not null
+                ? outputFileNames.Resolve(targetDirectory, ExistingNameOrDefault(localFanartPath,
+                    Path.ChangeExtension(defaults.Fanart, Path.GetExtension(localFanartPath))))
             : BuildPreservedTarget(
                 localFanartPath,
                 targetDirectory,
@@ -205,6 +228,11 @@ public sealed class FileOrganizationService
                 "-fanart",
                 outputNamingMode,
                 "fanart");
+        foreach (var path in new[] { replacePoster ? targetPosterPath : null, replaceFanart ? targetFanartPath : null })
+        {
+            if (path is not null && Path.GetExtension(path).Equals(".webp", StringComparison.OrdinalIgnoreCase))
+                blockingConflicts.Add($"无法原地编码 WebP 图片，请保留本地图片或保存到新目录：{path}");
+        }
 
         var updatePosterReference = targetPosterPath is not null &&
             (localBundle is null || replacePoster ||
@@ -297,7 +325,8 @@ public sealed class FileOrganizationService
             metadata,
             outputOptions,
             outputNamingMode,
-            OutputService.SelectScreenshotLocations(extrafanartSourceLocations ?? metadata.ScreenshotUrls).Count)
+            OutputService.SelectScreenshotLocations(extrafanartSourceLocations ?? metadata.ScreenshotUrls).Count,
+            outputFileNames)
             .ToArray();
         foreach (var outputPath in expectedOutputPaths)
         {
@@ -350,6 +379,7 @@ public sealed class FileOrganizationService
             OutputGenerationOptions = outputOptions,
             OutputAnchorPath = outputAnchorPath,
             OutputNamingMode = outputNamingMode,
+            OutputFileNames = outputFileNames,
             VideoTransfers = videoTransfers,
             LocalContext = localContext,
             NfoWriteContext = nfoContext,
@@ -458,7 +488,8 @@ public sealed class FileOrganizationService
                     plan.NfoWriteContext,
                     plan.OutputNamingMode,
                     cancellationToken,
-                    plan.ExtrafanartSourceLocations)
+                    plan.ExtrafanartSourceLocations,
+                    plan.OutputFileNames)
                 : new SaveResult(null, null, null, [], false);
 
             timing.Begin("stageAndVerify");
@@ -689,6 +720,8 @@ public sealed class FileOrganizationService
         finally
         {
             timing.Begin("cleanup");
+            if (operationSucceeded)
+                TryRemoveMigratedExtrafanartDirectory(plan);
             if (rollbackSucceeded)
             {
                 TryDeleteDirectory(sourceStagingRoot);
@@ -793,7 +826,8 @@ public sealed class FileOrganizationService
                     plan.NfoWriteContext,
                     plan.OutputNamingMode,
                     cancellationToken,
-                    plan.ExtrafanartSourceLocations)
+                    plan.ExtrafanartSourceLocations,
+                    plan.OutputFileNames)
                 : new SaveResult(null, null, null, [], false);
 
             timing.Begin("stageAndVerify");
@@ -1054,6 +1088,8 @@ public sealed class FileOrganizationService
         finally
         {
             timing.Begin("cleanup");
+            if (operationSucceeded)
+                TryRemoveMigratedExtrafanartDirectory(plan);
             if (rollbackSucceeded)
             {
                 TryDeleteDirectory(sourceStagingRoot);
@@ -1066,6 +1102,29 @@ public sealed class FileOrganizationService
                     TryDeleteEmptyTree(plan.TargetDirectory);
                 }
             }
+        }
+    }
+
+    private static void TryRemoveMigratedExtrafanartDirectory(SavePlan plan)
+    {
+        var sourceDirectory = Path.GetDirectoryName(plan.SourceVideoPath)!;
+        if (PathsEqual(sourceDirectory, plan.TargetDirectory)) return;
+        var directory = Path.Combine(sourceDirectory, "extrafanart");
+        // Only clean the directory involved in this successful transaction, never its parent.
+        if (!plan.SourcePathsToRetire.Any(path => PathsEqual(Path.GetDirectoryName(path)!, directory))) return;
+        try
+        {
+            if (!Directory.Exists(directory) ||
+                (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0 ||
+                (File.GetAttributes(sourceDirectory) & FileAttributes.ReparsePoint) != 0 ||
+                Directory.EnumerateFileSystemEntries(directory).Any()) return;
+            // A concurrent new entry makes this fail safely; never recursively delete.
+            Directory.Delete(directory, recursive: false);
+            AppLog.Info($"已清理迁移后的空剧照目录：{directory}");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            AppLog.Warning($"保存已完成，无法清理空剧照目录：{directory}", exception);
         }
     }
 
@@ -1201,7 +1260,8 @@ public sealed class FileOrganizationService
                 metadata,
                 plan.OutputGenerationOptions,
                 plan.OutputNamingMode,
-                OutputService.SelectScreenshotLocations(plan.ExtrafanartSourceLocations ?? metadata.ScreenshotUrls).Count)
+                OutputService.SelectScreenshotLocations(plan.ExtrafanartSourceLocations ?? metadata.ScreenshotUrls).Count,
+                plan.OutputFileNames)
             .Concat(plan.SidecarTransfers
                 .Where(transfer => !PathsEqual(transfer.SourcePath, transfer.DestinationPath))
                 .Select(transfer => transfer.DestinationPath))

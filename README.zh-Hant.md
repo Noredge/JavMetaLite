@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 
-> 目前版本：**1.2.0**。
+> 目前版本：**1.2.1**。
 
 用於本機影片資料審核與整理的 Windows 工具，支援單片編輯、批次處理及 Jellyfin 相容輸出。
 
@@ -18,7 +18,8 @@
 
 - 加入影片或掃描資料夾，將 CD1/CD2 分組為一部影片，在佇列中批次審核。
 - 支援 LibreDMM（預設建議）、R18.dev 與自訂多來源；JAVLibrary 僅供手動網頁查詢。
-- 編輯本機 NFO、選擇圖片來源與樣張，產生 NFO、海報、fanart 與選用的 Extra Fanart。
+- 編輯本機 NFO、選擇圖片來源與劇照，產生 NFO、海報、fanart 與選用的劇照（`extrafanart`）。
+- 支援獨立影片資料夾的 `movie.nfo` 與資料夾層級圖片，普通單片原地儲存保留其命名。
 - 圖片檢視器支援比較與本機圖片刪除，主介面提供低解析度封套提示。
 - 儲存前預覽檔案變更，可保持影片原位或整理到指定資料夾；支援簡、繁、英、日四語言。
 
@@ -40,7 +41,7 @@
 
 ## 更多
 
-[版本說明](docs/RELEASE-NOTES-v1.2.0.md) · [交付清單（簡體中文）](docs/RELEASE-v1.2.0.zh-Hans.md) · [更新歷史](CHANGELOG.md) · [開發與測試](TESTING.md)
+[版本說明](docs/RELEASE-NOTES-v1.2.1.md) · [交付清單（簡體中文）](docs/RELEASE-v1.2.1.zh-Hans.md) · [更新歷史](CHANGELOG.md) · [開發與測試](TESTING.md)
 
 編譯需要 .NET SDK 10.0.400。記錄與偏好設定位於 `%LOCALAPPDATA%\JavMetaLite`。
 

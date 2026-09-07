@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 
-> 現在のバージョン：**1.2.0**。
+> 現在のバージョン：**1.2.1**。
 
 ローカル動画の情報を確認・整理する Windows アプリです。単体編集と一括処理に対応し、Jellyfin 用のメタデータや画像を出力できます。
 
@@ -18,7 +18,8 @@
 
 - 動画の追加やフォルダーのスキャン、CD1/CD2 のグループ化、キューでの一括確認。
 - LibreDMM（標準・推奨）、R18.dev、カスタムの複数取得元に対応。JAVLibrary は手動 Web 検索のみ。
-- ローカル NFO の編集、画像の取得元とサンプルの選択、NFO・ポスター・fanart・任意の Extra Fanart の出力。
+- ローカル NFO の編集、画像の取得元とスチル画像の選択、NFO・ポスター・fanart・任意のスチル画像（`extrafanart`）の出力。
+- 作品専用フォルダーの `movie.nfo` と画像に対応。単一動画を元のフォルダーに保存する場合は、その命名を維持します。
 - ビューアーでの画像比較とローカル画像削除、メイン画面での低解像度ジャケットの注意表示。
 - 保存前の変更プレビュー、動画の元の場所への保存または指定フォルダーへの整理。簡体字中国語・繁体字中国語・英語・日本語に対応。
 
@@ -40,7 +41,7 @@ Windows 10/11 x64 が必要です。.NET Runtime の別途インストールは�
 
 ## 詳細
 
-[リリースノート](docs/RELEASE-NOTES-v1.2.0.md) · [引き渡しチェックリスト（簡体字中国語）](docs/RELEASE-v1.2.0.zh-Hans.md) · [変更履歴](CHANGELOG.md) · [開発とテスト](TESTING.md)
+[リリースノート](docs/RELEASE-NOTES-v1.2.1.md) · [引き渡しチェックリスト（簡体字中国語）](docs/RELEASE-v1.2.1.zh-Hans.md) · [変更履歴](CHANGELOG.md) · [開発とテスト](TESTING.md)
 
 ビルドには .NET SDK 10.0.400 が必要です。ログと設定は `%LOCALAPPDATA%\JavMetaLite` に保存されます。
 
