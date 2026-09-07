@@ -1,6 +1,6 @@
 # JavMetaLite 长期维护路线
 
-更新：2026-09-05 · 稳定基线：1.2.0 · 原则：稳定优先、问题驱动，不为发版而改动。
+更新：2026-09-07 · 稳定基线：1.2.1 · 原则：稳定优先、问题驱动，不为发版而改动。
 
 ## 近期重点
 
@@ -37,6 +37,6 @@ CI 保留 Core、文件事务、WPF、真实打包及独立 ZIP 校验。发布�
 
 ## 记录入口
 
-[测试与验证](../TESTING.md) · [1.2 交付记录](FINAL-v1.2.0.zh-Hans.md) · [更新历史](../CHANGELOG.md)
+[测试与验证](../TESTING.md) · [版本说明](RELEASE-NOTES-v1.2.1.md) · [更新历史](../CHANGELOG.md)
 
-旧 preview 路线、[性能规划](PERFORMANCE-NEXT.zh-Hans.md)和[优化提案](PROPOSAL-performance-localization-refactor.zh-Hans.md)作为历史依据保留，不是当前待办；维护方向以本页为准。
+旧 preview 路线和优化过程记录留在本地档案，不作为当前待办；维护方向以本页为准。

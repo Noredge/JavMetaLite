@@ -41,7 +41,7 @@
 
 ## 更多
 
-[版本说明](docs/RELEASE-NOTES-v1.2.1.md) · [交付清单](docs/RELEASE-v1.2.1.zh-Hans.md) · [更新历史](CHANGELOG.md) · [开发与测试](TESTING.md)
+[版本说明](docs/RELEASE-NOTES-v1.2.1.md) · [Docs](docs/README.md) · [更新历史](CHANGELOG.md) · [开发与测试](TESTING.md)
 
 编译需要 .NET SDK 10.0.400。日志和偏好设置位于 `%LOCALAPPDATA%\JavMetaLite`。
 

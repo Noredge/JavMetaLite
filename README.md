@@ -41,7 +41,7 @@ Windows 10/11 x64. No separate .NET Runtime installation; the embedded browser r
 
 ## More
 
-[Release notes](docs/RELEASE-NOTES-v1.2.1.md) · [Delivery checklist (简体中文)](docs/RELEASE-v1.2.1.zh-Hans.md) · [Changelog](CHANGELOG.md) · [Development and testing](TESTING.md)
+[Release notes](docs/RELEASE-NOTES-v1.2.1.md) · [Docs](docs/README.md) · [Changelog](CHANGELOG.md) · [Development and testing](TESTING.md)
 
 Building requires the .NET SDK 10.0.400. Logs and preferences are under `%LOCALAPPDATA%\JavMetaLite`.
 

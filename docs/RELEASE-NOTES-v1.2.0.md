@@ -1,10 +1,6 @@
 # JavMetaLite v1.2.0 — Release notes / 版本说明
 
-**Version 1.2.0 · Accepted preview.56 functionality**
-
-Version 1.2.0 freezes the accepted preview.56 functionality. On 2026-09-05, the user confirmed testing was complete and approved finalization after the earlier content review. The new build's automation, package identity and remaining checks are recorded separately in the finalization record. The user subsequently authorized updating main and publishing the portable package; the release process verifies CI and the exact artifact before publishing.
-
-2026-09-05：用户在材料审核和 preview.56 修复回验后确认测试完毕、可以定稿，现将已验收功能冻结为 1.2.0。新构建与便携包已独立验证。用户随后授权更新 main 与发布便携包；发布前须核对 CI 和实际交付产物，不将未逐项确认的环境边界记为已验收。
+Published 2026-09-05. 本页记录 1.2.0 的功能与使用边界。
 
 ## 简体中文
 
@@ -74,8 +70,8 @@ Version 1.2.0 freezes the accepted preview.56 functionality. On 2026-09-05, the 
 - The queue is memory-only. Back up important media, and do not blindly remove recovery folders left after failures.
 - Resolution hints are not blur detection. Website availability, rate limits and throughput remain external constraints. No R18 offline database is bundled.
 
-## Review material
+## More
 
-[Finalization record / 定稿记录](FINAL-v1.2.0.zh-Hans.md) · [Delivery checklist / 交付清单](RELEASE-v1.2.0.zh-Hans.md) · [Screenshots and provenance](SCREENSHOTS-v1.2.0.md) · [Complete preview history](../CHANGELOG.md) · [Testing boundaries](../TESTING.md)
+[Screenshots](SCREENSHOTS-v1.2.0.md) · [Changelog](../CHANGELOG.md) · [Testing](../TESTING.md)
 
-Screenshots use synthetic data and identify the build shown; older preview images retain their historical labels. The preview.56 review fixes and user recheck are complete. The release uses the package built and verified by CI, with matching SHA-256 files.
+Screenshots use synthetic data and identify the build shown. Release packages include SHA-256 checksums.

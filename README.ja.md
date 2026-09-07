@@ -41,7 +41,7 @@ Windows 10/11 x64 が必要です。.NET Runtime の別途インストールは�
 
 ## 詳細
 
-[リリースノート](docs/RELEASE-NOTES-v1.2.1.md) · [引き渡しチェックリスト（簡体字中国語）](docs/RELEASE-v1.2.1.zh-Hans.md) · [変更履歴](CHANGELOG.md) · [開発とテスト](TESTING.md)
+[リリースノート](docs/RELEASE-NOTES-v1.2.1.md) · [Docs](docs/README.md) · [変更履歴](CHANGELOG.md) · [開発とテスト](TESTING.md)
 
 ビルドには .NET SDK 10.0.400 が必要です。ログと設定は `%LOCALAPPDATA%\JavMetaLite` に保存されます。
 
