@@ -34,13 +34,15 @@
     <sys:String x:Key="Main.Queue">動画キュー</sys:String>
     <sys:String x:Key="Main.QueueCount">{0} 本</sys:String>
     <sys:String x:Key="Main.RemoveFromQueue">キューから削除</sys:String>
-    <sys:String x:Key="Dialog.ChooseScanRoot">スキャンするフォルダーを選択</sys:String>
+    <sys:String x:Key="Dialog.ChooseScanRoot">スキャンするフォルダーを選択（複数選択可）</sys:String>
     <sys:String x:Key="Discovery.Title">動画を検出</sys:String>
     <sys:String x:Key="Discovery.Description">選択したファイルとフォルダーを作品・CD 分割単位で確認します。検出中にネットワーク接続や書き込みは行いません。</sys:String>
     <sys:String x:Key="Discovery.IncludeSubdirectories">サブフォルダーを含める</sys:String>
     <sys:String x:Key="Discovery.Scanning">選択したファイルとフォルダーをスキャンしています…</sys:String>
     <sys:String x:Key="Discovery.Summary">作品 {0} 件、追加可能 {1} 件、追加済み {2} 件、対象外ファイル {3} 件、スキップしたフォルダー {4} 件。</sys:String>
-    <sys:String x:Key="Discovery.Diagnostics">{0} 個のフォルダーを読み取れませんでした。詳細はポイントして確認できます。</sys:String>
+    <sys:String x:Key="Discovery.Diagnostics">{0} 個のフォルダーを読み取れませんでした。</sys:String>
+    <sys:String x:Key="Discovery.ViewDetails">詳細を表示</sys:String>
+    <sys:String x:Key="Discovery.DetailsTitle">スキャンの詳細</sys:String>
     <sys:String x:Key="Discovery.Failed">フォルダーの検出に失敗しました：{0}</sys:String>
     <sys:String x:Key="Discovery.AddFound">検出した動画を追加</sys:String>
     <sys:String x:Key="Status.AddedMovies">{0} 本を追加し、重複 {1} 件をスキップしました。</sys:String>
@@ -127,6 +129,9 @@
     <sys:String x:Key="Status.SourceProfileUpdated">カスタム複数ソース規則を更新しました</sys:String>
     <sys:String x:Key="Discovery.SelectAll">すべて選択</sys:String>
     <sys:String x:Key="Discovery.SelectNone">すべて解除</sys:String>
+    <sys:String x:Key="Discovery.SelectRecognized">品番認識済みを選択</sys:String>
+    <sys:String x:Key="Discovery.AccessDenied">アクセス権限がないためスキップしました。動画の破損を示すものではありません。</sys:String>
+    <sys:String x:Key="Discovery.AccessDeniedSummary">アクセス権限がないため {0} 個のフォルダーをスキップしました。動画の破損を示すものではありません。</sys:String>
     <sys:String x:Key="Discovery.PartCount">CD 分割 {0} 本</sys:String>
     <sys:String x:Key="Discovery.Status.Ready">追加可能</sys:String>
     <sys:String x:Key="Discovery.Status.NeedsId">品番の確認が必要</sys:String>
@@ -285,4 +290,17 @@
     <sys:String x:Key="CoverCheck.Stopped">ジャケットの確認を停止しました。取得済みの情報と確認結果は保持されます。</sys:String>
     <sys:String x:Key="Error.BatchOutputConflict">選択した別の動画と出力先または元ファイルのパスが重複しています。保存すると別の動画のファイルを上書き・削除するおそれがあります。動画ごとに品番別フォルダーを使用し、再度プレビューしてください。競合するパス：&#10;{0}</sys:String>
     <sys:String x:Key="Preview.Conflict.WebPReplacement">WebP 形式での上書き保存には対応していません。ローカル画像を保持するか、新しいフォルダーに保存してください：{0}</sys:String>
+    <sys:String x:Key="Main.QueueSelectPending">未処理を選択</sys:String>
+    <sys:String x:Key="Main.QueueSelectIssues">問題ありを選択</sys:String>
+    <sys:String x:Key="Cleanup.Title">保存とクリーンアップの詳細</sys:String>
+    <sys:String x:Key="Cleanup.Committed">保存は完了しましたが、一時フォルダーが残っているか削除を確認できません。詳細を確認してください。</sys:String>
+    <sys:String x:Key="Cleanup.Incomplete">保存は完了しておらず、一時フォルダーの削除を確認できません。元の動画を保持し、以下のパスを確認してください。</sys:String>
+    <sys:String x:Key="Cleanup.RecoveryFailed">ファイルの復元が完了していません。一時フォルダーやバックアップを削除せず、以下のパスを確認してください。</sys:String>
+    <sys:String x:Key="Duplicate.Title">動画の保存先が重複</sys:String>
+    <sys:String x:Key="Duplicate.Intro">これらの動画は保存先が同じです。1 本を選ぶか、同じ作品の分割ファイルであることを確認してください。保存しない動画はキューに残ります。</sys:String>
+    <sys:String x:Key="Duplicate.Restriction">分割保存は、同じフォルダー・品番・保存設定の単一ファイルに限ります。上から CD1、CD2…となります。↑/↓ で順序を変更できます。</sys:String>
+    <sys:String x:Key="Duplicate.ConfirmParts">分割順を確認し、先頭の動画の情報と画像を使用します。品番-CD 名で保存し、元の場所への保存は品番サブフォルダーに変更します。他の分割の個別ローカル情報は元の場所に残します。</sys:String>
+    <sys:String x:Key="Duplicate.SaveOne">選択した 1 本を保存</sys:String>
+    <sys:String x:Key="Duplicate.SaveParts">分割として保存</sys:String>
+    <sys:String x:Key="Duplicate.Skip">このグループをスキップ</sys:String>
 </ResourceDictionary>

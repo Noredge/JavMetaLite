@@ -1,5 +1,6 @@
 # Documentation
 
+- [1.2.2 release notes](RELEASE-NOTES-v1.2.2.md)
 - [1.2.1 release notes](RELEASE-NOTES-v1.2.1.md)
 - [1.2.0 release notes](RELEASE-NOTES-v1.2.0.md)
 - [Screenshots](SCREENSHOTS-v1.2.0.md)

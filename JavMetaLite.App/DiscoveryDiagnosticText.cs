@@ -6,8 +6,12 @@ internal static class DiscoveryDiagnosticText
 {
     public static string Format(MovieFileDiscoveryDiagnostic diagnostic)
     {
-        var summary = LocalizationService.Get(diagnostic.Kind is MovieFileDiscoveryDiagnosticKind.PathUnavailable
-            ? "Discovery.PathUnavailable" : "Discovery.ReadFailed");
+        var summary = LocalizationService.Get(diagnostic.Kind switch
+        {
+            MovieFileDiscoveryDiagnosticKind.PathUnavailable => "Discovery.PathUnavailable",
+            MovieFileDiscoveryDiagnosticKind.AccessDenied => "Discovery.AccessDenied",
+            _ => "Discovery.ReadFailed"
+        });
         // Known application diagnostics are localized. OS/provider details remain verbatim.
         return diagnostic.Kind is MovieFileDiscoveryDiagnosticKind.PathUnavailable
             ? $"{diagnostic.Path}: {summary}"

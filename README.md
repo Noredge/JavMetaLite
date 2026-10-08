@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 
-> Current version: **1.2.1**.
+> Current version: **1.2.2**.
 
 A Windows app for reviewing and organizing local movie metadata, individually or in batches, with Jellyfin-compatible output.
 
@@ -41,7 +41,7 @@ Windows 10/11 x64. No separate .NET Runtime installation; the embedded browser r
 
 ## More
 
-[Release notes](docs/RELEASE-NOTES-v1.2.1.md) · [Docs](docs/README.md) · [Changelog](CHANGELOG.md) · [Development and testing](TESTING.md)
+[Release notes](docs/RELEASE-NOTES-v1.2.2.md) · [Docs](docs/README.md) · [Changelog](CHANGELOG.md) · [Development and testing](TESTING.md)
 
 Building requires the .NET SDK 10.0.400. Logs and preferences are under `%LOCALAPPDATA%\JavMetaLite`.
 

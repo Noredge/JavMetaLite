@@ -80,6 +80,10 @@ internal static partial class Program
             Path.GetTempPath(), "JavMetaLite-queue-keyboard-" + Guid.NewGuid().ToString("N"))));
         Console.WriteLine("UI PASS canceledPreviewRevisit=True canceledSourcePreviewRevisit=True completedPreviewCache=True missingArtworkCache=True lateViewerImageIgnored=True viewerCloseCancels=True");
         TestSearchPredicateParity();
+        TestDiscoveryRecognizedSelection();
+        TestQueueFilterSelection();
+        TestCleanupNotices();
+        RunStabilityTask(TestDuplicateMoviesAsync());
         TestRestrictedLayoutHost();
         TestSearchToolbarLayout();
         TestReadabilityCloseout();

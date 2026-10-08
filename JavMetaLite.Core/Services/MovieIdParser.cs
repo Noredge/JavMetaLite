@@ -10,9 +10,6 @@ public static partial class MovieIdParser
     [GeneratedRegex(@"(?i)(?<![a-z0-9])(?<prefix>[a-z]{2,12})[\s._-]*(?<number>\d{2,6})(?![a-z0-9])")]
     private static partial Regex StandardPattern();
 
-    [GeneratedRegex(@"(?i)(?<!\d)(?<date>\d{6})[\s._-]+(?<number>\d{2,4})(?!\d)")]
-    private static partial Regex DateNumberPattern();
-
     public static string? TryExtract(string? fileNameOrPath)
     {
         if (string.IsNullOrWhiteSpace(fileNameOrPath))
@@ -36,7 +33,7 @@ public static partial class MovieIdParser
             var prefix = match.Groups["prefix"].Value.ToUpperInvariant();
             var number = match.Groups["number"].Value;
 
-            if (IgnoredPrefixes.Contains(prefix) || IsLikelyResolution(number))
+            if (IgnoredPrefixes.Contains(prefix))
             {
                 continue;
             }
@@ -44,10 +41,7 @@ public static partial class MovieIdParser
             return $"{prefix}-{number}";
         }
 
-        var dateNumber = DateNumberPattern().Match(fileName);
-        return dateNumber.Success
-            ? $"{dateNumber.Groups["date"].Value}-{dateNumber.Groups["number"].Value}"
-            : null;
+        return null;
     }
 
     public static string Normalize(string? value)
@@ -59,9 +53,6 @@ public static partial class MovieIdParser
 
         return TryExtract(value) ?? value.Trim().ToUpperInvariant();
     }
-
-    private static bool IsLikelyResolution(string number) =>
-        number is "2160" or "1080" or "720" or "480";
 
     private static readonly HashSet<string> IgnoredPrefixes = new(StringComparer.OrdinalIgnoreCase)
     {

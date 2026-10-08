@@ -73,6 +73,11 @@
                             Content="{DynamicResource Discovery.SelectAll}"
                             Click="SelectAll_Click"
                             Padding="10,5" />
+                    <Button x:Name="SelectRecognizedButton"
+                            Content="{DynamicResource Discovery.SelectRecognized}"
+                            Click="SelectRecognized_Click"
+                            Padding="10,5"
+                            Margin="8,0,0,0" />
                     <Button x:Name="SelectNoneButton"
                             Content="{DynamicResource Discovery.SelectNone}"
                             Click="SelectNone_Click"
@@ -146,6 +151,11 @@
                        TextWrapping="Wrap"
                        MaxHeight="48"
                        Margin="0,5,0,0" />
+            <Button x:Name="DiagnosticsDetailsButton"
+                    Content="{DynamicResource Discovery.ViewDetails}"
+                    Click="DiagnosticsDetails_Click"
+                    HorizontalAlignment="Left" Padding="10,5"
+                    Margin="0,6,0,0" Visibility="Collapsed" />
         </StackPanel>
 
         <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">

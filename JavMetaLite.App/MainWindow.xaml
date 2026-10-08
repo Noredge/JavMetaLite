@@ -146,6 +146,38 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="QueueFilterItem" TargetType="ComboBoxItem" BasedOn="{StaticResource DarkComboBoxItem}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="ItemBorder" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}" CornerRadius="4">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter VerticalAlignment="Center" />
+                                <TextBlock x:Name="CategoryCount" Grid.Column="1" Text="{Binding StringFormat='({0})'}"
+                                           Foreground="{StaticResource MutedBrush}" Margin="12,0,0,0"
+                                           VerticalAlignment="Center" HorizontalAlignment="Right" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#2D6FD2" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#244B8F" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#607086" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="ComboBoxSelectionContent" TargetType="ContentPresenter">
             <Setter Property="Content" Value="{Binding SelectionBoxItem, RelativeSource={RelativeSource TemplatedParent}}" />
         </Style>
@@ -403,11 +435,12 @@
                         <ComboBox x:Name="QueueFilterComboBox"
                                   SelectedIndex="0"
                                   Style="{StaticResource DarkComboBox}"
+                                  ItemContainerStyle="{StaticResource QueueFilterItem}"
                                   SelectionChanged="QueueFilter_Changed"
                                   ToolTip="{DynamicResource Main.QueueFilterTooltip}">
-                            <ComboBoxItem Content="{DynamicResource Main.QueueFilter.All}" Tag="all" IsSelected="True" />
-                            <ComboBoxItem Content="{DynamicResource Main.QueueFilter.Pending}" Tag="pending" />
-                            <ComboBoxItem Content="{DynamicResource Main.QueueFilter.Issues}" Tag="issues" />
+                            <ComboBoxItem x:Name="QueueFilterAllItem" Content="{DynamicResource Main.QueueFilter.All}" Tag="all" IsSelected="True" DataContext="0" />
+                            <ComboBoxItem x:Name="QueueFilterPendingItem" Content="{DynamicResource Main.QueueFilter.Pending}" Tag="pending" DataContext="0" />
+                            <ComboBoxItem x:Name="QueueFilterIssuesItem" Content="{DynamicResource Main.QueueFilter.Issues}" Tag="issues" DataContext="0" />
                         </ComboBox>
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
@@ -434,6 +467,8 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="5" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="5" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -447,8 +482,26 @@
                                     Grid.Column="2"
                                     Content="{DynamicResource Main.QueueSelectNone}"
                                     Click="SelectNoneQueue_Click" />
+                            <Button x:Name="SelectPendingQueueButton" Grid.Row="2"
+                                    Content="{DynamicResource Main.QueueSelectPending}"
+                                    Click="SelectPendingQueue_Click" Padding="6,6">
+                                <Button.ContentTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" TextWrapping="Wrap" TextAlignment="Center" />
+                                    </DataTemplate>
+                                </Button.ContentTemplate>
+                            </Button>
+                            <Button x:Name="SelectIssuesQueueButton" Grid.Row="2" Grid.Column="2"
+                                    Content="{DynamicResource Main.QueueSelectIssues}"
+                                    Click="SelectIssuesQueue_Click" Padding="6,6">
+                                <Button.ContentTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" TextWrapping="Wrap" TextAlignment="Center" />
+                                    </DataTemplate>
+                                </Button.ContentTemplate>
+                            </Button>
                             <Button x:Name="RemoveSelectedQueueButton"
-                                    Grid.Row="2"
+                                    Grid.Row="4"
                                     Padding="6,6"
                                     Content="{DynamicResource Main.QueueRemoveSelected}"
                                     Click="RemoveSelectedQueue_Click">
@@ -459,7 +512,7 @@
                                 </Button.ContentTemplate>
                             </Button>
                             <Button x:Name="ClearQueueButton"
-                                    Grid.Row="2"
+                                    Grid.Row="4"
                                     Grid.Column="2"
                                     Content="{DynamicResource Main.QueueClear}"
                                     Click="ClearQueue_Click" />

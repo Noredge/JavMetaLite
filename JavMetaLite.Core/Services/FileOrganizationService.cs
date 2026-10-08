@@ -6,10 +6,18 @@ namespace JavMetaLite.Core.Services;
 public sealed class FileOrganizationService
 {
     private readonly OutputService _outputService;
+    private readonly Func<string, Task<TemporaryCleanupIssue?>> _cleanupDirectory;
 
     public FileOrganizationService(OutputService outputService)
+        : this(outputService, TemporaryDirectoryCleanup.TryDeleteAsync)
+    {
+    }
+
+    internal FileOrganizationService(OutputService outputService,
+        Func<string, Task<TemporaryCleanupIssue?>> cleanupDirectory)
     {
         _outputService = outputService;
+        _cleanupDirectory = cleanupDirectory;
     }
 
     public static SavePlan BuildPlan(
@@ -26,8 +34,18 @@ public sealed class FileOrganizationService
         SaveOptions saveOptions,
         OrganizationOptions organizationOptions,
         LocalSaveContext? localContext = null)
+        => BuildPlan(MovieFileSet.Create(videoPaths), metadata, saveOptions, organizationOptions, localContext);
+
+    public static SavePlan BuildConfirmedMultipartPlan(IEnumerable<string> orderedPaths,
+        MovieMetadata metadata, SaveOptions saveOptions, OrganizationOptions organizationOptions,
+        LocalSaveContext? localContext = null)
+        => BuildPlan(MovieFileSet.CreateConfirmedParts(orderedPaths, metadata.Id), metadata, saveOptions,
+            new OrganizationOptions(organizationOptions.TargetMode, true,
+                organizationOptions.CustomRootDirectory, organizationOptions.CrossVolumeVerification), localContext);
+
+    private static SavePlan BuildPlan(MovieFileSet fileSet, MovieMetadata metadata,
+        SaveOptions saveOptions, OrganizationOptions organizationOptions, LocalSaveContext? localContext)
     {
-        var fileSet = MovieFileSet.Create(videoPaths);
         foreach (var sourcePath in fileSet.VideoPaths)
         {
             if (!File.Exists(sourcePath))
@@ -462,6 +480,8 @@ public sealed class FileOrganizationService
         string? sourceVideoBackupPath = null;
         var operationSucceeded = false;
         var rollbackSucceeded = false;
+        OrganizedSaveResult? completedResult = null;
+        Exception? operationError = null;
         using var timing = new SaveTimingLog("transaction", metadata.Id);
         timing.Begin("metadataPrepare");
 
@@ -688,11 +708,12 @@ public sealed class FileOrganizationService
             operationSucceeded = true;
             rollbackSucceeded = true;
             timing.Complete();
-            return new OrganizedSaveResult(finalResult, plan.TargetVideoPath, videoMoved);
+            return completedResult = new OrganizedSaveResult(finalResult, plan.TargetVideoPath, videoMoved);
         }
         catch (Exception exception)
         {
             timing.Begin("rollback");
+            operationError = exception;
             AppLog.Error("保存计划失败，开始恢复文件", exception);
             var rollbackErrors = await RollbackAsync(
                 plan,
@@ -710,8 +731,9 @@ public sealed class FileOrganizationService
                     ? $"{sourceStagingRoot}；{targetStagingRoot}"
                     : sourceStagingRoot;
                 AppLog.Error($"文件恢复不完整，临时备份保留在 {recoveryPaths}", new AggregateException(rollbackErrors));
-                throw new IOException(
+                throw new FileRecoveryException(
                     $"保存失败且自动恢复不完整。请保留现场并检查：{recoveryPaths}",
+                    new[] { sourceStagingRoot, targetStagingRoot }.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
                     new AggregateException(new[] { exception }.Concat(rollbackErrors)));
             }
             AppLog.Info("文件恢复完成，原影片和 sidecar 保持不变");
@@ -724,11 +746,14 @@ public sealed class FileOrganizationService
                 TryRemoveMigratedExtrafanartDirectory(plan);
             if (rollbackSucceeded)
             {
-                TryDeleteDirectory(sourceStagingRoot);
-                if (!PathsEqual(sourceStagingRoot, targetStagingRoot))
-                {
-                    TryDeleteDirectory(targetStagingRoot);
-                }
+                var cleanupIssues = new List<TemporaryCleanupIssue>();
+                foreach (var path in new[] { sourceStagingRoot, targetStagingRoot }.Distinct(StringComparer.OrdinalIgnoreCase))
+                    if (await _cleanupDirectory(path) is { } issue) cleanupIssues.Add(issue);
+                if (completedResult is not null) completedResult.CleanupIssues = cleanupIssues;
+                if (cleanupIssues.Count > 0 && !operationSucceeded)
+                    throw new TemporaryCleanupException(cleanupIssues, operationError);
+                if (cleanupIssues.Count == 0)
+                    AppLog.Info("本次事务临时目录清理已确认完成");
                 if (!operationSucceeded && createdTargetDirectory)
                 {
                     TryDeleteEmptyTree(plan.TargetDirectory);
@@ -800,6 +825,8 @@ public sealed class FileOrganizationService
         var operationSucceeded = false;
         var rollbackSucceeded = false;
         using var timing = new SaveTimingLog("transaction-multipart", metadata.Id);
+        OrganizedSaveResult? completedResult = null;
+        Exception? operationError = null;
         timing.Begin("metadataPrepare");
 
         if (crossVolumeCopy)
@@ -1028,7 +1055,7 @@ public sealed class FileOrganizationService
             operationSucceeded = true;
             rollbackSucceeded = true;
             timing.Complete();
-            return new OrganizedSaveResult(finalResult, targetVideoPaths[0], movingVideoTransfers.Length > 0)
+            return completedResult = new OrganizedSaveResult(finalResult, targetVideoPaths[0], movingVideoTransfers.Length > 0)
             {
                 VideoPaths = targetVideoPaths
             };
@@ -1037,6 +1064,7 @@ public sealed class FileOrganizationService
         {
             timing.Begin("rollback");
             AppLog.Error("多分段保存计划失败，开始恢复文件", exception);
+            operationError = exception;
             var rollbackErrors = new List<Exception>();
             foreach (var transfer in sameVolumeMoves.AsEnumerable().Reverse())
             {
@@ -1078,8 +1106,9 @@ public sealed class FileOrganizationService
                 var recoveryPaths = crossVolumeCopy
                     ? $"{sourceStagingRoot}；{targetStagingRoot}"
                     : sourceStagingRoot;
-                throw new IOException(
+                throw new FileRecoveryException(
                     $"多分段保存失败且自动恢复不完整。请保留现场并检查：{recoveryPaths}",
+                    new[] { sourceStagingRoot, targetStagingRoot }.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
                     new AggregateException(new[] { exception }.Concat(rollbackErrors)));
             }
             AppLog.Info("多分段文件恢复完成，原影片和 sidecar 保持不变");
@@ -1092,11 +1121,14 @@ public sealed class FileOrganizationService
                 TryRemoveMigratedExtrafanartDirectory(plan);
             if (rollbackSucceeded)
             {
-                TryDeleteDirectory(sourceStagingRoot);
-                if (!PathsEqual(sourceStagingRoot, targetStagingRoot))
-                {
-                    TryDeleteDirectory(targetStagingRoot);
-                }
+                var cleanupIssues = new List<TemporaryCleanupIssue>();
+                foreach (var path in new[] { sourceStagingRoot, targetStagingRoot }.Distinct(StringComparer.OrdinalIgnoreCase))
+                    if (await _cleanupDirectory(path) is { } issue) cleanupIssues.Add(issue);
+                if (completedResult is not null) completedResult.CleanupIssues = cleanupIssues;
+                if (cleanupIssues.Count > 0 && !operationSucceeded)
+                    throw new TemporaryCleanupException(cleanupIssues, operationError);
+                if (cleanupIssues.Count == 0)
+                    AppLog.Info("本次事务临时目录清理已确认完成");
                 if (!operationSucceeded && createdTargetDirectory)
                 {
                     TryDeleteEmptyTree(plan.TargetDirectory);
@@ -1543,21 +1575,6 @@ public sealed class FileOrganizationService
     private static bool PathsEqual(string left, string right) =>
         Path.GetFullPath(left).TrimEnd(Path.DirectorySeparatorChar)
             .Equals(Path.GetFullPath(right).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase);
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, true);
-            }
-        }
-        catch (Exception exception)
-        {
-            AppLog.Warning($"无法清理临时目录：{path}", exception);
-        }
-    }
 
     private static void TryDeleteEmptyTree(string path)
     {

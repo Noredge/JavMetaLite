@@ -176,12 +176,15 @@ public sealed record SourceFileExpectation(
     string ExpectedSha256,
     string Description);
 
+public sealed record TemporaryCleanupIssue(string Path, string Error);
+
 public sealed record OrganizedSaveResult(
     SaveResult Outputs,
     string VideoPath,
     bool VideoMoved)
 {
     public IReadOnlyList<string> VideoPaths { get; init; } = [VideoPath];
+    public IReadOnlyList<TemporaryCleanupIssue> CleanupIssues { get; internal set; } = [];
 }
 
 public enum FileTransactionStage

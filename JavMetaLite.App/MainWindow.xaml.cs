@@ -407,22 +407,25 @@ public partial class MainWindow : Window
         }
     }
 
+    internal static OpenFolderDialog CreateScanFolderDialog() => new()
+    {
+        Title = LocalizationService.Get("Dialog.ChooseScanRoot"),
+        Multiselect = true
+    };
+
     private async void ScanFolder_Click(object sender, RoutedEventArgs e)
     {
         SetWorkspaceMode(WorkspaceMode.Batch);
-        var folderDialog = new OpenFolderDialog
-        {
-            Title = LocalizationService.Get("Dialog.ChooseScanRoot"),
-            Multiselect = false
-        };
+        var folderDialog = CreateScanFolderDialog();
         if (folderDialog.ShowDialog(this) != true)
         {
             return;
         }
 
         var discovery = new MovieDiscoveryWindow(
-            folderDialog.FolderName,
-            _movieQueue.SelectMany(job => job.VideoPaths))
+            folderDialog.FolderNames,
+            _movieQueue.SelectMany(job => job.VideoPaths),
+            includeSubdirectories: true)
         {
             Owner = this
         };
@@ -886,6 +889,8 @@ public partial class MainWindow : Window
                 CurrentOperationToken,
                 transactionProgress);
             CancelOperationButton.IsEnabled = false;
+            if (result.CleanupIssues.Count > 0)
+                ShowCleanupDetails(result.CleanupIssues, committed: true);
             _activeJob.UpdateVideoPaths(result.VideoPaths);
             var outputs = new[] { result.Outputs.NfoPath, result.Outputs.PosterPath, result.Outputs.FanartPath }
                 .Where(path => path is not null)
@@ -901,7 +906,11 @@ public partial class MainWindow : Window
             var moveNote = result.VideoMoved
                 ? LocalizationService.Get("Status.VideoOrganized", Path.GetFileName(result.VideoPath))
                 : string.Empty;
-            await SelectVideoCoreAsync(result.VideoPath);
+            try { await SelectVideoCoreAsync(result.VideoPath); }
+            catch (OperationCanceledException) when (CurrentOperationToken.IsCancellationRequested)
+            {
+                // Saving has already committed; canceled preview loading is not a canceled save.
+            }
             _activeJob.MarkSaveCompleted();
             RemoveCompletedActiveJobFromQueue();
             var outputSummary = outputs.Count == 0
@@ -915,6 +924,8 @@ public partial class MainWindow : Window
                                  LocalizationService.Get("Status.ExtrafanartSkipped");
             }
             SetStatus(LocalizationService.Get("Status.SaveComplete", outputSummary, fanartNote, moveNote), true);
+            if (result.CleanupIssues.Count > 0)
+                SetStatus(LocalizationService.Get("Cleanup.Committed"), false);
         });
     }
 
@@ -1164,9 +1175,45 @@ public partial class MainWindow : Window
             }
         }
 
+        var originalPreviewItems = previewItems.ToArray();
+        var combinedGroups = new Dictionary<MovieJob, IReadOnlyList<BatchSavePreviewItem>>();
+        var duplicateGroups = DuplicateMovieResolution.Groups(previewItems);
+        foreach (var group in duplicateGroups)
+        {
+            var chooser = new DuplicateMovieWindow(group) { Owner = this };
+            var returnFocus = Keyboard.FocusedElement;
+            var accepted = chooser.ShowDialog() == true;
+            RestoreKeyboardFocus(returnFocus);
+            if (!accepted)
+            {
+                SetStatus(LocalizationService.Get("Status.CanceledNoChanges"), false);
+                return;
+            }
+            foreach (var item in group) previewItems.Remove(item);
+            if (!chooser.AsParts) previewItems.AddRange(chooser.ChosenItems);
+            else
+            {
+                try
+                {
+                    var combined = DuplicateMovieResolution.Combine(chooser.ChosenItems);
+                    if (combined.Plan.HasBlockingConflicts)
+                        throw new IOException(string.Join(Environment.NewLine, combined.Plan.BlockingConflicts));
+                    previewItems.Add(combined);
+                    combinedGroups[combined.Job] = chooser.ChosenItems;
+                }
+                catch (Exception exception)
+                {
+                    foreach (var item in group) previewIssues.Add(new(item.Job, exception.Message));
+                }
+            }
+        }
+        var participatingJobs = previewItems.Select(item => item.Job)
+            .Concat(combinedGroups.Values.SelectMany(group => group).Select(item => item.Job)).ToHashSet();
+        var protectedItems = originalPreviewItems.Where(item => !participatingJobs.Contains(item.Job)).ToArray();
+
         // Individually safe plans may still overwrite or retire another movie's files.
         // Remove every affected plan before the user can accept or skip the preview.
-        var batchConflicts = BatchSavePathConflicts.Find(previewItems);
+        var batchConflicts = BatchSavePathConflicts.Find(previewItems, protectedItems);
         foreach (var conflict in batchConflicts)
         {
             previewIssues.Add(new BatchSavePreviewIssue(conflict.Key,
@@ -1174,10 +1221,16 @@ public partial class MainWindow : Window
         }
         previewItems.RemoveAll(item => batchConflicts.ContainsKey(item.Job));
 
+        if (previewItems.Count == 0 && previewIssues.Count == 0)
+        {
+            SetStatus(LocalizationService.Get("Status.CanceledNoChanges"), false);
+            return;
+        }
+
         var previewAllowOverwrite = false;
         IReadOnlyList<BatchSavePreviewItem> itemsToSave = previewItems;
         if (ShouldShowBatchSavePreview(
-                SkipSavePreviewCheckBox.IsChecked == true,
+                duplicateGroups.Count == 0 && SkipSavePreviewCheckBox.IsChecked == true,
                 previewItems,
                 previewIssues))
         {
@@ -1212,6 +1265,11 @@ public partial class MainWindow : Window
                 preparedItems,
                 async (item, cancellationToken) =>
                 {
+                    if (combinedGroups.TryGetValue(item.Job, out var parts))
+                    {
+                        foreach (var part in parts.Where(part => part.Job != item.Job))
+                            part.Job.BeginSave(part.ReviewRevision);
+                    }
                     var progress = new Progress<FileTransactionProgress>(update =>
                         SetStatus(
                             LocalizationService.Get(
@@ -1229,18 +1287,30 @@ public partial class MainWindow : Window
                 CurrentOperationToken,
                 async item =>
                 {
+                    var related = combinedGroups.TryGetValue(item.Item.Job, out var parts)
+                        ? parts.Select(part => part.Job).ToArray() : [item.Item.Job];
+                    foreach (var job in related.Where(job => job != item.Item.Job))
+                    {
+                        if (item.Status is BatchSaveItemStatus.Completed) job.MarkSaveCompleted();
+                        else if (item.Status is BatchSaveItemStatus.Canceled) job.MarkSaveCanceled();
+                        else if (item.Error is not null) job.MarkSaveFailed(item.Error, true);
+                    }
                     if (item.Status is BatchSaveItemStatus.Completed)
                     {
-                        await RemoveCompletedQueueJobsAsync([item.Item.Job]);
+                        await RemoveCompletedQueueJobsAsync(related);
                     }
                 });
 
             // The batch coordinator reports recovery failures as results, not exceptions.
             // Keep the window open even if a close request canceled the batch.
-            if (result.FailedCount > 0)
+            var cleanupIssues = result.Items.SelectMany(item => item.SaveResult?.CleanupIssues ?? []).ToArray();
+            if (result.FailedCount > 0 || cleanupIssues.Length > 0)
             {
                 _closeRequested = false;
             }
+            var firstFailure = result.Items.FirstOrDefault(item => item.Error is not null)?.Error;
+            if (firstFailure is not null) throw firstFailure;
+            if (cleanupIssues.Length > 0) ShowCleanupDetails(cleanupIssues, committed: true);
 
             if (_activeJob.VideoPath is not null)
             {
@@ -1250,7 +1320,11 @@ public partial class MainWindow : Window
                 {
                     ClearPosterPreview();
                     ClearFanartPreview();
-                    await LoadSelectedArtworkPreviewAsync();
+                    if (!CurrentOperationToken.IsCancellationRequested)
+                    {
+                        try { await LoadSelectedArtworkPreviewAsync(); }
+                        catch (OperationCanceledException) when (CurrentOperationToken.IsCancellationRequested) { }
+                    }
                     CacheActivePreview();
                 }
 
@@ -1268,6 +1342,8 @@ public partial class MainWindow : Window
                     result.CanceledCount,
                     result.NotStartedCount),
                 result.FailedCount == 0 && result.CanceledCount == 0);
+            if (cleanupIssues.Length > 0)
+                SetStatus(LocalizationService.Get("Cleanup.Committed"), false);
         });
     }
 
@@ -1460,6 +1536,18 @@ public partial class MainWindow : Window
             job.IsSelectedForBatch = isSelected;
         }
 
+        _queueRefresh.Flush();
+    }
+
+    private void SelectPendingQueue_Click(object sender, RoutedEventArgs e) => SetBatchSelectionByIssue(false);
+
+    private void SelectIssuesQueue_Click(object sender, RoutedEventArgs e) => SetBatchSelectionByIssue(true);
+
+    private void SetBatchSelectionByIssue(bool hasIssue)
+    {
+        if (_busy) return;
+        foreach (var job in _movieQueue)
+            job.IsSelectedForBatch = HasQueueIssue(job) == hasIssue;
         _queueRefresh.Flush();
     }
 
@@ -1663,11 +1751,16 @@ public partial class MainWindow : Window
             hasSearchableJob = hasSearchableJob || job.CanBatchSearch;
         }
         SearchQueueButton.IsEnabled = !_busy && canSearch && hasSearchableJob;
+        QueueFilterAllItem.DataContext = _movieQueue.Count;
+        QueueFilterPendingItem.DataContext = _movieQueue.Count - issueCount;
+        QueueFilterIssuesItem.DataContext = issueCount;
         SearchQueueButton.ToolTip = canSearch
             ? LocalizationService.Get("Main.SearchQueueSourceTooltip", GetAutomaticSourceDisplayName(sourceMode))
             : LocalizationService.Get("Status.ManualMode");
         SaveSelectedButton.IsEnabled = !_busy && selectedCount > 0;
         SelectAllQueueButton.IsEnabled = !_busy && _movieQueue.Count > 0 && selectedCount < _movieQueue.Count;
+        SelectPendingQueueButton.IsEnabled = !_busy && _movieQueue.Count > 0;
+        SelectIssuesQueueButton.IsEnabled = !_busy && _movieQueue.Count > 0;
         SelectNoneQueueButton.IsEnabled = !_busy && selectedCount > 0;
         RemoveSelectedQueueButton.IsEnabled = !_busy && selectedCount > 0;
         ClearQueueButton.IsEnabled = !_busy && _movieQueue.Count > 0;
@@ -4156,6 +4249,8 @@ public partial class MainWindow : Window
         SearchQueueButton.IsEnabled = false;
         SaveSelectedButton.IsEnabled = false;
         SelectAllQueueButton.IsEnabled = false;
+        SelectPendingQueueButton.IsEnabled = false;
+        SelectIssuesQueueButton.IsEnabled = false;
         SelectNoneQueueButton.IsEnabled = false;
         RemoveSelectedQueueButton.IsEnabled = false;
         ClearQueueButton.IsEnabled = false;
@@ -4175,7 +4270,7 @@ public partial class MainWindow : Window
         }
         catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
         {
-            AppLog.Info("当前操作已取消，文件事务已执行安全恢复");
+            AppLog.Info("当前操作已取消；文件事务恢复及清理结果见对应事务日志");
             if (!_lifetimeCancellation.IsCancellationRequested)
             {
                 SetStatus(LocalizationService.Get("Status.OperationCanceled"), false);
@@ -4186,7 +4281,18 @@ public partial class MainWindow : Window
             // Keep recovery errors visible; do not close on a failed/incomplete rollback.
             _closeRequested = false;
             AppLog.Error(message, exception);
-            ShowError(GetLocalizedExceptionMessage(exception));
+            if (exception is TemporaryCleanupException cleanup)
+                ShowCleanupDetails(cleanup.Issues, committed: false, cleanup.InnerException);
+            else if (exception is FileRecoveryException recovery)
+            {
+                var summary = LocalizationService.Get("Cleanup.RecoveryFailed");
+                SetStatus(summary, false);
+                new DiscoveryDetailsWindow(summary + Environment.NewLine + Environment.NewLine +
+                    string.Join(Environment.NewLine, recovery.RecoveryPaths) + Environment.NewLine + recovery,
+                    LocalizationService.Get("Cleanup.Title")) { Owner = this }.ShowDialog();
+            }
+            else
+                ShowError(GetLocalizedExceptionMessage(exception));
         }
         finally
         {
@@ -4257,6 +4363,18 @@ public partial class MainWindow : Window
     {
         SetStatus(message.Replace(Environment.NewLine, " "), false);
         MessageBox.Show(this, message, "JAV Metadata Lite", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    private void ShowCleanupDetails(IReadOnlyList<TemporaryCleanupIssue> issues, bool committed, Exception? originalError = null)
+    {
+        _closeRequested = false;
+        var summary = LocalizationService.Get(committed ? "Cleanup.Committed" : "Cleanup.Incomplete");
+        SetStatus(summary, false);
+        var details = summary + Environment.NewLine + Environment.NewLine +
+            string.Join(Environment.NewLine + Environment.NewLine, issues.Select(issue => issue.Path + Environment.NewLine + issue.Error));
+        if (originalError is not null)
+            details += Environment.NewLine + Environment.NewLine + originalError;
+        new DiscoveryDetailsWindow(details, LocalizationService.Get("Cleanup.Title")) { Owner = this }.ShowDialog();
     }
 
     private static string GetLocalizedExceptionMessage(Exception exception) =>

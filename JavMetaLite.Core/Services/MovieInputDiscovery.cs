@@ -84,7 +84,7 @@ public static class MovieInputDiscovery
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                diagnostics.Add(new MovieFileDiscoveryDiagnostic(currentDirectory, exception.Message));
+                diagnostics.Add(MovieFileDiscoveryDiagnostic.FromException(currentDirectory, exception));
                 continue;
             }
 
@@ -106,7 +106,7 @@ public static class MovieInputDiscovery
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                diagnostics.Add(new MovieFileDiscoveryDiagnostic(currentDirectory, exception.Message));
+                diagnostics.Add(MovieFileDiscoveryDiagnostic.FromException(currentDirectory, exception));
                 continue;
             }
 
@@ -127,7 +127,7 @@ public static class MovieInputDiscovery
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
                     skippedDirectoryCount++;
-                    diagnostics.Add(new MovieFileDiscoveryDiagnostic(subdirectory, exception.Message));
+                    diagnostics.Add(MovieFileDiscoveryDiagnostic.FromException(subdirectory, exception));
                 }
             }
         }

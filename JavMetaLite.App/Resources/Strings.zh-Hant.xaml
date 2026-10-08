@@ -38,13 +38,15 @@
     <sys:String x:Key="Main.Queue">影片佇列</sys:String>
     <sys:String x:Key="Main.QueueCount">{0} 部影片</sys:String>
     <sys:String x:Key="Main.RemoveFromQueue">從佇列移除</sys:String>
-    <sys:String x:Key="Dialog.ChooseScanRoot">選擇要掃描的資料夾</sys:String>
+    <sys:String x:Key="Dialog.ChooseScanRoot">選擇要掃描的資料夾（可多選）</sys:String>
     <sys:String x:Key="Discovery.Title">探索影片</sys:String>
     <sys:String x:Key="Discovery.Description">加入前依影片與 CD 分段檢查所選檔案及資料夾。探索過程不會連線，也不會寫入檔案。</sys:String>
     <sys:String x:Key="Discovery.IncludeSubdirectories">包含子資料夾</sys:String>
     <sys:String x:Key="Discovery.Scanning">正在掃描所選檔案與資料夾…</sys:String>
     <sys:String x:Key="Discovery.Summary">共找到 {0} 部影片；可加入 {1} 部；已在佇列 {2} 部；忽略檔案 {3} 個；略過資料夾 {4} 個。</sys:String>
-    <sys:String x:Key="Discovery.Diagnostics">有 {0} 個資料夾無法讀取；將游標停留可查看詳情。</sys:String>
+    <sys:String x:Key="Discovery.Diagnostics">有 {0} 個資料夾無法讀取。</sys:String>
+    <sys:String x:Key="Discovery.ViewDetails">查看詳情</sys:String>
+    <sys:String x:Key="Discovery.DetailsTitle">掃描詳情</sys:String>
     <sys:String x:Key="Discovery.Failed">資料夾探索失敗：{0}</sys:String>
     <sys:String x:Key="Discovery.AddFound">加入找到的影片</sys:String>
     <sys:String x:Key="Status.AddedMovies">已加入 {0} 部影片，略過 {1} 個重複項。</sys:String>
@@ -131,6 +133,9 @@
     <sys:String x:Key="Status.SourceProfileUpdated">自訂多來源規則已更新</sys:String>
     <sys:String x:Key="Discovery.SelectAll">全選</sys:String>
     <sys:String x:Key="Discovery.SelectNone">取消全選</sys:String>
+    <sys:String x:Key="Discovery.SelectRecognized">選擇已識別</sys:String>
+    <sys:String x:Key="Discovery.AccessDenied">存取權限不足，已略過此資料夾；這不表示影片損壞。</sys:String>
+    <sys:String x:Key="Discovery.AccessDeniedSummary">有 {0} 個資料夾因存取權限不足而略過；不表示影片損壞。</sys:String>
     <sys:String x:Key="Discovery.PartCount">{0} 個 CD 分段</sys:String>
     <sys:String x:Key="Discovery.Status.Ready">可加入</sys:String>
     <sys:String x:Key="Discovery.Status.NeedsId">番號待確認</sys:String>
@@ -289,4 +294,17 @@
     <sys:String x:Key="CoverCheck.Stopped">封套檢查已停止；已取得的資料及檢查結果保留。</sys:String>
     <sys:String x:Key="Error.BatchOutputConflict">本片與其他所選影片使用了相同的輸出或來源路徑，儲存可能覆寫或移除另一部影片的檔案。請為每部影片使用獨立的番號資料夾，再重新預覽。衝突路徑：&#10;{0}</sys:String>
     <sys:String x:Key="Preview.Conflict.WebPReplacement">無法原地編碼 WebP 圖片，請保留本機圖片或儲存到新目錄：{0}</sys:String>
+    <sys:String x:Key="Main.QueueSelectPending">選擇待處理</sys:String>
+    <sys:String x:Key="Main.QueueSelectIssues">選擇有問題</sys:String>
+    <sys:String x:Key="Cleanup.Title">儲存與清理詳情</sys:String>
+    <sys:String x:Key="Cleanup.Committed">儲存已完成，但仍有暫存資料夾待清理或無法確認；請查看詳情。</sys:String>
+    <sys:String x:Key="Cleanup.Incomplete">儲存未完成，暫存資料夾清理未確認。請保留原影片並檢查下列路徑。</sys:String>
+    <sys:String x:Key="Cleanup.RecoveryFailed">檔案還原不完整。請勿刪除暫存資料夾或備份，檢查下列路徑。</sys:String>
+    <sys:String x:Key="Duplicate.Title">影片目標衝突</sys:String>
+    <sys:String x:Key="Duplicate.Intro">這些影片將儲存到相同路徑。請選擇一條儲存，或確認它們是同一影片的不同分段；未儲存的影片仍留在佇列中。</sys:String>
+    <sys:String x:Key="Duplicate.Restriction">合為分段僅支援同目錄、同番號且儲存設定一致的單檔影片。依清單由上到下儲存為 CD1、CD2…，可用 ↑/↓ 調整順序。</sys:String>
+    <sys:String x:Key="Duplicate.ConfirmParts">我已確認分段順序，並使用第一條影片的資料和圖片。儲存時使用番號-CD 命名；原地模式改為番號子目錄，其他分段獨有的本機資料保留在原處。</sys:String>
+    <sys:String x:Key="Duplicate.SaveOne">儲存選中一條</sys:String>
+    <sys:String x:Key="Duplicate.SaveParts">作為分段儲存</sys:String>
+    <sys:String x:Key="Duplicate.Skip">本次略過此組</sys:String>
 </ResourceDictionary>

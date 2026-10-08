@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 
-> 現在のバージョン：**1.2.1**。
+> 現在のバージョン：**1.2.2**。
 
 ローカル動画の情報を確認・整理する Windows アプリです。単体編集と一括処理に対応し、Jellyfin 用のメタデータや画像を出力できます。
 
@@ -41,7 +41,7 @@ Windows 10/11 x64 が必要です。.NET Runtime の別途インストールは�
 
 ## 詳細
 
-[リリースノート](docs/RELEASE-NOTES-v1.2.1.md) · [Docs](docs/README.md) · [変更履歴](CHANGELOG.md) · [開発とテスト](TESTING.md)
+[リリースノート](docs/RELEASE-NOTES-v1.2.2.md) · [Docs](docs/README.md) · [変更履歴](CHANGELOG.md) · [開発とテスト](TESTING.md)
 
 ビルドには .NET SDK 10.0.400 が必要です。ログと設定は `%LOCALAPPDATA%\JavMetaLite` に保存されます。
 

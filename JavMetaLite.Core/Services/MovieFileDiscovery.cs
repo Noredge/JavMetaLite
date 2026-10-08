@@ -1,10 +1,18 @@
 namespace JavMetaLite.Core.Services;
 
-public enum MovieFileDiscoveryDiagnosticKind { ReadFailed, PathUnavailable }
+public enum MovieFileDiscoveryDiagnosticKind { ReadFailed, PathUnavailable, AccessDenied }
 
 public sealed record MovieFileDiscoveryDiagnostic(string Path, string Message)
 {
     public MovieFileDiscoveryDiagnosticKind Kind { get; init; } = MovieFileDiscoveryDiagnosticKind.ReadFailed;
+
+    public static MovieFileDiscoveryDiagnostic FromException(string path, Exception exception) =>
+        new(path, exception.Message)
+        {
+            Kind = exception is UnauthorizedAccessException
+                ? MovieFileDiscoveryDiagnosticKind.AccessDenied
+                : MovieFileDiscoveryDiagnosticKind.ReadFailed
+        };
 }
 
 public sealed record MovieFileDiscoveryResult(
@@ -56,7 +64,7 @@ public static class MovieFileDiscovery
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                diagnostics.Add(new MovieFileDiscoveryDiagnostic(currentDirectory, exception.Message));
+                diagnostics.Add(MovieFileDiscoveryDiagnostic.FromException(currentDirectory, exception));
                 continue;
             }
 
@@ -85,7 +93,7 @@ public static class MovieFileDiscovery
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                diagnostics.Add(new MovieFileDiscoveryDiagnostic(currentDirectory, exception.Message));
+                diagnostics.Add(MovieFileDiscoveryDiagnostic.FromException(currentDirectory, exception));
                 continue;
             }
 
@@ -105,7 +113,7 @@ public static class MovieFileDiscovery
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
                     skippedDirectoryCount++;
-                    diagnostics.Add(new MovieFileDiscoveryDiagnostic(subdirectory, exception.Message));
+                    diagnostics.Add(MovieFileDiscoveryDiagnostic.FromException(subdirectory, exception));
                 }
             }
         }

@@ -34,6 +34,20 @@ public sealed class MovieFileSet
 
     public bool UsesMultipartNaming => Parts.All(part => part.IsMultipart);
 
+    // Explicit user confirmation only; automatic discovery deliberately does not infer a/b.
+    public static MovieFileSet CreateConfirmedParts(IEnumerable<string> orderedPaths, string movieBaseName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(movieBaseName);
+        var paths = orderedPaths.Select(Path.GetFullPath).ToArray();
+        if (paths.Length < 2 || paths.Distinct(StringComparer.OrdinalIgnoreCase).Count() != paths.Length)
+            throw new ArgumentException("需要至少两个不同的影片文件。", nameof(orderedPaths));
+        var directory = Path.GetDirectoryName(paths[0]);
+        if (paths.Any(path => !string.Equals(Path.GetDirectoryName(path), directory, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("手动分段必须位于同一来源目录。");
+        return new MovieFileSet(paths.Select((path, index) =>
+            new MovieFilePart(path, movieBaseName, index + 1)).ToArray(), $"multipart|{directory}|{movieBaseName}");
+    }
+
     public static MovieFileSet Create(IEnumerable<string> paths)
     {
         ArgumentNullException.ThrowIfNull(paths);

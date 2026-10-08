@@ -61,6 +61,7 @@ public static class BatchSaveCoordinator
                 var saveResult = await executeAsync(item, cancellationToken);
                 item.Job.UpdateVideoPaths(saveResult.VideoPaths);
                 item.Job.MarkSaveCompleted();
+                stopAfterItem = saveResult.CleanupIssues.Count > 0;
                 results[index] = new BatchSaveItemResult(
                     item,
                     BatchSaveItemStatus.Completed,

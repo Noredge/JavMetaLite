@@ -10,7 +10,8 @@ namespace JavMetaLite.App;
 internal static class BatchSavePathConflicts
 {
     internal static IReadOnlyDictionary<MovieJob, IReadOnlyList<string>> Find(
-        IReadOnlyList<BatchSavePreviewItem> items)
+        IReadOnlyList<BatchSavePreviewItem> items,
+        IReadOnlyList<BatchSavePreviewItem>? protectedItems = null)
     {
         var uses = new Dictionary<string, Dictionary<MovieJob, bool>>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in items)
@@ -34,11 +35,26 @@ internal static class BatchSavePathConflicts
             foreach (var path in item.Plan.SourcePathsToRetire) Add(item.Job, path, true);
         }
 
+        // Skipping a movie protects its existing inputs, not its hypothetical outputs.
+        foreach (var item in protectedItems ?? [])
+        {
+            foreach (var change in item.Plan.Changes)
+            {
+                Add(item.Job, change.SourcePath, false);
+                if (change.Kind is PlannedChangeKind.KeepFile) Add(item.Job, change.DestinationPath, false);
+            }
+            foreach (var transfer in item.Plan.VideoTransfers) Add(item.Job, transfer.SourcePath, false);
+            foreach (var transfer in item.Plan.SidecarTransfers) Add(item.Job, transfer.SourcePath, false);
+            foreach (var expectation in item.Plan.SourceFileExpectations) Add(item.Job, expectation.Path, false);
+            foreach (var path in item.Plan.SourcePathsToRetire) Add(item.Job, path, false);
+        }
+        var activeJobs = items.Select(item => item.Job).ToHashSet();
         var conflicts = new Dictionary<MovieJob, List<string>>();
         foreach (var (path, owners) in uses.Where(pair => pair.Value.Count > 1 && pair.Value.Values.Any(writes => writes)))
         {
             foreach (var job in owners.Keys)
             {
+                if (!activeJobs.Contains(job)) continue;
                 if (!conflicts.TryGetValue(job, out var paths)) conflicts[job] = paths = [];
                 paths.Add(path);
             }

@@ -13,6 +13,7 @@ public partial class MovieDiscoveryWindow : Window
     private MovieInputDiscoveryResult? _initialResult;
     private CancellationTokenSource? _scanCancellation;
     private bool _loaded;
+    private string _diagnosticDetails = string.Empty;
 
     public MovieDiscoveryWindow(string rootPath, IEnumerable<string> existingVideoPaths)
         : this([rootPath], existingVideoPaths, includeSubdirectories: true)
@@ -84,9 +85,12 @@ public partial class MovieDiscoveryWindow : Window
         _scanCancellation = cancellation;
         AddButton.IsEnabled = false;
         SelectAllButton.IsEnabled = false;
+        SelectRecognizedButton.IsEnabled = false;
         SelectNoneButton.IsEnabled = false;
         Items.Clear();
         DiagnosticsText.Text = string.Empty;
+        _diagnosticDetails = string.Empty;
+        DiagnosticsDetailsButton.Visibility = Visibility.Collapsed;
         SummaryText.Text = LocalizationService.Get("Discovery.Scanning");
 
         try
@@ -110,7 +114,8 @@ public partial class MovieDiscoveryWindow : Window
             SelectedVideoPaths = [];
             SummaryText.Text = LocalizationService.Get("Discovery.FailedSummary");
             DiagnosticsText.Text = LocalizationService.Get("Discovery.ReadFailed");
-            DiagnosticsText.ToolTip = exception.Message;
+            _diagnosticDetails = exception.ToString();
+            DiagnosticsDetailsButton.Visibility = Visibility.Visible;
         }
     }
 
@@ -132,6 +137,16 @@ public partial class MovieDiscoveryWindow : Window
         foreach (var item in Items.Where(item => item.CanSelect))
         {
             item.IsSelected = true;
+        }
+
+        UpdateSelectionState();
+    }
+
+    private void SelectRecognized_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var item in Items.Where(item => item.CanSelect))
+        {
+            item.IsSelected = item.HasRecognizedId;
         }
 
         UpdateSelectionState();
@@ -168,13 +183,25 @@ public partial class MovieDiscoveryWindow : Window
             duplicateCount,
             result.IgnoredFileCount,
             result.SkippedDirectoryCount);
-        DiagnosticsText.Text = result.Diagnostics.Count == 0
-            ? string.Empty
-            : LocalizationService.Get("Discovery.Diagnostics", result.Diagnostics.Count);
-        DiagnosticsText.ToolTip = result.Diagnostics.Count == 0
-            ? null
-            : string.Join(Environment.NewLine, result.Diagnostics.Select(DiscoveryDiagnosticText.Format));
+        var deniedCount = result.Diagnostics.Count(d => d.Kind == MovieFileDiscoveryDiagnosticKind.AccessDenied);
+        var otherCount = result.Diagnostics.Count - deniedCount;
+        var diagnosticSummaries = new List<string>();
+        if (deniedCount > 0)
+            diagnosticSummaries.Add(LocalizationService.Get("Discovery.AccessDeniedSummary", deniedCount));
+        if (otherCount > 0)
+            diagnosticSummaries.Add(LocalizationService.Get("Discovery.Diagnostics", otherCount));
+        DiagnosticsText.Text = string.Join(Environment.NewLine, diagnosticSummaries);
+        _diagnosticDetails = string.Join(Environment.NewLine + Environment.NewLine,
+            result.Diagnostics.Select(DiscoveryDiagnosticText.Format));
+        DiagnosticsDetailsButton.Visibility = result.Diagnostics.Count == 0
+            ? Visibility.Collapsed : Visibility.Visible;
         UpdateSelectionState();
+    }
+
+    private void DiagnosticsDetails_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(_diagnosticDetails))
+            new DiscoveryDetailsWindow(_diagnosticDetails) { Owner = this }.ShowDialog();
     }
 
     private void UpdateSelectionState()
@@ -182,6 +209,7 @@ public partial class MovieDiscoveryWindow : Window
         var hasSelectableItems = Items.Any(item => item.CanSelect);
         AddButton.IsEnabled = Items.Any(item => item.CanSelect && item.IsSelected);
         SelectAllButton.IsEnabled = hasSelectableItems;
+        SelectRecognizedButton.IsEnabled = Items.Any(item => item.CanSelect && item.HasRecognizedId);
         SelectNoneButton.IsEnabled = hasSelectableItems;
     }
 
@@ -205,6 +233,7 @@ public sealed class MovieDiscoveryItem : INotifyPropertyChanged
         CanSelect = !isDuplicate;
         _isSelected = CanSelect;
         var id = MovieIdParser.TryExtract(fileSet.MovieBaseName);
+        HasRecognizedId = id is not null;
         DisplayName = id ?? fileSet.MovieBaseName;
         Detail = fileSet.Parts.Count > 1
             ? LocalizationService.Get("Discovery.PartCount", fileSet.Parts.Count)
@@ -229,6 +258,8 @@ public sealed class MovieDiscoveryItem : INotifyPropertyChanged
     public string StatusText { get; }
 
     public bool CanSelect { get; }
+
+    public bool HasRecognizedId { get; }
 
     public bool IsSelected
     {

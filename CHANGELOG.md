@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.2
+
+- Scan multiple folders and select only recognized movie IDs during discovery.
+- Fix IDs containing resolution-like numbers; stop auto-detecting numeric date-style IDs.
+- Add pending/problem selection buttons and category counts without changing list filtering.
+- Show complete scan diagnostics and distinguish permission denial from read failures.
+- Resolve duplicate batch targets explicitly: save one, confirm ordered CD parts, or skip.
+- Report incomplete temporary cleanup and preserve recovery errors after cancellation.
+
+[Release notes](docs/RELEASE-NOTES-v1.2.2.md)
+
 ## 1.2.1
 
 - Read folder-level metadata and artwork in dedicated movie folders.

@@ -173,6 +173,18 @@ static Task TestMovieIdParser()
     AssertEqual("SSIS-001", MovieIdParser.TryExtract("ssis001_uncensored.mkv"));
     AssertEqual("FC2-PPV-1234567", MovieIdParser.TryExtract("FC2-PPV-1234567.mp4"));
     AssertEqual(null, MovieIdParser.TryExtract("vacation-1080p.mp4"));
+    foreach (var number in new[] { "480", "720", "1080", "2160" })
+    {
+        AssertEqual($"MIDE-{number}", MovieIdParser.TryExtract($"MIDE-{number} 中文标题OL.mp4"));
+        AssertEqual(null, MovieIdParser.TryExtract($"vacation-{number}p.mp4"));
+        AssertEqual(null, MovieIdParser.TryExtract($"HD-{number}.mp4"));
+    }
+    AssertEqual("MIDE-720", MovieIdParser.TryExtract("MIDE-720.mp4"));
+    AssertEqual("MIDE-720", MovieIdParser.TryExtract("[1080p] MIDE-720 OL.mp4"));
+    AssertEqual(null, MovieIdParser.TryExtract("042619-903 中文标题.mp4"));
+    AssertEqual(null, MovieIdParser.TryExtract("012318_589.mp4"));
+    AssertEqual(null, MovieIdParser.TryExtract("032614.779.mp4"));
+    AssertEqual("IPX-123", MovieIdParser.TryExtract("042619-903 IPX-123.mp4"));
     return Task.CompletedTask;
 }
 
@@ -1858,6 +1870,13 @@ static async Task TestMovieFileDiscovery()
         var unifiedTopOnly = await MovieInputDiscovery.DiscoverAsync([root], includeSubdirectories: false);
         AssertEqual("1", unifiedTopOnly.MovieFileSets.Count.ToString());
         AssertEqual(Path.GetFullPath(topVideo), unifiedTopOnly.MovieFileSets[0].PrimaryPath);
+
+        var multipleTopOnly = await MovieInputDiscovery.DiscoverAsync(
+            [root, nested, root], includeSubdirectories: false);
+        AssertEqual("2", multipleTopOnly.InputPaths.Count.ToString());
+        AssertEqual("2", multipleTopOnly.VideoPaths.Count.ToString());
+        AssertEqual("True", multipleTopOnly.VideoPaths.Contains(Path.GetFullPath(topVideo)).ToString());
+        AssertEqual("True", multipleTopOnly.VideoPaths.Contains(Path.GetFullPath(nestedVideo)).ToString());
 
         var missingMixedInput = await MovieInputDiscovery.DiscoverAsync(
             [topVideo, Path.Combine(root, "missing")],

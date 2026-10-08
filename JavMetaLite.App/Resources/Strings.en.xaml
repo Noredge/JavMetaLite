@@ -29,13 +29,15 @@
     <sys:String x:Key="Main.Queue">Movie queue</sys:String>
     <sys:String x:Key="Main.QueueCount">{0} movies</sys:String>
     <sys:String x:Key="Main.RemoveFromQueue">Remove from queue</sys:String>
-    <sys:String x:Key="Dialog.ChooseScanRoot">Choose a folder to scan</sys:String>
+    <sys:String x:Key="Dialog.ChooseScanRoot">Choose folders to scan (multiple selection allowed)</sys:String>
     <sys:String x:Key="Discovery.Title">Discover movies</sys:String>
     <sys:String x:Key="Discovery.Description">Review selected files and folders grouped by movie and CD parts. Discovery does not use the network or write files.</sys:String>
     <sys:String x:Key="Discovery.IncludeSubdirectories">Include subfolders</sys:String>
     <sys:String x:Key="Discovery.Scanning">Scanning the selected files and folders…</sys:String>
     <sys:String x:Key="Discovery.Summary">Found {0} movies; ready to add {1}; already queued {2}; ignored files {3}; skipped folders {4}.</sys:String>
-    <sys:String x:Key="Discovery.Diagnostics">{0} folders could not be read. Hover for details.</sys:String>
+    <sys:String x:Key="Discovery.Diagnostics">{0} folders could not be read.</sys:String>
+    <sys:String x:Key="Discovery.ViewDetails">View details</sys:String>
+    <sys:String x:Key="Discovery.DetailsTitle">Scan details</sys:String>
     <sys:String x:Key="Discovery.Failed">Folder discovery failed: {0}</sys:String>
     <sys:String x:Key="Discovery.AddFound">Add found movies</sys:String>
     <sys:String x:Key="Status.AddedMovies">Added {0} movies; skipped {1} duplicates.</sys:String>
@@ -122,6 +124,9 @@
     <sys:String x:Key="Status.SourceProfileUpdated">Custom multi-source rules updated</sys:String>
     <sys:String x:Key="Discovery.SelectAll">Select all</sys:String>
     <sys:String x:Key="Discovery.SelectNone">Select none</sys:String>
+    <sys:String x:Key="Discovery.SelectRecognized">Select recognized</sys:String>
+    <sys:String x:Key="Discovery.AccessDenied">Access denied; folder skipped. This does not indicate damaged videos.</sys:String>
+    <sys:String x:Key="Discovery.AccessDeniedSummary">{0} folders skipped due to access permissions, not evidence of damaged videos.</sys:String>
     <sys:String x:Key="Discovery.PartCount">{0} CD parts</sys:String>
     <sys:String x:Key="Discovery.Status.Ready">Ready to add</sys:String>
     <sys:String x:Key="Discovery.Status.NeedsId">ID needs review</sys:String>
@@ -280,4 +285,17 @@
     <sys:String x:Key="CoverCheck.Stopped">Cover checks stopped. Fetched metadata and completed checks are retained.</sys:String>
     <sys:String x:Key="Error.BatchOutputConflict">This movie shares an output or source file with another selected movie. Saving could overwrite or remove that movie's files. Use a separate ID folder for each movie, then preview again. Conflicting paths:&#10;{0}</sys:String>
     <sys:String x:Key="Preview.Conflict.WebPReplacement">Cannot encode WebP in place. Keep the local image or save to a new folder: {0}</sys:String>
+    <sys:String x:Key="Main.QueueSelectPending">Select pending</sys:String>
+    <sys:String x:Key="Main.QueueSelectIssues">Select issues</sys:String>
+    <sys:String x:Key="Cleanup.Title">Save and cleanup details</sys:String>
+    <sys:String x:Key="Cleanup.Committed">Saving completed, but temporary folders remain or cleanup could not be confirmed. See details.</sys:String>
+    <sys:String x:Key="Cleanup.Incomplete">Saving did not complete; temporary folder cleanup could not be confirmed. Keep the original videos and check the paths below.</sys:String>
+    <sys:String x:Key="Cleanup.RecoveryFailed">File recovery is incomplete. Do not delete temporary folders or backups. Check the paths below.</sys:String>
+    <sys:String x:Key="Duplicate.Title">Conflicting movie targets</sys:String>
+    <sys:String x:Key="Duplicate.Intro">These movies share a destination. Choose one to save, or confirm they are parts of one movie. Unsaved movies remain in the queue.</sys:String>
+    <sys:String x:Key="Duplicate.Restriction">Combining requires single-file movies with the same folder, ID and save settings. Top-to-bottom order becomes CD1, CD2…; use ↑/↓ to reorder.</sys:String>
+    <sys:String x:Key="Duplicate.ConfirmParts">I confirm the part order and use the first movie's metadata and images. Files use ID-CD names; in-place mode becomes an ID subfolder. Other parts' separate local metadata stays at the source.</sys:String>
+    <sys:String x:Key="Duplicate.SaveOne">Save selected one</sys:String>
+    <sys:String x:Key="Duplicate.SaveParts">Save as parts</sys:String>
+    <sys:String x:Key="Duplicate.Skip">Skip this group</sys:String>
 </ResourceDictionary>
