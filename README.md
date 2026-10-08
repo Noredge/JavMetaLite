@@ -39,10 +39,30 @@ Windows 10/11 x64. No separate .NET Runtime installation; the embedded browser r
 - Back up important media. Saves stop on failure or cancellation; keep recovery folders if restoration fails.
 - Sources may contain adult material. Respect their terms and applicable age/legal requirements.
 
+## Build from source
+
+On Windows 10/11 x64, install Git and the exact .NET SDK pinned in [global.json](global.json) (currently 10.0.400). In PowerShell:
+
+```powershell
+git clone https://github.com/Noredge/JavMetaLite.git
+cd JavMetaLite
+dotnet build .\JavMetaLite.App\JavMetaLite.App.csproj -c Release
+dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj -c Release --no-build
+```
+
+The build restores NuGet packages automatically; the first build needs network access. To create and verify a self-contained portable package from the repository root:
+
+```powershell
+.\scripts\New-ReleasePackage.ps1
+.\scripts\Test-PortablePackage.ps1
+```
+
+The EXE folder, ZIP and SHA-256 files are written to `release/`. See [Development and testing](TESTING.md) for the full test suite.
+
 ## More
 
 [Release notes](docs/RELEASE-NOTES-v1.2.2.md) · [Docs](docs/README.md) · [Changelog](CHANGELOG.md) · [Development and testing](TESTING.md)
 
-Building requires the .NET SDK 10.0.400. Logs and preferences are under `%LOCALAPPDATA%\JavMetaLite`.
+Logs and preferences are under `%LOCALAPPDATA%\JavMetaLite`.
 
 [MIT License](LICENSE) · © 2026 Noredge · [Third-party notices](THIRD_PARTY_NOTICES.md). Not affiliated with source sites; their data is not covered by this project's license.

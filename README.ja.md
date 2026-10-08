@@ -39,10 +39,30 @@ Windows 10/11 x64 が必要です。.NET Runtime の別途インストールは�
 - 重要な動画はバックアップしてください。保存は失敗またはキャンセルで停止します。復元失敗時は復元用フォルダーを保持してください。
 - 取得元には成人向けコンテンツが含まれる場合があります。サイトの規約、適用される年齢条件・法令を守ってください。
 
+## ソースからビルド
+
+Windows 10/11 x64 に Git と [global.json](global.json) で指定された .NET SDK（現在は 10.0.400）をインストールし、PowerShell で実行します。
+
+```powershell
+git clone https://github.com/Noredge/JavMetaLite.git
+cd JavMetaLite
+dotnet build .\JavMetaLite.App\JavMetaLite.App.csproj -c Release
+dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj -c Release --no-build
+```
+
+ビルド時に NuGet パッケージが自動復元されるため、初回はネットワーク接続が必要です。リポジトリのルートで自己完結型ポータブルパッケージを作成・検証します。
+
+```powershell
+.\scripts\New-ReleasePackage.ps1
+.\scripts\Test-PortablePackage.ps1
+```
+
+EXE を含むフォルダー、ZIP、SHA-256 ファイルは `release/` に出力されます。全テストの実行方法は[開発とテスト](TESTING.md)を参照してください。
+
 ## 詳細
 
 [リリースノート](docs/RELEASE-NOTES-v1.2.2.md) · [Docs](docs/README.md) · [変更履歴](CHANGELOG.md) · [開発とテスト](TESTING.md)
 
-ビルドには .NET SDK 10.0.400 が必要です。ログと設定は `%LOCALAPPDATA%\JavMetaLite` に保存されます。
+ログと設定は `%LOCALAPPDATA%\JavMetaLite` に保存されます。
 
 [MIT License](LICENSE) · © 2026 Noredge · [サードパーティーについて](THIRD_PARTY_NOTICES.md)。取得元サイトとは提携しておらず、本プロジェクトのライセンスはサイトのデータには適用されません。

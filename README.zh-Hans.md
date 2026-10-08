@@ -39,10 +39,30 @@
 - 请备份重要媒体。保存遇到失败或取消会停止；恢复失败时请保留恢复目录。
 - 来源网站可能含成人内容，请遵守其条款及适用的年龄与法律要求。
 
+## 从源码构建
+
+在 Windows 10/11 x64 上安装 Git 和 [global.json](global.json) 指定的准确 .NET SDK 版本（目前为 10.0.400），然后在 PowerShell 中执行：
+
+```powershell
+git clone https://github.com/Noredge/JavMetaLite.git
+cd JavMetaLite
+dotnet build .\JavMetaLite.App\JavMetaLite.App.csproj -c Release
+dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj -c Release --no-build
+```
+
+构建会自动还原 NuGet 依赖，首次构建需要联网。在仓库根目录生成并校验自包含便携包：
+
+```powershell
+.\scripts\New-ReleasePackage.ps1
+.\scripts\Test-PortablePackage.ps1
+```
+
+EXE 所在文件夹、ZIP 和 SHA-256 文件均输出到 `release/`。完整测试命令见[开发与测试](TESTING.md)。
+
 ## 更多
 
 [版本说明](docs/RELEASE-NOTES-v1.2.2.md) · [Docs](docs/README.md) · [更新历史](CHANGELOG.md) · [开发与测试](TESTING.md)
 
-编译需要 .NET SDK 10.0.400。日志和偏好设置位于 `%LOCALAPPDATA%\JavMetaLite`。
+日志和偏好设置位于 `%LOCALAPPDATA%\JavMetaLite`。
 
 [MIT 许可证](LICENSE) · © 2026 Noredge · [第三方声明](THIRD_PARTY_NOTICES.md)。本项目与来源网站无隶属关系，项目许可证不包含网站资料的授权。
