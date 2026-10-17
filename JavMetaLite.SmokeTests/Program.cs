@@ -185,6 +185,20 @@ static Task TestMovieIdParser()
     AssertEqual(null, MovieIdParser.TryExtract("012318_589.mp4"));
     AssertEqual(null, MovieIdParser.TryExtract("032614.779.mp4"));
     AssertEqual("IPX-123", MovieIdParser.TryExtract("042619-903 IPX-123.mp4"));
+    foreach (var (stem, expected) in new[] {
+        ("489155.com@ABF-391-U", "ABF-391"),
+        ("489155.com@SSNI-177-UC", "SSNI-177"),
+        ("mirror.example@IPZZ-950-UC", "IPZZ-950"),
+        ("ABF.391-U", "ABF-391"),
+        ("mirror.example@FC2-PPV-1234567", "FC2-PPV-1234567") })
+    {
+        AssertEqual(expected, MovieIdParser.TryExtractFromBaseName(stem));
+        AssertEqual(expected, MovieIdParser.TryExtract($@"C:\Synthetic\{stem}.mp4"));
+    }
+    AssertEqual(null, MovieIdParser.TryExtractFromBaseName(null));
+    AssertEqual(null, MovieIdParser.TryExtractFromBaseName(" "));
+    AssertEqual(null, MovieIdParser.TryExtractFromBaseName("042619-903"));
+    AssertEqual(null, MovieIdParser.TryExtract(@"C:\Synthetic\ABF-391-U\广告.mp4"));
     return Task.CompletedTask;
 }
 

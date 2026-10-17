@@ -17,7 +17,19 @@ public static partial class MovieIdParser
             return null;
         }
 
-        var fileName = Path.GetFileNameWithoutExtension(fileNameOrPath)
+        return TryExtractFromBaseName(Path.GetFileNameWithoutExtension(fileNameOrPath));
+    }
+
+    // Discovery has already removed the extension (and any CD suffix).
+    // Dots in a base name belong to the name, not to another extension.
+    public static string? TryExtractFromBaseName(string? baseName)
+    {
+        if (string.IsNullOrWhiteSpace(baseName))
+        {
+            return null;
+        }
+
+        var fileName = baseName
             .Replace('—', '-')
             .Replace('–', '-')
             .Replace('－', '-');

@@ -232,7 +232,7 @@ public sealed class MovieDiscoveryItem : INotifyPropertyChanged
         FileSet = fileSet;
         CanSelect = !isDuplicate;
         _isSelected = CanSelect;
-        var id = MovieIdParser.TryExtract(fileSet.MovieBaseName);
+        var id = MovieIdParser.TryExtractFromBaseName(fileSet.MovieBaseName);
         HasRecognizedId = id is not null;
         DisplayName = id ?? fileSet.MovieBaseName;
         Detail = fileSet.Parts.Count > 1

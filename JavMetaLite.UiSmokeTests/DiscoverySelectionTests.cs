@@ -33,6 +33,23 @@ internal static partial class Program
         void Click(string name) => typeof(MovieDiscoveryWindow).GetMethod(name,
             BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, [window, new RoutedEventArgs()]);
 
+        var prefixed = new MovieDiscoveryItem(MovieFileSet.Create([@"C:\Synthetic\ABF-391-U\489155.com@ABF-391-U.mp4"]), false);
+        var prefixedParts = new MovieDiscoveryItem(MovieFileSet.Create([
+            @"C:\Synthetic\489155.com@SSNI-177-UC-CD1.mp4",
+            @"C:\Synthetic\489155.com@SSNI-177-UC-CD2.mp4"]), false);
+        var advert = new MovieDiscoveryItem(MovieFileSet.Create([@"C:\Synthetic\ABF-391-U\广告.mp4"]), false);
+        window.Items.Clear();
+        foreach (var item in new[] { prefixed, prefixedParts, advert }) window.Items.Add(item);
+        Click("SelectNone_Click");
+        if (!((Button)window.FindName("SelectRecognizedButton")).IsEnabled ||
+            prefixed.DisplayName != "ABF-391" || prefixedParts.DisplayName != "SSNI-177")
+            throw new InvalidOperationException("Dotted prefixes must not hide recognized IDs or disable selection.");
+        Click("SelectRecognized_Click");
+        if (!prefixed.IsSelected || !prefixedParts.IsSelected || advert.IsSelected || advert.HasRecognizedId)
+            throw new InvalidOperationException("Select recognized must include dotted-prefix movies but exclude adjacent advertisements.");
+        window.Items.Clear();
+        foreach (var item in new[] { recognized, unknown, numeric, duplicate, multipart, fc2 }) window.Items.Add(item);
+
         Click("SelectRecognized_Click");
         if (!recognized.IsSelected || !multipart.IsSelected || !fc2.IsSelected ||
             unknown.IsSelected || numeric.IsSelected || duplicate.IsSelected)

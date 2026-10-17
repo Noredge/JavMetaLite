@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 
-> 当前版本：**1.2.2**。
+> 当前版本：**1.2.3**。
 
 用于本地影片资料审核与整理的 Windows 工具，支持单片编辑、批量处理和 Jellyfin 兼容输出。
 
@@ -61,7 +61,7 @@ EXE 所在文件夹、ZIP 和 SHA-256 文件均输出到 `release/`。完整测�
 
 ## 更多
 
-[版本说明](docs/RELEASE-NOTES-v1.2.2.md) · [Docs](docs/README.md) · [更新历史](CHANGELOG.md) · [开发与测试](TESTING.md)
+[版本说明](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [更新历史](CHANGELOG.md) · [开发与测试](TESTING.md)
 
 日志和偏好设置位于 `%LOCALAPPDATA%\JavMetaLite`。
 

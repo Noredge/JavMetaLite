@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.3
+
+- Fix movie ID recognition during discovery for filenames containing dotted prefixes such as `mirror.example@ABF-391-U.mp4`.
+- Keep unrelated files without IDs unrecognized; do not infer their IDs from the parent folder.
+- Add parser and discovery-selection regression coverage, including U/UC suffixes and CD parts.
+
+[Release notes](docs/RELEASE-NOTES-v1.2.3.md)
+
 ## 1.2.2
 
 - Scan multiple folders and select only recognized movie IDs during discovery.
