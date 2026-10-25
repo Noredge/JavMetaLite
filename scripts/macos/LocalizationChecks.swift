@@ -6,7 +6,9 @@ struct LocalizationChecks {
         let resourcePath = CommandLine.arguments[1]
         let catalogPath = CommandLine.arguments[2]
         let fallbackPath = CommandLine.arguments[3]
-        guard let resources = Bundle(path: resourcePath), let fallback = Bundle(path: fallbackPath) else {
+        let lowercasePath = CommandLine.arguments[4]
+        guard let resources = Bundle(path: resourcePath), let fallback = Bundle(path: fallbackPath),
+              let lowercaseResources = Bundle(path: lowercasePath) else {
             fatalError("Localization fixture bundle could not be loaded")
         }
         let catalog = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: catalogPath))) as! [String: Any]
@@ -25,6 +27,8 @@ struct LocalizationChecks {
                 let expected = unit["value"] as! String
                 let actual = AppLocalization.string(key, preference: language, preferredLanguages: ["en-US"], resources: resources)
                 check(actual == expected, "Actual Bundle lookup mismatch: \(language)/\(key): \(actual)")
+                let lowercase = AppLocalization.string(key, preference: language, preferredLanguages: ["en-US"], resources: lowercaseResources)
+                check(lowercase == expected, "SwiftPM lowercase bundle lookup mismatch: \(language)/\(key): \(lowercase)")
             }
             check(AppLanguage.normalizePreference(language) == language, "Saved explicit language changed")
             check(AppLanguage.resolve(preference: language, preferredLanguages: ["fr-FR"]) == language, "Explicit preference did not win")
@@ -42,6 +46,6 @@ struct LocalizationChecks {
         check(AppLocalization.string("englishFallback", preference: "ja", resources: fallback) == "English fallback value", "Missing selected-language key must use English")
         check(AppLocalization.string("__missing_key__", preference: "ja", resources: fallback) == "__missing_key__", "Unknown key fallback failed")
         check(AppLanguage.traditionalChinese.nativeName == "繁體中文" && AppLanguage.japanese.nativeName == "日本語", "Language names must be self-identifying")
-        print("LOCALIZATION RUNTIME PASS: \(checks) checks; \(strings.count) keys × 4 real Bundle lookups; regional selection and English fallback")
+        print("LOCALIZATION RUNTIME PASS: \(checks) checks; \(strings.count) keys × 4 languages × 2 resource layouts; regional selection and English fallback")
     }
 }

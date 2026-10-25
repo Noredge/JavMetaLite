@@ -47,9 +47,15 @@ enum AppLocalization {
         let language = AppLanguage.resolve(preference: preference, preferredLanguages: preferredLanguages)
         let missing = "__JavMetaLite_missing_translation__"
         for code in language == "en" ? ["en"] : [language, "en"] {
-            if let path = resources.path(forResource: code, ofType: "lproj"), let localized = Bundle(path: path) {
-                let value = localized.localizedString(forKey: key, value: missing, table: "Localizable")
-                if value != missing { return value }
+            // SwiftPM 6.1 lowercases lproj names; Xcode preserves their source
+            // spelling. Resolve literal directories, without Bundle's implicit
+            // language fallback hiding an explicitly selected Chinese locale.
+            guard let root = resources.resourceURL else { continue }
+            for directory in Set([code, code.lowercased()]).sorted() {
+                if let localized = Bundle(url: root.appendingPathComponent(directory + ".lproj", isDirectory: true)) {
+                    let value = localized.localizedString(forKey: key, value: missing, table: "Localizable")
+                    if value != missing { return value }
+                }
             }
         }
         return key

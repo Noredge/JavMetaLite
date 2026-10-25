@@ -29,7 +29,9 @@ import WorkerKit
         #expect(decision(detail, capturing: true) == .block)
         #expect(decision(detail, frame: true, main: true, capturing: true) == .block)
         for address in ["about:blank", "about:srcdoc", "about:blank#widget"] {
-            let url = URL(string: address)
+            // Explicit components preserve the fragment on macOS 15 as well;
+            // URL(string:) there encodes '#' into the opaque about: path.
+            let url = URLComponents(string: address)?.url
             #expect(decision(url, frame: true, main: false, activated: false) == .allow)
             #expect(decision(url, frame: true, main: true) == .block)
             #expect(decision(url) == .block)
@@ -37,6 +39,9 @@ import WorkerKit
             #expect(!BrowserNavigationPolicy.allowsResponse(url, isMainFrame: true))
             #expect(BrowserNavigationPolicy.externalURL(address) == nil)
         }
+        let encodedLookalike = URL(string: "about:blank%23widget")
+        #expect(decision(encodedLookalike, frame: true, main: false, activated: false) == .block)
+        #expect(!BrowserNavigationPolicy.allowsResponse(encodedLookalike, isMainFrame: false))
         for address in ["file:///tmp/private.html", "javascript:alert(1)",
                         "https://user:password@www.javlibrary.com/", "data:text/html,private"] {
             #expect(decision(URL(string: address)) == .block)

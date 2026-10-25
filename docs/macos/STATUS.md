@@ -1,11 +1,14 @@
-# JavMetaLite macOS — Mac CI Swift 6.1兼容修复
+# JavMetaLite macOS — Mac CI兼容修复
 
 更新：2026-10-25，America/Los_Angeles。首轮远端Mac CI在Swift测试编译失败；不是运行时保存超时，打包步骤当时未执行。[原始失败记录](https://github.com/Noredge/JavMetaLite/actions/runs/40225213296)。
 
 - runner实际为macOS15/macOS SDK15.5、Xcode16.4、Swift6.1.2；BrowserInteractionTests的嵌套JSON表达式触发“unable to type-check this expression in reasonable time”。此前本机Swift6.4通过不能覆盖该编译器差异。
-- 仅将该测试的三个来源字典、目标数组和2MiB整数计算拆成有明确类型的局部值；保留原目标/解析标记、完整浏览器行为和断言。没有升级runner或跳过测试，没有修改应用/Worker/Core/WPF代码、revision、NFO round-trip、冲突预检或文件事务保护。
-- 修复后本机完整11套门禁exit0：Core50/486断言、Swift68（20+48）、协议74、queue4/retention5、发布工具36/manifest15、445keys/1810四语检查；22个应用/8个测试源文件注册与非SwiftPM编译布局通过。本机编译器仍为Swift6.4/CLT，不冒充Swift6.1或完整Xcode运行。
-- 远端沿用原macos-15/Swift6.1工作流，完整测试及自包含App签名、解包回归结果以[mac分支Actions](https://github.com/Noredge/JavMetaLite/actions?query=branch%3Amac)中对应提交为准。只签名、不公证；本轮未重复原生UI验收或替换此前冻结的本机build45交付包，未验证平台/长期压力范围保持。
+- `cd3a147`将三个来源字典、目标数组和2MiB计算拆成明确类型的局部值；[随后远端运行](https://github.com/Noredge/JavMetaLite/actions/runs/40228682086)已越过编译失败，执行全部68项Swift测试，暴露下列3项差异；其中5个失败断言保留原始记录，没有把本机成功当作远端成功。
+- SwiftPM6.1将本地化目录转为小写（[上游实现](https://github.com/swiftlang/swift-package-manager/blob/swift-6.1.2-RELEASE/Sources/PackageModel/Resource.swift#L39-L40)），旧Bundle查找漏掉中文目录并回退英文。应用改为从资源根目录显式寻找规范及小写lproj拼写，保留英文/缺键回退；新增两种真实Bundle布局的四语检查，共445keys/3590运行检查。
+- macOS15的`URL(string:)`将测试的`about:blank#widget`解析为带编码井号的路径；测试改由URLComponents明确构造片段，并增加编码伪装URL的嵌套frame拒绝断言。生产导航规则没有放宽，主页面/弹窗/捕获仍拒绝about URL。
+- 超时测试原将Python冷启动也限制为250ms，远端初始化阶段偶发超时。现在给予正常请求5秒预算，fixture扣住保存响应直到客户端超时后显式释放；验证晚到响应不完成另一请求、保存计数仍为1、状态仍可查询。没有改生产超时、重试或Worker代码。
+- 上述修复后本机完整11套门禁再次exit0：Core50/486断言、Swift68（20+48）、协议74、queue4/retention5、发布工具36/manifest15、445keys/3590四语检查；22个应用/8个测试源文件注册与非SwiftPM编译布局通过。本机编译器仍为Swift6.4/CLT，不冒充Swift6.1或完整Xcode运行。
+- 远端沿用原macos-15/Swift6.1工作流及全部门禁，自包含App签名和解包回归结果以[mac分支Actions](https://github.com/Noredge/JavMetaLite/actions?query=branch%3Amac)中对应提交为准。revision、NFO round-trip、冲突预检和文件事务保护没有修改。只签名、不公证；本轮未重复原生UI验收或替换此前冻结的本机build45交付包，未验证平台/长期压力范围保持。
 
 ---
 

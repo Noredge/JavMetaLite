@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import plistlib
 import re
+import shutil
 import subprocess
 import tempfile
 
@@ -81,6 +82,11 @@ with tempfile.TemporaryDirectory(prefix='JavMetaLite localization 测试 ') as t
     (fallback / 'Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier': 'com.noredge.JavMetaLite.LocalizationFixture', 'CFBundleDevelopmentRegion': 'en'}))
     (fallback / 'en.lproj/Localizable.strings').write_text('"englishFallback" = "English fallback value";\n')
     (fallback / 'ja.lproj/Localizable.strings').write_text('"anotherKey" = "別のキー";\n')
+    lowercase = directory / 'SwiftPM.bundle'
+    lowercase.mkdir()
+    (lowercase / 'Info.plist').write_bytes((fallback / 'Info.plist').read_bytes())
+    for language in LANGUAGES:
+        shutil.copytree(RESOURCES / (language + '.lproj'), lowercase / (language.lower() + '.lproj'))
     executable = directory / 'LocalizationChecks'
     subprocess.run(['/usr/bin/xcrun', 'swiftc', str(ROOT / 'macos/JavMetaLiteMac/App/Localization.swift'), str(ROOT / 'scripts/macos/LocalizationChecks.swift'), '-o', str(executable)], check=True)
-    subprocess.run([str(executable), str(RESOURCES), str(CATALOG), str(fallback)], check=True)
+    subprocess.run([str(executable), str(RESOURCES), str(CATALOG), str(fallback), str(lowercase)], check=True)

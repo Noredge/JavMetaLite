@@ -177,8 +177,9 @@ struct WorkerKitTests {
         let script = directory.appendingPathComponent("delayed_engine.py")
         let count = directory.appendingPathComponent("save-count.txt")
         let source = #"""
-import json,sys,threading
+import json,sys
 counter=sys.argv[1]
+delayed_save_id=None
 def emit(id,result):
     print(json.dumps({"jsonrpc":"2.0","id":id,"result":result}),flush=True)
 for line in sys.stdin:
@@ -187,21 +188,27 @@ for line in sys.stdin:
     if method=="initialize": emit(id,{"protocolVersion":1})
     elif method=="save.execute":
         with open(counter,"a") as output: output.write("save\n")
-        delayed=threading.Timer(1.0,lambda request_id=id:emit(request_id,{"operationId":"delayed-save"}))
-        delayed.daemon=True; delayed.start()
+        delayed_save_id=id
+    elif method=="fixture.releaseSave":
+        emit(delayed_save_id,{"operationId":"delayed-save"})
+        emit(id,{"released":True})
     elif method=="operations.get": emit(id,{"operationId":"delayed-save","status":"completed","result":{"savedJobIds":[]}})
     elif method=="workspace.getSnapshot": emit(id,{"jobs":[],"activeOperations":[]})
     elif method=="shutdown":
         emit(id,{"shutdown":True});break
 """#
         try source.write(to: script, atomically: true, encoding: .utf8)
-        let client = WorkerClient(requestTimeout: .milliseconds(250))
+        // Allow Python's cold start on a loaded runner. The save acknowledgement
+        // is withheld until after the timeout, not raced against a short timer.
+        let client = WorkerClient(requestTimeout: .seconds(5))
         do {
             _ = try await client.start(executable: URL(fileURLWithPath: "/usr/bin/python3"), arguments: [script.path, count.path])
             do {
                 _ = try await client.request("save.execute", params: .object(["planId": .string("fixture-plan")]))
                 Issue.record("Delayed save should time out without being automatically retried.")
             } catch let error as RPCFailure { #expect(error.reason == "WORKER_UNAVAILABLE") }
+            let released = try await client.request("fixture.releaseSave")
+            #expect(released["released"].boolValue, "A late save response must not fulfill a different request.")
             let state = try await client.request("operations.get", params: .object(["operationId": .string("delayed-save")]))
             #expect(state["status"].stringValue == "completed")
             let snapshot = try await client.request("workspace.getSnapshot")

@@ -72,7 +72,8 @@ its actually observed native checks.
 1. `python3 scripts/macos/test-localization.py`: four-language catalog/strings key
    parity, translation state, format placeholders, literal UI keys, stable error
    reasons, SwiftPM/Xcode registrations; compiles the actual `Localization.swift`
-   and checks every locale/key through Foundation Bundle lookup plus regional
+   and checks every locale/key through Foundation Bundle lookup in both canonical
+   and SwiftPM 6.1 lowercase lproj layouts, plus regional
    system-language selection and English/missing-key fallback. It does not change
    user preferences. Package verification separately compares all four bundled
    translation payloads with the reviewed catalog.
