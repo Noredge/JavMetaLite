@@ -98,13 +98,18 @@ server.shutdown();server.server_close()
             store.ready = true
             store.jobs = [MovieJobSnapshot(try await store.worker.request("fixture.job"))]; store.selectNavigation(["fixture"])
             let base = initialized["fixtureBaseUrl"].stringValue
-            let response: JSONValue = .object([
-                "maximumHtmlBytes": .number(2 * 1024 * 1024),
-                "targets": .array([
-                    .object(["source": .string("libredmm"), "displayName": .string("LibreDMM"), "url": .string(base + "/libre")]),
-                    .object(["source": .string("r18dev"), "displayName": .string("R18.dev"), "url": .string(base + "/r18home"), "requiresResolution": .bool(true)]),
-                    .object(["source": .string("javlibrary"), "displayName": .string("JAVLibrary"), "url": .string(base + "/library")])
-                ])])
+            // Keep each inference unit small for the CI's Swift 6.1 compiler.
+            let libreTarget: [String: JSONValue] = [
+                "source": .string("libredmm"), "displayName": .string("LibreDMM"), "url": .string(base + "/libre")]
+            let r18Target: [String: JSONValue] = [
+                "source": .string("r18dev"), "displayName": .string("R18.dev"),
+                "url": .string(base + "/r18home"), "requiresResolution": .bool(true)]
+            let libraryTarget: [String: JSONValue] = [
+                "source": .string("javlibrary"), "displayName": .string("JAVLibrary"), "url": .string(base + "/library")]
+            let targets: [JSONValue] = [.object(libreTarget), .object(r18Target), .object(libraryTarget)]
+            let maximumHtmlBytes = 2 * 1024 * 1024
+            let response = JSONValue.object([
+                "maximumHtmlBytes": .number(Double(maximumHtmlBytes)), "targets": .array(targets)])
             let session = BrowserSession(jobID: "fixture", response: response, store: store)
             func settle(_ path: String, supported: Bool) async throws {
                 for _ in 0..<500 {

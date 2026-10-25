@@ -1,4 +1,15 @@
-# JavMetaLite macOS — mac分支推送前审查
+# JavMetaLite macOS — Mac CI Swift 6.1兼容修复
+
+更新：2026-10-25，America/Los_Angeles。首轮远端Mac CI在Swift测试编译失败；不是运行时保存超时，打包步骤当时未执行。[原始失败记录](https://github.com/Noredge/JavMetaLite/actions/runs/40225213296)。
+
+- runner实际为macOS15/macOS SDK15.5、Xcode16.4、Swift6.1.2；BrowserInteractionTests的嵌套JSON表达式触发“unable to type-check this expression in reasonable time”。此前本机Swift6.4通过不能覆盖该编译器差异。
+- 仅将该测试的三个来源字典、目标数组和2MiB整数计算拆成有明确类型的局部值；保留原目标/解析标记、完整浏览器行为和断言。没有升级runner或跳过测试，没有修改应用/Worker/Core/WPF代码、revision、NFO round-trip、冲突预检或文件事务保护。
+- 修复后本机完整11套门禁exit0：Core50/486断言、Swift68（20+48）、协议74、queue4/retention5、发布工具36/manifest15、445keys/1810四语检查；22个应用/8个测试源文件注册与非SwiftPM编译布局通过。本机编译器仍为Swift6.4/CLT，不冒充Swift6.1或完整Xcode运行。
+- 远端沿用原macos-15/Swift6.1工作流，完整测试及自包含App签名、解包回归结果以[mac分支Actions](https://github.com/Noredge/JavMetaLite/actions?query=branch%3Amac)中对应提交为准。只签名、不公证；本轮未重复原生UI验收或替换此前冻结的本机build45交付包，未验证平台/长期压力范围保持。
+
+---
+
+# JavMetaLite macOS — mac分支推送前审查（历史记录）
 
 更新：2026-10-25，America/Los_Angeles。发布分支目标为原仓库的 **mac**，保留main；当前应用仍为0.4.0/build45，ad-hoc签名，不公证。详见 [PRE-PUSH-REVIEW.md](PRE-PUSH-REVIEW.md)。
 
