@@ -1,4 +1,23 @@
-# JavMetaLite macOS — Mac CI兼容修复
+# JavMetaLite — Windows事务回归与取消夹具修复
+
+更新：2026-10-25，America/Los_Angeles。修复基线`21ac04a`；[此前Windows CI](https://github.com/Noredge/JavMetaLite/actions/runs/40230254346)出现事务断言失败，随后在响应体取消用例挂起并触及20分钟上限，未执行Windows打包。本轮只改测试、CI诊断和文档，未修改生产Core/Worker/WPF/Swift或安全保护代码。
+
+- 来源锁测试拆为两项：`FileShare.Read`允许重新校验但禁止移除，须完整回滚目标、保持来源hash并清理临时文件；`FileShare.None`使来源无法重新校验，须抛FileRecoveryException、保留来源及已验证副本并报告恢复路径，同时回滚NFO。保留保守恢复契约，没有为旧断言删除无法确认冗余的副本。
+- 挂起源于HTTP夹具只实现HttpContent序列化；改用流读取后，框架的默认缓冲路径不传入取消令牌。将夹具提为Windows/Portable共用的StreamContent/GatedStream，在实际ReadAsync中接收取消，另有明确的夹具清理令牌。仍检查3路并发、取消后排空、致命错误取消同批请求及后续影片不启动、单片/多CD原视频/NFO/图片不变。
+- 新Portable回归在旧夹具上实际失败：50/52，取消与致命失败均TimeoutException；流式夹具修复后52/52、526断言通过。Windows旧断言并未删除：保留可校验锁的完整回滚用例，新增独占锁保留副本用例。
+- Windows事务runner输出每项START，单项超过2分钟则报错并终止测试进程，不继续运行文件测试或记为通过。取消/致命失败用例另有10秒上限及显式清理；没有延长原20分钟job限制。Windows CI无论成功失败均上传automated-gate.log。
+- 本机最终11套门禁exit0：Portable52/526断言、Swift68、协议74、queue4/retention5、发布工具36/manifest15、445keys/3590四语检查及Xcode源文件/编译布局检查；Windows四项目交叉编译均exit0、无警告或错误。交叉编译不冒充Windows运行验证。
+
+同提交双平台合并门禁（徽章跟随mac分支；最终须核对两套运行的head SHA相同）：
+
+[![Windows CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg?branch=mac)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml?query=branch%3Amac)
+[![macOS CI](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml/badge.svg?branch=mac)](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml?query=branch%3Amac)
+
+revision、NFO round-trip、冲突预检和事务/恢复逻辑保持。只签名、不公证；尚未合并main。远端Windows自动测试不等同用户电脑手动验收；既有长期使用、物理外接卷/SMB/断电、完整IME/VoiceOver及平台矩阵等未验证范围保持，未替换旧本机冻结App。
+
+---
+
+# JavMetaLite macOS — Mac CI兼容修复（历史记录）
 
 更新：2026-10-25，America/Los_Angeles。首轮远端Mac CI在Swift测试编译失败；不是运行时保存超时，打包步骤当时未执行。[原始失败记录](https://github.com/Noredge/JavMetaLite/actions/runs/40225213296)。
 

@@ -48,6 +48,8 @@ internal static partial class Program
         ("Batch cancel during second movie retains first and stops third", BatchMidCopyCancellation),
         ("Post-commit journal warning remains completed and stops batch", PostCommitWarning),
         ("Stalled artwork response body times out before transaction commit", ArtworkBodyTimeout),
+        ("Windows/shared response body cancellation drains without changing single/multipart files", DownloadBodyCancellation),
+        ("Windows/shared fatal response body cancels siblings before single/multipart writes", FatalDownloadCancellation),
         ("Incomplete sample replacement retains existing local artwork", SampleReplacementFailure),
         ("Duplicate CD group is diagnosed without dropping other imports", DuplicateGroupIsolation),
         ("New local-artwork symlink is rejected before plan normalization", ArtworkSymlink),

@@ -26,7 +26,8 @@ internal static class FileOrganizationRegressionTests
         new("transfer", "复制期间取消会保留来源并清理目标", TestVerifiedCopyCancellation),
         new("transfer", "SHA-256 不一致会拒绝提交并保留来源", TestVerifiedCopyHashMismatch),
         new("transfer", "复制后出现目标影片冲突会保留两边文件", TestVerifiedCopyLateTargetConflict),
-        new("transfer", "目标提交后来源锁定会回滚目标", TestVerifiedCopyLateSourceFailure),
+        new("transfer", "来源可校验但禁止移除时安全回滚目标", TestVerifiedCopyLateSourceFailure),
+        new("transfer", "来源独占锁阻止再次校验时保留已验证恢复副本", TestVerifiedCopyUnreadableSourceRecovery),
         new("overwrite", "预览模式拒绝覆盖，直接模式允许覆盖", TestOverwritePolicy),
         new("roundtrip", "生成变更预览后取消保持全部文件零写入", TestPreviewCancellationIsPure),
         new("roundtrip", "NFO 预览只在实际存在未知 XML 时提示保留", TestConditionalUnknownXmlPreview),
@@ -567,17 +568,19 @@ internal static class FileOrganizationRegressionTests
         {
             if (sourceLock is null && update.Stage == FileTransactionStage.RetiringSource)
             {
-                sourceLock = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.None);
+                // Keep SHA-256 revalidation possible, but deny rename/delete.
+                sourceLock = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
             }
         });
 
         using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         try
         {
-            await AssertEx.ThrowsAsync<IOException>(
+            var error = await AssertEx.ThrowsAsync<IOException>(
                 () => new FileOrganizationService(outputService)
                     .ExecuteAsync(plan, metadata, false, CancellationToken.None, progress),
                 "A locked source movie did not roll back the committed target.");
+            AssertEx.False(error is FileRecoveryException, "Readable unchanged source should permit complete rollback.");
         }
         finally
         {
@@ -589,6 +592,39 @@ internal static class FileOrganizationRegressionTests
         AssertEx.FileDoesNotExist(plan.TargetVideoPath);
         AssertEx.FileDoesNotExist(Path.Combine(plan.TargetDirectory, "IPX-893.nfo"));
         workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestVerifiedCopyUnreadableSourceRecovery()
+    {
+        using var workspace = new TestWorkspace("verified-copy-unreadable-source");
+        var sourcePath = workspace.WriteFile("incoming/locked-source.mp4", new byte[2 * 1024 * 1024]);
+        var sourceHash = AssertEx.Sha256(sourcePath);
+        var metadata = Metadata("IPX-899", "无法重新校验来源");
+        var plan = FileOrganizationService.BuildPlan(sourcePath, metadata, NfoOnly(),
+            new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, true,
+                workspace.CreateDirectory("library"))) with { RequiresVerifiedVideoCopy = true };
+        FileStream? sourceLock = null;
+        var progress = new InlineProgress<FileTransactionProgress>(update =>
+        {
+            if (sourceLock is null && update.Stage == FileTransactionStage.RetiringSource)
+                sourceLock = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.None);
+        });
+        using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
+        FileRecoveryException recovery;
+        try
+        {
+            recovery = await AssertEx.ThrowsAsync<FileRecoveryException>(
+                () => new FileOrganizationService(output).ExecuteAsync(plan, metadata, false, default, progress),
+                "An unverifiable original must not authorize deletion of its verified recovery copy.");
+        }
+        finally { sourceLock?.Dispose(); }
+        AssertEx.Equal(sourceHash, AssertEx.Sha256(sourcePath));
+        AssertEx.Equal(sourceHash, AssertEx.Sha256(plan.TargetVideoPath));
+        AssertEx.FileDoesNotExist(Path.Combine(plan.TargetDirectory, "IPX-899.nfo"));
+        AssertEx.True(recovery.RecoveryPaths.Count > 0 && recovery.RecoveryPaths.All(Directory.Exists),
+            "Recovery staging must be retained and reported.");
+        AssertEx.True(recovery.ToString().Contains(plan.TargetVideoPath, StringComparison.Ordinal),
+            "The retained verified video must be identified in the recovery diagnostic.");
     }
 
     private static async Task TestVerifiedCopyLateTargetConflict()

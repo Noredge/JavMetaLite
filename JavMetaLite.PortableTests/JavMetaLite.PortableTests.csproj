@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../JavMetaLite.RegressionTests/GatedDownloadHandler.cs" Link="GatedDownloadHandler.cs" />
     <ProjectReference Include="../JavMetaLite.Core/JavMetaLite.Core.csproj" />
     <ProjectReference Include="../JavMetaLite.Imaging.Skia/JavMetaLite.Imaging.Skia.csproj" />
   </ItemGroup>

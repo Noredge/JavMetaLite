@@ -212,6 +212,14 @@ Existing Windows gates remain available:
 ./scripts/Test-PortablePackage.ps1
 ```
 
+The transaction runner prints each case before executing it and terminates with
+an error after a two-minute case timeout; remaining cases are not counted as
+passed. Windows CI retains its transcript as `windows-automated-gate-evidence`
+on success or failure. Its gated HTTP response stream is shared with the portable
+suite, which checks cancellation and fatal sibling failure for both single and
+multipart transactions. Source-retirement tests separately cover readable locks
+(complete rollback) and exclusive locks (reported, retained verified recovery copies).
+
 `crossbuild-windows.sh` compiles the Windows app and all three Windows test
 projects, preserving each exit code in `artifacts/test-results/windows-crossbuild-results.tsv`.
 Cross-compilation of WPF on macOS does not prove Windows runtime behavior. Run
