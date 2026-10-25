@@ -102,7 +102,8 @@ public static class MovieFileDiscovery
                 cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
-                    if ((File.GetAttributes(subdirectory) & FileAttributes.ReparsePoint) != 0)
+                    if ((File.GetAttributes(subdirectory) & (FileAttributes.ReparsePoint | FileAttributes.Hidden | FileAttributes.System)) != 0 ||
+                        Path.GetFileName(subdirectory).StartsWith('.'))
                     {
                         skippedDirectoryCount++;
                         continue;
@@ -122,8 +123,8 @@ public static class MovieFileDiscovery
             normalizedRoot,
             includeSubdirectories,
             videoPaths
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .Distinct(FileSystemPathSemantics.PathComparer)
+                .OrderBy(path => path, FileSystemPathSemantics.PathComparer)
                 .ToArray(),
             ignoredFileCount,
             skippedDirectoryCount,

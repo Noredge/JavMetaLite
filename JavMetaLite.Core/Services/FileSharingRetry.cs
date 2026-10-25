@@ -7,10 +7,19 @@ internal static class FileSharingRetry
     private static readonly int[] DelaysMs = [100, 200, 400];
 
     internal static Task MoveAsync(string source, string destination, CancellationToken token = default) =>
-        RunAsync(() => File.Move(source, destination), "move", $"{source} -> {destination}", token);
+        RunAsync(() =>
+        {
+            FileSystemPathSemantics.ValidateCanonicalPath(source);
+            FileSystemPathSemantics.ValidateCanonicalPath(destination);
+            File.Move(source, destination);
+        }, "move", $"{source} -> {destination}", token);
 
     internal static Task DeleteAsync(string path) =>
-        RunAsync(() => File.Delete(path), "rollback-delete", path);
+        RunAsync(() =>
+        {
+            FileSystemPathSemantics.ValidateCanonicalPath(path);
+            File.Delete(path);
+        }, "rollback-delete", path);
 
     internal static async Task RunAsync(Action action, string operation, string path,
         CancellationToken token = default)

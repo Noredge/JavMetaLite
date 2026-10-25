@@ -36,7 +36,8 @@ public static class NfoReader
             throw new FileNotFoundException("影片旁没有找到同名 NFO。", sidecars.NfoPath);
         }
 
-        var nfoPath = Path.GetFullPath(sidecars.NfoPath);
+        FileSystemPathSemantics.ValidateUnambiguousPath(sidecars.NfoPath);
+        var nfoPath = FileSystemPathSemantics.CanonicalizePath(sidecars.NfoPath);
         var fileInfo = new FileInfo(nfoPath);
         if (!fileInfo.Exists)
         {

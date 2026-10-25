@@ -67,11 +67,13 @@ public static class ArtworkLocationHelper
 
     public static async Task<byte[]> ReadLocalImageAsync(
         string location,
+        IArtworkImageProcessor imageProcessor,
         CancellationToken cancellationToken = default) =>
-        (await ReadLocalImageWithDimensionsAsync(location, cancellationToken)).Bytes;
+        (await ReadLocalImageWithDimensionsAsync(location, imageProcessor, cancellationToken)).Bytes;
 
     public static async Task<ValidatedLocalImage> ReadLocalImageWithDimensionsAsync(
         string location,
+        IArtworkImageProcessor imageProcessor,
         CancellationToken cancellationToken = default)
     {
         if (!TryGetLocalPath(location, out var path))
@@ -79,6 +81,7 @@ public static class ArtworkLocationHelper
             throw new InvalidDataException("不是有效的本地图片路径。");
         }
 
+        FileSystemPathSemantics.ValidateUnambiguousPath(path);
         var fileInfo = new FileInfo(path);
         if (!fileInfo.Exists)
         {
@@ -91,9 +94,26 @@ public static class ArtworkLocationHelper
                 $"本地图片大小无效，最大允许 {MaximumLocalImageBytes} 字节。");
         }
 
-        var bytes = await File.ReadAllBytesAsync(path, cancellationToken);
-        var dimensions = PosterImageProcessor.GetDimensions(bytes);
+        await using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
+        var bytes = await ReadBoundedImageAsync(input, cancellationToken);
+        var dimensions = imageProcessor.GetDimensions(bytes);
         cancellationToken.ThrowIfCancellationRequested();
         return new ValidatedLocalImage(bytes, dimensions.Width, dimensions.Height);
     }
+
+    internal static async Task<byte[]> ReadBoundedImageAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        using var output = new MemoryStream();
+        var buffer = new byte[81920];
+        while (true)
+        {
+            var read = await stream.ReadAsync(buffer, cancellationToken);
+            if (read == 0) break;
+            if (output.Length + read > MaximumLocalImageBytes)
+                throw new InvalidDataException("Image exceeds the encoded byte limit.");
+            output.Write(buffer, 0, read);
+        }
+        return output.ToArray();
+    }
+
 }

@@ -37,7 +37,7 @@ if (args.Length == 3 && args[0] == "--live-artwork")
     var outputDirectory = Path.GetFullPath(args[2]);
     Directory.CreateDirectory(outputDirectory);
     using var liveClient = new LibreDmmClient();
-    using var outputService = new OutputService();
+    using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
     var liveResult = await liveClient.SearchAsync(args[1]);
     var videoPath = Path.Combine(outputDirectory, $"{liveResult.Id}.mp4");
     await File.WriteAllBytesAsync(videoPath, []);
@@ -59,7 +59,7 @@ if (args.Length == 3 && args[0] == "--live-r18-artwork")
     var outputDirectory = Path.GetFullPath(args[2]);
     Directory.CreateDirectory(outputDirectory);
     using var liveClient = new R18DevClient();
-    using var outputService = new OutputService();
+    using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
     var liveResult = await liveClient.SearchAsync(args[1]);
     var videoPath = Path.Combine(outputDirectory, $"{liveResult.Id}.mp4");
     await File.WriteAllBytesAsync(videoPath, []);
@@ -229,7 +229,7 @@ static async Task TestMovieFileSet()
         AssertEqual("True", groups.Any(group => group.VideoPaths.Count == 2).ToString());
 
         using var job = new MovieJob();
-        var load = await MovieJobLoader.LoadAsync(job, cd2);
+        var load = await MovieJobLoader.LoadAsync(job, cd2, WindowsArtworkImageProcessor.Instance);
         AssertEqual(LocalMetadataLoadStatus.Loaded.ToString(), load.MetadataStatus.ToString());
         AssertEqual("2", job.VideoPartCount.ToString());
         AssertEqual("IPX-123", job.Metadata.Id);
@@ -2543,7 +2543,7 @@ static async Task TestArtworkOutput()
             ["/sample1.jpg"] = sample1,
             ["/sample2.jpg"] = sample2
         }));
-        using var service = new OutputService(httpClient);
+        using var service = new OutputService(WindowsArtworkImageProcessor.Instance, httpClient);
         var metadata = new MovieMetadata
         {
             Id = "IPZZ-850",
@@ -2599,7 +2599,7 @@ static async Task TestMissingSampleImagesAreSkipped()
         };
 
         var options = new JavMetaLite.Core.Models.SaveOptions(false, false, false, true, true, false);
-        using var service = new OutputService();
+        using var service = new OutputService(WindowsArtworkImageProcessor.Instance);
         var result = await service.SaveAsync(
             videoPath,
             metadata,
@@ -2648,7 +2648,7 @@ static async Task TestLocalCompleteCoverOutput()
             SourceDisplayName = "手动封套"
         };
 
-        using var service = new OutputService();
+        using var service = new OutputService(WindowsArtworkImageProcessor.Instance);
         var result = await service.SaveAsync(
             videoPath,
             metadata,
@@ -2709,7 +2709,7 @@ static async Task TestFileOrganization()
         AssertEqual("True", plan.Changes.Any(change => change.Kind == PlannedChangeKind.CreateFolder).ToString());
         AssertEqual("True", plan.Changes.Any(change => change.Kind == PlannedChangeKind.MoveAndRenameVideo).ToString());
 
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var organizer = new FileOrganizationService(outputService);
         var result = await organizer.ExecuteAsync(plan, metadata, false);
         AssertEqual("False", File.Exists(sourcePath).ToString());
@@ -2826,7 +2826,7 @@ static async Task TestMultipartFileOrganization()
         AssertEqual("2", plan.Changes.Count(change =>
             change.Kind == PlannedChangeKind.MoveAndRenameVideo).ToString());
 
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var result = await new FileOrganizationService(outputService)
             .ExecuteAsync(plan, metadata, false);
         AssertEqual("2", result.VideoPaths.Count.ToString());
@@ -2954,7 +2954,7 @@ static async Task TestLocalArtworkDiscovery()
             ExtrafanartPaths = [extra1Path, invalidExtraPath]
         };
 
-        var complete = await LocalArtworkDiscovery.DiscoverAsync(sidecars);
+        var complete = await LocalArtworkDiscovery.DiscoverAsync(sidecars, WindowsArtworkImageProcessor.Instance);
         AssertEqual("1", complete.Diagnostics.Count.ToString());
         AssertEqual("True", complete.Diagnostics[0].Contains("extrafanart", StringComparison.Ordinal).ToString());
         AssertEqual("1", complete.ExtrafanartPaths.Count.ToString());
@@ -2967,7 +2967,7 @@ static async Task TestLocalArtworkDiscovery()
         AssertEqual(Path.GetFullPath(fanartPath), complete.Candidate?.LocalFanartPath);
 
         await File.WriteAllBytesAsync(posterPath, [0x00, 0x01, 0x02]);
-        var partial = await LocalArtworkDiscovery.DiscoverAsync(sidecars);
+        var partial = await LocalArtworkDiscovery.DiscoverAsync(sidecars, WindowsArtworkImageProcessor.Instance);
         AssertEqual("2", partial.Diagnostics.Count.ToString());
         AssertEqual("True", partial.Diagnostics.Any(message => message.Contains("poster", StringComparison.Ordinal)).ToString());
         AssertEqual("False", partial.Candidate?.HasPoster.ToString());
@@ -2975,7 +2975,7 @@ static async Task TestLocalArtworkDiscovery()
         AssertEqual(string.Empty, partial.Candidate?.LocalPosterPath);
 
         await File.WriteAllBytesAsync(fanartPath, [0x03, 0x04, 0x05]);
-        var invalid = await LocalArtworkDiscovery.DiscoverAsync(sidecars);
+        var invalid = await LocalArtworkDiscovery.DiscoverAsync(sidecars, WindowsArtworkImageProcessor.Instance);
         AssertEqual("True", (invalid.Candidate is null).ToString());
         AssertEqual("3", invalid.Diagnostics.Count.ToString());
         AssertEqual("1", invalid.ExtrafanartPaths.Count.ToString());

@@ -6,19 +6,20 @@ public static class LocalArtworkDiscovery
 {
     public static async Task<LocalArtworkDiscoveryResult> DiscoverAsync(
         LocalSidecarPaths sidecars,
+        IArtworkImageProcessor imageProcessor,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(sidecars);
 
         var diagnostics = new List<string>();
-        var posterPath = await ValidateAsync("poster", sidecars.PosterPath, diagnostics, cancellationToken);
+        var posterPath = await ValidateAsync("poster", sidecars.PosterPath, diagnostics, imageProcessor, cancellationToken);
         CoverResolutionCheck? fanartResolution = null;
-        var fanartPath = await ValidateAsync("fanart", sidecars.FanartPath, diagnostics, cancellationToken,
+        var fanartPath = await ValidateAsync("fanart", sidecars.FanartPath, diagnostics, imageProcessor, cancellationToken,
             measured => fanartResolution = measured);
         var extrafanartPaths = new List<string>();
         foreach (var path in sidecars.ExtrafanartPaths)
         {
-            var validatedPath = await ValidateAsync("extrafanart", path, diagnostics, cancellationToken);
+            var validatedPath = await ValidateAsync("extrafanart", path, diagnostics, imageProcessor, cancellationToken);
             if (validatedPath is not null)
             {
                 extrafanartPaths.Add(validatedPath);
@@ -46,6 +47,7 @@ public static class LocalArtworkDiscovery
         string role,
         string? path,
         ICollection<string> diagnostics,
+        IArtworkImageProcessor imageProcessor,
         CancellationToken cancellationToken,
         Action<CoverResolutionCheck>? measured = null)
     {
@@ -56,7 +58,7 @@ public static class LocalArtworkDiscovery
 
         try
         {
-            var image = await ArtworkLocationHelper.ReadLocalImageWithDimensionsAsync(path, cancellationToken);
+            var image = await ArtworkLocationHelper.ReadLocalImageWithDimensionsAsync(path, imageProcessor, cancellationToken);
             var normalizedPath = Path.GetFullPath(path);
             measured?.Invoke(new(normalizedPath, image.Width, image.Height));
             return normalizedPath;

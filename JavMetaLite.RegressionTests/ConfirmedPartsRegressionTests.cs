@@ -57,7 +57,7 @@ internal static class ConfirmedPartsRegressionTests
                 new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, true, w.CreateDirectory("target"), verification));
             // Exercise the cross-volume transaction path with synthetic same-volume files.
             plan = plan with { RequiresVerifiedVideoCopy = true };
-            using var output = new OutputService();
+            using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
             var service = new FileOrganizationService(output);
             using var cts = new CancellationTokenSource();
             var progress = new InlineProgress<FileTransactionProgress>(update =>
@@ -90,7 +90,7 @@ internal static class ConfirmedPartsRegressionTests
         var plan = FileOrganizationService.BuildConfirmedMultipartPlan([a, b], Metadata(), Options,
             new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, true, target));
         AssertEx.True(plan.HasBlockingConflicts, "Existing CD video must block.");
-        using var output = new OutputService();
+        using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
         await AssertEx.ThrowsAsync<IOException>(() => new FileOrganizationService(output).ExecuteAsync(plan, Metadata(), true), "Overwrite approval must not overwrite video.");
         AssertEx.Equal((byte)9, File.ReadAllBytes(existing)[0]); AssertEx.FileExists(a); AssertEx.FileExists(b);
     }

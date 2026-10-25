@@ -50,7 +50,7 @@ internal static class TemporaryCleanupRegressionTests
             var hashes = sources.Select(AssertEx.Sha256).ToArray();
             var metadata = new MovieMetadata { Id = "IPX-123", Title = "Synthetic cleanup test" };
             var plan = Plan(w, sources, metadata, verification);
-            using var output = new OutputService();
+            using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
             var attempted = new List<string>();
             var service = new FileOrganizationService(output, async path =>
             {
@@ -95,7 +95,7 @@ internal static class TemporaryCleanupRegressionTests
             var sources = CreateSources(w, multipart);
             var metadata = new MovieMetadata { Id = "IPX-123", Title = "Synthetic committed save" };
             var plan = Plan(w, sources, metadata, CrossVolumeVerificationMode.FullSha256);
-            using var output = new OutputService();
+            using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
             var service = new FileOrganizationService(output, path =>
                 Task.FromResult<TemporaryCleanupIssue?>(new(path, "Synthetic cleanup failure")));
             using var first = new MovieJob();

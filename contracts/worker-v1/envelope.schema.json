@@ -1,0 +1,21 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"urn:javmetalite:worker-v1:envelope",
+  "title":"JavMetaLite stdio JSON-RPC v1 envelope",
+  "type":"object",
+  "required":["jsonrpc"],
+  "properties":{
+    "jsonrpc":{"const":"2.0"},
+    "id":{"type":["string","null"]},
+    "method":{"type":"string"},
+    "params":{"type":"object"},
+    "result":{},
+    "error":{"type":"object","required":["code","message"],"properties":{"code":{"type":"integer"},"message":{"type":"string"},"data":{"type":"object"}}}
+  },
+  "oneOf":[
+    {"required":["method"],"not":{"anyOf":[{"required":["result"]},{"required":["error"]}]}},
+    {"required":["id","result"],"not":{"anyOf":[{"required":["method"]},{"required":["error"]}]}},
+    {"required":["id","error"],"not":{"anyOf":[{"required":["method"]},{"required":["result"]}]}}
+  ],
+  "additionalProperties":true
+}

@@ -80,7 +80,7 @@ internal static class FileOrganizationRegressionTests
             AssertEx.Equal(expectedVideo, plan.TargetVideoPath);
             AssertEx.Equal(scenario.VideoMoves, plan.VideoWillMove);
 
-            using var outputService = new OutputService();
+            using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
             var result = await new FileOrganizationService(outputService)
                 .ExecuteAsync(plan, metadata, false);
 
@@ -115,7 +115,7 @@ internal static class FileOrganizationRegressionTests
             plan.Changes.Any(change => change.Kind == PlannedChangeKind.CreateFolder),
             "A duplicate number folder was planned.");
 
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var result = await new FileOrganizationService(outputService)
             .ExecuteAsync(plan, metadata, false);
         AssertEx.Equal(Path.Combine(sourceDirectory, "IPX-123.mp4"), result.VideoPath);
@@ -141,7 +141,7 @@ internal static class FileOrganizationRegressionTests
                 NfoOnly(),
                 new OrganizationOptions(true, true));
 
-            using var outputService = new OutputService();
+            using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
             var result = await new FileOrganizationService(outputService)
                 .ExecuteAsync(plan, metadata, false);
             AssertEx.Equal(extension, Path.GetExtension(result.VideoPath));
@@ -369,7 +369,7 @@ internal static class FileOrganizationRegressionTests
         var stages = new List<FileTransactionStage>();
         var progress = new InlineProgress<FileTransactionProgress>(update => stages.Add(update.Stage));
 
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var result = await new FileOrganizationService(outputService)
             .ExecuteAsync(plan, metadata, false, CancellationToken.None, progress);
 
@@ -401,7 +401,7 @@ internal static class FileOrganizationRegressionTests
             RequiresVerifiedVideoCopy = true
         };
 
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var result = await new FileOrganizationService(outputService)
             .ExecuteAsync(plan, metadata, false);
 
@@ -441,7 +441,7 @@ internal static class FileOrganizationRegressionTests
         };
         var stages = new List<FileTransactionStage>();
         var progress = new InlineProgress<FileTransactionProgress>(update => stages.Add(update.Stage));
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var result = await new FileOrganizationService(outputService)
             .ExecuteAsync(plan, metadata, false, CancellationToken.None, progress);
 
@@ -490,7 +490,7 @@ internal static class FileOrganizationRegressionTests
             }
         });
 
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         await AssertEx.ThrowsAsync<OperationCanceledException>(
             () => new FileOrganizationService(outputService)
                 .ExecuteAsync(plan, metadata, false, cancellation.Token, progress),
@@ -532,7 +532,7 @@ internal static class FileOrganizationRegressionTests
             }
         });
 
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var exception = await AssertEx.ThrowsAsync<IOException>(
             () => new FileOrganizationService(outputService)
                 .ExecuteAsync(plan, metadata, false, CancellationToken.None, progress),
@@ -571,7 +571,7 @@ internal static class FileOrganizationRegressionTests
             }
         });
 
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         try
         {
             await AssertEx.ThrowsAsync<IOException>(
@@ -621,7 +621,7 @@ internal static class FileOrganizationRegressionTests
             }
         });
 
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         await AssertEx.ThrowsAsync<IOException>(
             () => new FileOrganizationService(outputService)
                 .ExecuteAsync(plan, metadata, false, CancellationToken.None, progress),
@@ -654,7 +654,7 @@ internal static class FileOrganizationRegressionTests
         AssertEx.False(plan.HasBlockingConflicts, "A same-volume custom target was unexpectedly blocked.");
         AssertEx.Equal(Path.Combine(customRoot, "IPX-889", "IPX-889.mkv"), plan.TargetVideoPath);
 
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var result = await new FileOrganizationService(outputService)
             .ExecuteAsync(plan, metadata, false);
 
@@ -674,7 +674,7 @@ internal static class FileOrganizationRegressionTests
         var previewOptions = NfoOnly();
         AssertEx.True(previewOptions.RequiresPreview, "Safe default must require preview.");
         var initialMetadata = Metadata("IPX-321", "旧标题");
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var organizer = new FileOrganizationService(outputService);
         var initialPlan = FileOrganizationService.BuildPlan(
             sourcePath,
@@ -783,7 +783,7 @@ internal static class FileOrganizationRegressionTests
         AssertEx.False(noChangePlan.OutputGenerationOptions.WriteNfo, "Unchanged NFO should not be regenerated.");
         AssertEx.Equal(0, noChangePlan.OverwriteConflicts.Count);
         AssertEx.Equal(3, noChangePlan.Changes.Count(change => change.Kind == PlannedChangeKind.KeepFile));
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var organizer = new FileOrganizationService(outputService);
         await organizer.ExecuteAsync(noChangePlan, editable, false);
         AssertEx.Equal(nfoHash, AssertEx.Sha256(nfoPath), "No-op save rewrote the NFO.");
@@ -909,7 +909,7 @@ internal static class FileOrganizationRegressionTests
             plan.Changes.Any(change => change.Kind == PlannedChangeKind.UpdateFile),
             "The migrated NFO was not classified as an update.");
         AssertEx.Equal(2, plan.Changes.Count(change => change.Kind == PlannedChangeKind.KeepFile));
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var result = await new FileOrganizationService(outputService).ExecuteAsync(plan, editable, false);
 
         var targetDirectory = workspace.PathOf("incoming", "IPX-850");
@@ -982,7 +982,7 @@ internal static class FileOrganizationRegressionTests
         AssertEx.Equal(2, plan.SidecarTransfers.Count);
         AssertEx.Equal(3, plan.SourcePathsToRetire.Count);
 
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var result = await new FileOrganizationService(outputService).ExecuteAsync(plan, editable, false);
         var movieNfo = Path.Combine(movieDirectory, "movie.nfo");
         var poster = Path.Combine(movieDirectory, "poster.jpg");
@@ -1023,7 +1023,7 @@ internal static class FileOrganizationRegressionTests
         await File.WriteAllTextAsync(nfoPath, "<movie><title>外部程序修改</title><id>IPX-654</id></movie>");
         var externalHash = AssertEx.Sha256(nfoPath);
         var movieHash = AssertEx.Sha256(sourcePath);
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         await AssertEx.ThrowsAsync<IOException>(
             () => new FileOrganizationService(outputService).ExecuteAsync(plan, editable, true),
             "An externally changed NFO was overwritten.");
@@ -1047,7 +1047,7 @@ internal static class FileOrganizationRegressionTests
             new OrganizationOptions(true, true));
 
         AssertEx.True(plan.HasBlockingConflicts, "The existing destination movie was not marked as blocking.");
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         await AssertEx.ThrowsAsync<IOException>(
             () => new FileOrganizationService(outputService).ExecuteAsync(plan, metadata, true),
             "Direct overwrite mode overwrote an existing movie.");
@@ -1071,7 +1071,7 @@ internal static class FileOrganizationRegressionTests
 
         var nfoPath = workspace.WriteFile("IPX-555.nfo", [0x4F, 0x4C, 0x44]);
         var conflictHash = AssertEx.Sha256(nfoPath);
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         await AssertEx.ThrowsAsync<IOException>(
             () => new FileOrganizationService(outputService).ExecuteAsync(plan, metadata, false),
             "A metadata conflict created after planning was not detected.");
@@ -1110,7 +1110,7 @@ internal static class FileOrganizationRegressionTests
             new OrganizationOptions(false, false),
             context);
         using var httpClient = new HttpClient(new StaticImageHandler(TestImageFactory.CreateJpeg()));
-        using var outputService = new OutputService(httpClient);
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance, httpClient);
         var organizer = new FileOrganizationService(outputService);
 
         using (var lockedPoster = new FileStream(posterPath, FileMode.Open, FileAccess.Read, FileShare.None))
@@ -1159,7 +1159,7 @@ internal static class FileOrganizationRegressionTests
             plan.SourcePathsToRetire.Contains(extra2Path, StringComparer.OrdinalIgnoreCase),
             "The deselected local extrafanart was not included in the safe transaction.");
 
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var result = await new FileOrganizationService(outputService)
             .ExecuteAsync(plan, metadata, true);
         AssertEx.Equal(1, result.Outputs.ExtrafanartPaths.Count);
@@ -1232,7 +1232,7 @@ internal static class FileOrganizationRegressionTests
             plan.SourcePathsToRetire.Contains(extra2Path, StringComparer.OrdinalIgnoreCase),
             "Full replacement did not retire the trailing local extrafanart.");
 
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var result = await new FileOrganizationService(outputService)
             .ExecuteAsync(plan, metadata, true);
         AssertEx.Equal(1, result.Outputs.ExtrafanartPaths.Count);
@@ -1306,7 +1306,7 @@ internal static class FileOrganizationRegressionTests
             change.Description.Contains("extrafanart", StringComparison.OrdinalIgnoreCase)) == 2,
             "The no-search save preview did not preserve every local extrafanart.");
 
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var result = await new FileOrganizationService(outputService)
             .ExecuteAsync(plan, metadata, true);
         AssertEx.Equal(0, result.Outputs.ExtrafanartPaths.Count);
@@ -1345,7 +1345,7 @@ internal static class FileOrganizationRegressionTests
                     CanReplaceLocalExtrafanart = true
                 });
             using var client = new HttpClient(new SelectiveImageHandler(TestImageFactory.CreateJpeg(120, 80)));
-            using var output = new OutputService(client);
+            using var output = new OutputService(WindowsArtworkImageProcessor.Instance, client);
             await AssertEx.ThrowsAsync<InvalidDataException>(
                 () => new FileOrganizationService(output).ExecuteAsync(plan, metadata, true),
                 "Failed replacement samples were treated as an intentional empty/partial selection.");
@@ -1370,7 +1370,7 @@ internal static class FileOrganizationRegressionTests
             metadata,
             NfoOnly(),
             new OrganizationOptions(true, true));
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var organizer = new FileOrganizationService(outputService);
 
         using (var lockedVideo = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.None))
@@ -1400,7 +1400,7 @@ internal static class FileOrganizationRegressionTests
             metadata,
             NfoOnly(),
             new OrganizationOptions(true, true));
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         var organizer = new FileOrganizationService(outputService);
 
         using (var lockedCd2 = new FileStream(cd2, FileMode.Open, FileAccess.Read, FileShare.None))
@@ -1450,7 +1450,7 @@ internal static class FileOrganizationRegressionTests
             NfoOnly(overwrite: true),
             new OrganizationOptions(true, false));
         AssertEx.True(blockedPlan.HasBlockingConflicts, "A file occupying the target folder was not blocked.");
-        using var outputService = new OutputService();
+        using var outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         await AssertEx.ThrowsAsync<IOException>(
             () => new FileOrganizationService(outputService).ExecuteAsync(blockedPlan, metadata, true),
             "A file occupying the target folder did not prevent execution.");

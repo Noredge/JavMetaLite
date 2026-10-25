@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<movie customAttribute="keep-me">
+  <!-- Preserve local extensions and unedited strings. Synthetic data only. -->
+  <title>合成影片 · Synthetic Film</title>
+  <originaltitle>元の題名</originaltitle>
+  <id>DEMO-001</id>
+  <premiered>2026 年 春</premiered>
+  <runtime>約 90 分</runtime>
+  <rating>未评分</rating>
+  <actor><name>合成演员</name><role>演示</role><thumb>https://example.invalid/actor.jpg</thumb><customActor>keep</customActor></actor>
+  <genre>演示</genre>
+  <plot>第一行。
+Second line.</plot>
+  <customNode custom="yes"><nested>KEEP UNKNOWN XML</nested></customNode>
+</movie>

@@ -32,7 +32,7 @@ internal static class OutputDownloadRegressionTests
         var images = Enumerable.Range(0, 60).Select(i => TestImageFactory.CreateJpeg(100 + i, 80)).ToArray();
         using var handler = new SampleHandler(images);
         using var client = new HttpClient(handler);
-        using var service = new OutputService(client);
+        using var service = new OutputService(WindowsArtworkImageProcessor.Instance, client);
         var metadata = new MovieMetadata { Id = "TEST-501", ScreenshotUrls = Enumerable.Range(0, 60).Select(Url).ToArray() };
         var result = await service.SaveAsync(source, metadata, SamplesOnly);
         AssertEx.Equal(50, handler.Calls);
@@ -57,7 +57,7 @@ internal static class OutputDownloadRegressionTests
         var images = Enumerable.Range(0, 8).Select(i => TestImageFactory.CreateJpeg(100 + i, 80)).ToArray();
         using var handler = new SampleHandler(images, failures: true);
         using var client = new HttpClient(handler);
-        using var output = new OutputService(client);
+        using var output = new OutputService(WindowsArtworkImageProcessor.Instance, client);
         var metadata = new MovieMetadata { Id = "TEST-502", ScreenshotUrls = Enumerable.Range(0, 8).Select(Url).ToArray() };
         var result = await output.SaveAsync(source, metadata, SamplesOnly);
         // 2=404, 3=wrong MIME, 4=tiny body, 5=429. 1 duplicates 0; 6 and 7 succeed.
@@ -77,7 +77,7 @@ internal static class OutputDownloadRegressionTests
         var local = workspace.WriteFile("local.jpg", images[2]);
         using var handler = new SampleHandler(images);
         using var client = new HttpClient(handler);
-        using var output = new OutputService(client);
+        using var output = new OutputService(WindowsArtworkImageProcessor.Instance, client);
         var metadata = new MovieMetadata { Id = "TEST-503", ScreenshotUrls = [local, Url(0), Url(2), Url(3)] };
         var result = await output.SaveAsync(source, metadata, SamplesOnly);
         AssertEx.Equal(3, result.ExtrafanartPaths.Count);
@@ -118,7 +118,7 @@ internal static class OutputDownloadRegressionTests
             var setup = Replacement(workspace, multipart, Enumerable.Range(0, 8).Select(Url).ToArray());
             using var client = new HttpClient(new SampleHandler(Enumerable.Range(0, 8)
                 .Select(i => TestImageFactory.CreateJpeg(100 + i, 80)).ToArray(), failures: true));
-            using var output = new OutputService(client);
+            using var output = new OutputService(WindowsArtworkImageProcessor.Instance, client);
             await AssertEx.ThrowsAsync<InvalidDataException>(() => new FileOrganizationService(output)
                 .ExecuteAsync(setup.Plan, setup.Metadata, true), "Partial replacement was accepted.");
             foreach (var pair in setup.Originals) AssertEx.Equal(pair.Value, AssertEx.Sha256(pair.Key));
@@ -134,7 +134,7 @@ internal static class OutputDownloadRegressionTests
             var setup = Replacement(workspace, multipart, Enumerable.Range(0, 8).Select(Url).ToArray());
             using var handler = new GatedHandler(fatal: false);
             using var client = new HttpClient(handler);
-            using var output = new OutputService(client);
+            using var output = new OutputService(WindowsArtworkImageProcessor.Instance, client);
             using var cancel = new CancellationTokenSource();
             var task = new FileOrganizationService(output).ExecuteAsync(setup.Plan, setup.Metadata, true, cancel.Token);
             try
@@ -162,7 +162,7 @@ internal static class OutputDownloadRegressionTests
         var setup = Replacement(workspace, false, Enumerable.Range(0, 8).Select(Url).ToArray());
         using var handler = new GatedHandler(fatal: true);
         using var client = new HttpClient(handler);
-        using var output = new OutputService(client);
+        using var output = new OutputService(WindowsArtworkImageProcessor.Instance, client);
         var first = new MovieJob(); first.ResetForVideo(setup.Plan.SourceVideoPath, setup.Metadata.Id);
         first.ApplyOnlineSources(setup.Metadata, [setup.Metadata]);
         first.UpdateSaveConfiguration(new(SamplesOnly, new(false, false)));

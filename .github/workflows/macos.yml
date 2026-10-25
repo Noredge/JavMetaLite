@@ -1,0 +1,51 @@
+name: macOS native gate
+
+on:
+  push:
+    branches: [main, mac, feature/macos-native]
+  pull_request:
+    branches: [main, mac]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apple-silicon:
+    name: Apple Silicon portable and native gate
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: true
+    steps:
+      # Official action tag resolutions verified for this source snapshot; update deliberately.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+      - name: Check runner architecture
+        run: test "$(uname -m)" = arm64
+      - name: Run release tooling, localization, portable, protocol and Swift tests
+        run: ./scripts/macos/test.sh --arch arm64 --configuration Release
+      - name: Build and verify self-contained ad-hoc app
+        run: ./scripts/macos/package.sh --arch arm64 --configuration Release --sign-mode adhoc
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: macos-arm64-local-build-and-evidence
+          path: |
+            artifacts/test-results/
+            artifacts/macos/*adhoc.zip
+            artifacts/macos/*adhoc.zip.sha256
+            artifacts/macos/*adhoc.zip.manifest.json
+            artifacts/macos/arm64/Release/signing-report.json
+          retention-days: 7
+          if-no-files-found: error
+          compression-level: 0

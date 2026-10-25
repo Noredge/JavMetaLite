@@ -59,6 +59,46 @@ The build restores NuGet packages automatically; the first build needs network a
 
 The EXE folder, ZIP and SHA-256 files are written to `release/`. See [Development and testing](TESTING.md) for the full test suite.
 
+## Native macOS preview
+
+A separate SwiftUI/AppKit client is available as a local Apple Silicon build for macOS 15+.
+It uses the same portable Core through a bundled, self-contained C# Worker. The current
+M6 local candidate supports recursive import, local NFO/artwork, LibreDMM and R18.dev queries,
+revisioned review/editing, artwork output, explicit multipart ordering, and batch saving
+with whole-batch conflict preflight. Video organization uses full SHA-256 verified copies.
+Every save requires a Worker-owned preview plan. The confirmation sheet is shown by default;
+Confirm Save authorizes the listed NFO/artwork replacements without an extra overwrite checkbox.
+An explicit skip-preview preference can skip only that sheet; video and cross-job conflicts,
+revisions, fingerprints and file transactions remain enforced. Output, naming, destination,
+query and panel settings are remembered automatically. The native client includes a bounded native WebKit manual import,
+separately confirmed local-image Trash operations, four languages and native text Undo.
+Browser content cannot call native file operations. M6 adds locked restores, source/build/payload
+provenance, archive round-trip checks, CI and fail-closed signing/notarization preparation.
+Late or externally modified NFO baselines and redirected input paths are refused before saving.
+The original WPF client and Windows release scripts remain available.
+
+```sh
+./scripts/macos/build.sh --arch arm64 --configuration Debug
+./scripts/macos/test.sh --arch arm64 --configuration Release
+./scripts/macos/package.sh --arch arm64 --configuration Release --sign-mode adhoc
+```
+
+Builds require the SDK in `global.json` and Apple developer tools. Packaged apps include
+their runtime. The current release policy is signed-only; no notarization submission or
+stapling is performed. Local ad-hoc builds are not Developer ID signed. Three real IDs
+have been checked against both live providers using isolated synthetic H.264 clips;
+see [metadata acceptance](docs/macos/LIVE-PROVIDER-QA.md). The same three synthetic movies
+also passed live cover/poster/37-sample output and ordered batch saving; the tested preview
+fallback fix and exact candidate boundaries are recorded in
+[artwork and batch acceptance](docs/macos/LIVE-ARTWORK-BATCH-QA.md).
+Normal import now opens a discovery review sheet before queue admission, with exact-item confirmation and selectable scan diagnostics. Completed operation/preview history has bounded retention; expired save receipts are recovered by an explicit read-only status check without replay. See [discovery and native regression evidence](docs/macos/REGRESSION-DISCOVERY-QA.md).
+Windows historical cases are tracked individually in [the Mac regression matrix](docs/macos/WINDOWS-CASE-REGRESSION.md), including remaining gaps and actual native evidence.
+See [actual implementation and verification status](docs/macos/STATUS.md),
+[Mac build and test instructions](docs/macos/TESTING.md), and
+[native project notes](macos/README.md), and [release preparation/checklist](docs/macos/RELEASING.md).
+Only the local Apple Silicon candidate has been exercised; Developer ID trust, Intel,
+macOS 15 runtime and Windows runtime acceptance remain open. Windows version remains 1.2.3.
+
 ## More
 
 [Release notes](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [Changelog](CHANGELOG.md) · [Development and testing](TESTING.md)

@@ -1,0 +1,40 @@
+{
+  "files": [
+    {
+      "file": "SkiaSharp-LICENSE.txt",
+      "package": "SkiaSharp",
+      "packageFile": "LICENSE.txt",
+      "sha256": "89101e35a8c66fd4d6dffc1763259161d35cb564c169714ec227a768c89f2938",
+      "version": "3.119.0"
+    },
+    {
+      "file": "SkiaSharp-THIRD-PARTY-NOTICES.txt",
+      "package": "SkiaSharp.NativeAssets.macOS",
+      "packageFile": "THIRD-PARTY-NOTICES.txt",
+      "sha256": "21504c46c4c58aa64c1055bd2dcbc5f9a136b4b8c412ed3cc6740e22c5b127f5",
+      "version": "3.119.0"
+    },
+    {
+      "file": "DOTNET-LICENSE.txt",
+      "package": "Microsoft.NETCore.App.Runtime.osx-{arch}",
+      "packageFile": "LICENSE.TXT",
+      "sha256": "cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310",
+      "version": "10.0.11"
+    },
+    {
+      "file": "DOTNET-THIRD-PARTY-NOTICES.txt",
+      "package": "Microsoft.NETCore.App.Runtime.osx-{arch}",
+      "packageFile": "THIRD-PARTY-NOTICES.TXT",
+      "sha256": "66f1d4e44973185519bb4aa8a9718eb22fc7af2cc532e3ae9cfc4c127ee7fc54",
+      "version": "10.0.11"
+    },
+    {
+      "file": "AngleSharp-LICENSE.txt",
+      "package": "AngleSharp",
+      "sha256": "2c594d9bfcf21dbcf3077e2c49bb53ceae4464f655e87be86fe1af76a5a73e39",
+      "source": "Unmodified AngleSharp license block from repository THIRD_PARTY_NOTICES.md",
+      "version": "1.5.2"
+    }
+  ],
+  "schemaVersion": 1
+}

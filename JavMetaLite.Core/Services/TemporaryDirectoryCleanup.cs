@@ -25,6 +25,7 @@ internal static class TemporaryDirectoryCleanup
             // Do not use Directory.Exists: it also returns false for inaccessible paths.
             await FileSharingRetry.RunAsync(() =>
             {
+                FileSystemPathSemantics.ValidateCanonicalPath(path);
                 try { Directory.Delete(path, recursive: true); }
                 catch (DirectoryNotFoundException) { ConfirmAbsent(path); }
                 ConfirmAbsent(path);

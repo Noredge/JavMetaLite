@@ -41,3 +41,12 @@ docs/images/javmetalite-v1.2.0-preview.55-*.png
 !docs/images/javmetalite-v1.2.0-preview.55-cover-warning.zh-Hans.png
 !docs/images/javmetalite-v1.2.0-preview.55-deferred.zh-Hans.png
 docs/images/javmetalite-v1.2.0-preview.56-*.png
+
+# Native macOS local build and editor state
+macos/.build/
+macos/.swiftpm/
+**/xcuserdata/
+*.xcresult/
+
+# Python verification cache
+scripts/macos/__pycache__/

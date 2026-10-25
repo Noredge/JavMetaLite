@@ -41,7 +41,7 @@ internal static class FolderSidecarRegressionTests
         AssertEx.Equal(workspace.PathOf("movie.NFO"), sidecars.NfoPath);
         AssertEx.Equal(workspace.PathOf("poster.jpg"), sidecars.PosterPath);
         var job = new MovieJob();
-        var loaded = await MovieJobLoader.LoadAsync(job, video);
+        var loaded = await MovieJobLoader.LoadAsync(job, video, WindowsArtworkImageProcessor.Instance);
         AssertEx.Equal(LocalMetadataLoadStatus.Loaded, loaded.MetadataStatus);
         await File.WriteAllTextAsync(workspace.PathOf("TEST-123.nfo"), "<movie><title>Named</title></movie>");
         workspace.WriteFile("TEST-123-poster.jpg", TestImageFactory.CreateJpeg());
@@ -101,7 +101,7 @@ internal static class FolderSidecarRegressionTests
             AssertEx.True(workspace.Root.Equals(plan.TargetDirectory, StringComparison.OrdinalIgnoreCase), "Target must resolve to the source directory.");
             AssertEx.Equal("movie.NFO", plan.OutputFileNames?.Nfo);
             AssertEx.Equal(0, plan.SourcePathsToRetire.Count);
-            using var output = new OutputService();
+            using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
             await new FileOrganizationService(output).ExecuteAsync(plan, metadata, true);
             AssertEx.Equal("keep", XDocument.Load(workspace.PathOf("movie.NFO")).Root?.Element("unknown")?.Value);
             AssertEx.FileDoesNotExist(workspace.PathOf("TEST-123.nfo"));
@@ -117,7 +117,7 @@ internal static class FolderSidecarRegressionTests
         var (context, metadata) = await Load(video);
         var plan = FileOrganizationService.BuildPlan(video, metadata, Options, new OrganizationOptions(true, true), context);
         AssertEx.Equal("TEST-123.nfo", plan.OutputFileNames?.Nfo);
-        using var output = new OutputService();
+        using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
         await new FileOrganizationService(output).ExecuteAsync(plan, metadata, true);
         AssertEx.FileExists(Path.Combine(plan.TargetDirectory, "TEST-123.nfo"));
         AssertEx.FileExists(Path.Combine(plan.TargetDirectory, "TEST-123-poster.jpg"));
@@ -138,7 +138,7 @@ internal static class FolderSidecarRegressionTests
         var plan = FileOrganizationService.BuildPlan(video, metadata, Options, new OrganizationOptions(false, false),
             context with { SelectedArtwork = null });
         AssertEx.Equal("poster.png", plan.OutputFileNames?.Poster);
-        using var output = new OutputService();
+        using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
         var result = await new FileOrganizationService(output).ExecuteAsync(plan, metadata, true);
         AssertEx.Equal(workspace.PathOf("poster.png"), result.Outputs.PosterPath);
         AssertEx.Equal((byte)137, File.ReadAllBytes(result.Outputs.PosterPath!)[0]);
@@ -157,7 +157,7 @@ internal static class FolderSidecarRegressionTests
             new LocalSaveContext(bundle, null, null));
         AssertEx.Equal("poster.jpg", plan.OutputFileNames?.Poster);
         AssertEx.Equal("fanart.jpg", plan.OutputFileNames?.Fanart);
-        using var output = new OutputService();
+        using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
         await new FileOrganizationService(output).ExecuteAsync(plan, metadata, true);
         AssertEx.FileDoesNotExist(workspace.PathOf("TEST-123-poster.jpg"));
         AssertEx.FileExists(workspace.PathOf("poster.jpg"));
@@ -172,7 +172,7 @@ internal static class FolderSidecarRegressionTests
         var plan = FileOrganizationService.BuildPlan(video, metadata, Options, new OrganizationOptions(false, false), context);
         await File.AppendAllTextAsync(workspace.PathOf("movie.NFO"), "<!--external-->");
         var hash = AssertEx.Sha256(workspace.PathOf("movie.NFO"));
-        using var output = new OutputService();
+        using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
         await AssertEx.ThrowsAsync<IOException>(() => new FileOrganizationService(output).ExecuteAsync(plan, metadata, true),
             "External edits must block commit.");
         AssertEx.Equal(hash, AssertEx.Sha256(workspace.PathOf("movie.NFO")));
@@ -188,7 +188,7 @@ internal static class FolderSidecarRegressionTests
         metadata.Title = "Updated named";
         var plan = FileOrganizationService.BuildPlan(video, metadata, Options, new OrganizationOptions(false, false), context);
         AssertEx.Equal("TEST-123.nfo", plan.OutputFileNames?.Nfo);
-        using var output = new OutputService();
+        using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
         await new FileOrganizationService(output).ExecuteAsync(plan, metadata, true);
         AssertEx.Equal(hash, AssertEx.Sha256(workspace.PathOf("movie.NFO")));
     }
@@ -234,7 +234,7 @@ internal static class FolderSidecarRegressionTests
                 organization = new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, false, Path.GetDirectoryName(workspace.Root));
             }
             var plan = FileOrganizationService.BuildPlan(MovieFileSet.Discover(video).VideoPaths, metadata, Options, organization, context);
-            using var output = new OutputService();
+            using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
             using var cancellation = new CancellationTokenSource();
             var progress = new InlineProgress<FileTransactionProgress>(value =>
             {
@@ -267,7 +267,7 @@ internal static class FolderSidecarRegressionTests
         var hash = AssertEx.Sha256(workspace.PathOf("movie.NFO"));
         var plan = FileOrganizationService.BuildPlan(video, metadata, Options, new OrganizationOptions(false, false), context);
         AssertEx.False(plan.HasActualChanges, "Unchanged folder metadata should not be rewritten.");
-        using var output = new OutputService();
+        using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
         await new FileOrganizationService(output).ExecuteAsync(plan, metadata, false);
         AssertEx.Equal(hash, AssertEx.Sha256(workspace.PathOf("movie.NFO")));
     }

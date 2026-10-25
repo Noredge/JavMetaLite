@@ -34,7 +34,7 @@ internal static class SavePerformance
             AppLog.ConfigureDirectory(Path.Combine(roundRoot, "logs"));
             using var handler = new MeasuredImageHandler(images, delay);
             using var client = new HttpClient(handler);
-            using var output = new OutputService(client);
+            using var output = new OutputService(WindowsArtworkImageProcessor.Instance, client);
             var organizer = new FileOrganizationService(output);
             var items = new List<PreparedMovieSave>();
             var videoBytes = new byte[] { 0x4A, 0x41, 0x56, 0x4D, 0x45, 0x54, 0x41 };

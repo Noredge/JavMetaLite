@@ -1,0 +1,16 @@
+{
+  "dvd_id": "DEMO-001",
+  "content_id": "demoactual001",
+  "title_en": "Synthetic R18 title",
+  "title_ja": "合成資料のタイトル",
+  "release_date": "2026-01-02",
+  "runtime_mins": 120,
+  "jacket_full_url": "https://example.invalid/demoactual001pl.jpg",
+  "maker_name_en": "Synthetic studio",
+  "label_name_en": "Synthetic label",
+  "description_en": "Offline fixture only; never a live lookup.",
+  "actresses": [{ "name_romaji": "Synthetic actor", "image_url": "https://example.invalid/synthetic-actor.jpg" }],
+  "directors": [{ "name_romaji": "Synthetic director" }],
+  "categories": [{ "name_en": "Demo" }],
+  "gallery": [{ "image_full": "https://example.invalid/sample.jpg" }]
+}

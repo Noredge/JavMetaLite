@@ -28,6 +28,7 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
     private readonly HashSet<MetadataField> _reviewedFields = [];
     private bool _applyingAutomaticSelection;
     private bool _artworkReviewed;
+    private bool _changingEquivalentId;
     private long _coverResolutionRevision;
 
     public long CoverResolutionRevision => _coverResolutionRevision;
@@ -76,6 +77,48 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
             : Path.GetFileName(VideoPath);
 
     public MovieMetadata Metadata => _metadata;
+
+    // The native Worker commits an edited ID through this boundary. Online
+    // candidates belong to one normalized movie ID, while the imported NFO's
+    // raw XML/fingerprint and explicit manual review still belong to this file.
+    public void ChangeReviewedId(string value)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (string.Equals(MovieIdParser.Normalize(Metadata.Id), MovieIdParser.Normalize(value), StringComparison.OrdinalIgnoreCase))
+        {
+            _changingEquivalentId = true;
+            try { Metadata.Id = value; }
+            finally { _changingEquivalentId = false; }
+            return;
+        }
+        var manual = Enum.GetValues<MetadataField>().Select(MetadataReview.GetSelectedCandidate)
+            .OfType<MetadataFieldCandidate>().Where(candidate => candidate.Source.IsManual).ToArray();
+        var actors = Metadata.Actors.ToArray();
+        var source = SourceResults.FirstOrDefault(candidate => candidate.SourceName == Metadata.SourceName);
+        var manualUrl = source is null || Metadata.SourceUrl != source.SourceUrl ? Metadata.SourceUrl : null;
+        var samples = Metadata.ScreenshotUrls.Where(location => LocalExtrafanartPaths.Contains(location, FileSystemPathSemantics.PathComparer)).ToArray();
+        var local = LocalSourceMetadata is null ? null : CloneMetadata(LocalSourceMetadata);
+        var metadata = local is null ? new MovieMetadata() : CloneMetadata(local);
+        metadata.Id = value;
+        if (manualUrl is not null) metadata.SourceUrl = manualUrl;
+        _reviewedFields.Clear();
+        _artworkReviewed = false;
+        ManualArtworkCandidate = null;
+        PreferredArtworkSourceName = LocalArtworkCandidate?.Source.Name;
+        _onlineExtrafanartCandidateId = null;
+        AvailableScreenshotUrls = LocalExtrafanartPaths.ToArray();
+        ReplaceMetadata(metadata, local is null ? [] : [local], []);
+        foreach (var candidate in manual)
+        {
+            MetadataReview.SetManualValue(candidate.Field, candidate.Value);
+            if (candidate.Field == MetadataField.Actors) Metadata.Actors = actors;
+        }
+        Metadata.ScreenshotUrls = samples;
+        LastSearchAttempts = [];
+        LastSearchError = null;
+        SearchState = string.IsNullOrWhiteSpace(MovieIdParser.Normalize(value)) ? MovieSearchState.NeedsId : MovieSearchState.Searchable;
+        OnPropertyChanged(nameof(CanReplaceLocalExtrafanart));
+    }
 
     public MetadataReviewSession MetadataReview => _metadataReview;
 
@@ -318,6 +361,21 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
         ArgumentNullException.ThrowIfNull(sourceResults);
         ReplaceAvailableScreenshotUrls(sourceResults.Append(metadata));
         ReplaceMetadata(metadata, sourceResults, []);
+    }
+
+    // An artwork-only/organization save may move the baseline NFO without saving the
+    // reviewed metadata. Refresh that baseline without discarding unsaved review state.
+    public void RefreshLocalMetadataBaseline(LocalMetadataBundle? bundle)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        LocalMetadataBundle = bundle;
+        LocalSourceMetadata = bundle is null
+            ? null : LocalMetadataReviewComposer.CreateLocal(bundle.Metadata).Sources.FirstOrDefault();
+        LocalNfoSaveBlocked = false;
+        OnPropertyChanged(nameof(LocalMetadataBundle));
+        OnPropertyChanged(nameof(LocalSourceMetadata));
+        OnPropertyChanged(nameof(LocalNfoSaveBlocked));
+        TouchReview();
     }
 
     public void InitializeSaveConfiguration(MovieSaveConfiguration configuration)
@@ -709,8 +767,8 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(videoPaths);
         var combined = _videoPaths
-            .Concat(videoPaths)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Concat(videoPaths.Select(FileSystemPathSemantics.CanonicalizePath))
+            .Distinct(FileSystemPathSemantics.PathComparer)
             .ToArray();
         if (combined.Length == _videoPaths.Count)
         {
@@ -944,14 +1002,14 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
 
     private void HandleMetadataPropertyChanged(PropertyChangedEventArgs eventArgs)
     {
-        if (eventArgs.PropertyName is nameof(MovieMetadata.Id) or nameof(MovieMetadata.CoverUrl) or
+        if (!_changingEquivalentId && eventArgs.PropertyName is nameof(MovieMetadata.Id) or nameof(MovieMetadata.CoverUrl) or
             nameof(MovieMetadata.FallbackCoverUrl) or nameof(MovieMetadata.PosterUrl))
             InvalidateCoverResolution();
         if (eventArgs.PropertyName == nameof(MovieMetadata.ScreenshotUrls) && !_applyingAutomaticSelection)
         {
             _artworkReviewed = true;
         }
-        if (eventArgs.PropertyName == nameof(MovieMetadata.Id) && SearchState is not MovieSearchState.Searching)
+        if (!_changingEquivalentId && eventArgs.PropertyName == nameof(MovieMetadata.Id) && SearchState is not MovieSearchState.Searching)
         {
             _onlineExtrafanartCandidateId = null;
             OnPropertyChanged(nameof(CanReplaceLocalExtrafanart));

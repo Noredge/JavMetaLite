@@ -48,6 +48,7 @@ public sealed class FileOrganizationService
     {
         foreach (var sourcePath in fileSet.VideoPaths)
         {
+            FileSystemPathSemantics.ValidateUnambiguousPath(sourcePath);
             if (!File.Exists(sourcePath))
             {
                 throw new FileNotFoundException("找不到所选影片分段。", sourcePath);
@@ -68,6 +69,14 @@ public sealed class FileOrganizationService
             effectiveOrganizationOptions);
         var sourceDirectory = pathPlan.SourceDirectory;
         var targetDirectory = pathPlan.TargetDirectory;
+        // Original folders and explicitly selected custom roots are containers;
+        // they are not renamed or replaced. Validate their actual metadata name
+        // without enumerating a parent the user did not select. Every file target
+        // and any created/relocated movie directory retains the full alias check.
+        if (PathsEqual(sourceDirectory, targetDirectory) ||
+            pathPlan.UsesCustomRoot && Directory.Exists(targetDirectory) && PathsEqual(targetDirectory, pathPlan.TargetRootDirectory))
+            FileSystemPathSemantics.ValidateExistingContainer(targetDirectory);
+        else FileSystemPathSemantics.ValidateUnambiguousPath(targetDirectory);
         var targetBaseName = fileSet.UsesMultipartNaming && !effectiveOrganizationOptions.RenameVideo
             ? fileSet.MovieBaseName
             : pathPlan.TargetBaseName;
@@ -79,6 +88,7 @@ public sealed class FileOrganizationService
                     : Path.GetFileName(part.Path)
                 : targetBaseName + Path.GetExtension(part.Path);
             var targetPath = Path.Combine(targetDirectory, targetFileName);
+            FileSystemPathSemantics.ValidateUnambiguousPath(targetPath);
             return new VideoFileTransfer(
                 part.Path,
                 targetPath,
@@ -155,6 +165,9 @@ public sealed class FileOrganizationService
             }
         }
 
+        foreach (var path in localContext?.MetadataBundle?.Sidecars is { } localSidecars
+                     ? new[] { localSidecars.NfoPath, localSidecars.PosterPath, localSidecars.FanartPath } : [])
+            if (path is not null) FileSystemPathSemantics.ValidateUnambiguousPath(path);
         var localBundle = localContext?.MetadataBundle;
         if (localBundle is not null && !fileSet.VideoPaths.Any(path =>
                 PathsEqual(localBundle.Sidecars.VideoPath, path)))
@@ -162,15 +175,19 @@ public sealed class FileOrganizationService
             throw new InvalidOperationException("本地 NFO 上下文不属于当前影片，请重新选择影片。");
         }
 
+        // Reject a newly introduced direct link before canonicalization can hide it.
+        foreach (var path in new[] { localContext?.LocalArtwork?.LocalPosterPath, localContext?.LocalArtwork?.LocalFanartPath }
+                     .Concat(localContext?.LocalExtrafanartPaths ?? []).Where(path => !string.IsNullOrWhiteSpace(path)))
+            FileSystemPathSemantics.ValidateUnambiguousPath(path!);
         var localNfoPath = NormalizePath(localBundle?.Sidecars.NfoPath);
         var localPosterPath = NormalizePath(localContext?.LocalArtwork?.LocalPosterPath);
         var localFanartPath = NormalizePath(localContext?.LocalArtwork?.LocalFanartPath);
         var localExtrafanartPaths = localContext?.LocalExtrafanartPaths
             .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Select(Path.GetFullPath)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(FileSystemPathSemantics.CanonicalizePath)
+            .Distinct(FileSystemPathSemantics.PathComparer)
             .ToArray() ?? [];
-        var localExtrafanartSet = localExtrafanartPaths.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var localExtrafanartSet = localExtrafanartPaths.ToHashSet(FileSystemPathSemantics.PathComparer);
         var canUseOnlineExtrafanart = localContext is null || localContext.CanReplaceLocalExtrafanart;
         var generateExtrafanart = saveOptions.DownloadExtrafanart && canUseOnlineExtrafanart;
         var replaceLocalExtrafanart = generateExtrafanart && saveOptions.ReplaceLocalExtrafanart;
@@ -337,7 +354,7 @@ public sealed class FileOrganizationService
             new[] { targetNfoPath, targetPosterPath, targetFanartPath }
                 .Where(path => path is not null)
                 .Select(path => Path.GetFullPath(path!)),
-            StringComparer.OrdinalIgnoreCase);
+            FileSystemPathSemantics.PathComparer);
         var expectedOutputPaths = OutputService.GetExpectedOutputFiles(
                 outputAnchorPath,
             metadata,
@@ -391,7 +408,7 @@ public sealed class FileOrganizationService
             saveOptions,
             effectiveOrganizationOptions,
             changes,
-            overwriteConflicts.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            overwriteConflicts.Distinct(FileSystemPathSemantics.PathComparer).ToArray(),
             blockingConflicts.Distinct(StringComparer.Ordinal).ToArray())
         {
             OutputGenerationOptions = outputOptions,
@@ -403,9 +420,9 @@ public sealed class FileOrganizationService
             NfoWriteContext = nfoContext,
             SidecarTransfers = transfers.ToArray(),
             SourceFileExpectations = expectations
-                .DistinctBy(expectation => expectation.Path, StringComparer.OrdinalIgnoreCase)
+                .DistinctBy(expectation => expectation.Path, FileSystemPathSemantics.PathComparer)
                 .ToArray(),
-            SourcePathsToRetire = retirePaths.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            SourcePathsToRetire = retirePaths.Distinct(FileSystemPathSemantics.PathComparer).ToArray(),
             ExtrafanartSourceLocations = extrafanartSourceLocations,
             RequiresVerifiedVideoCopy = videoTransfers.Any(transfer =>
                 transfer.WillMove && transfer.RequiresVerifiedCopy)
@@ -419,6 +436,7 @@ public sealed class FileOrganizationService
         CancellationToken cancellationToken = default,
         IProgress<FileTransactionProgress>? progress = null)
     {
+        ValidatePlanPathSafety(plan);
         if (plan.VideoTransfers.Count > 1)
         {
             return await ExecuteMultipartAsync(
@@ -441,6 +459,7 @@ public sealed class FileOrganizationService
             throw new FileNotFoundException("执行前找不到原影片，未进行任何更改。", plan.SourceVideoPath);
         }
         ValidateSourceExpectations(plan.SourceFileExpectations);
+        ValidateTargetExpectations(plan.PreviewTargetExpectations);
         if (plan.VideoWillMove && (File.Exists(plan.TargetVideoPath) || Directory.Exists(plan.TargetVideoPath)))
         {
             throw new IOException($"目标影片已经存在，未进行任何更改：{plan.TargetVideoPath}");
@@ -478,6 +497,7 @@ public sealed class FileOrganizationService
         var targetVideoCommitted = false;
         var sourceVideoRetired = false;
         string? sourceVideoBackupPath = null;
+        string? copiedSourceSha256 = null;
         var operationSucceeded = false;
         var rollbackSucceeded = false;
         OrganizedSaveResult? completedResult = null;
@@ -498,6 +518,8 @@ public sealed class FileOrganizationService
 
         try
         {
+            progress?.Report(new FileTransactionProgress(FileTransactionStage.Preparing,
+                "Preparing transaction staging directory", TemporaryPath: sourceStagingRoot));
             Directory.CreateDirectory(sourceStagingRoot);
             var stagedResult = HasOutputs(plan.OutputGenerationOptions)
                 ? await _outputService.SaveAsync(
@@ -514,6 +536,7 @@ public sealed class FileOrganizationService
 
             timing.Begin("stageAndVerify");
             ValidateSourceExpectations(plan.SourceFileExpectations);
+            ValidateTargetExpectations(plan.PreviewTargetExpectations);
             var stagedPaths = new[] { stagedResult.NfoPath, stagedResult.PosterPath, stagedResult.FanartPath }
                 .Where(path => path is not null)
                 .Select(path => path!)
@@ -534,11 +557,14 @@ public sealed class FileOrganizationService
                 var stagedPath = Path.Combine(sourceStagingRoot, relativePath);
                 Directory.CreateDirectory(Path.GetDirectoryName(stagedPath)!);
                 File.Copy(transfer.SourcePath, stagedPath, overwrite: false);
+                if (!string.Equals(ComputeSha256(stagedPath), transfer.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+                    throw new IOException($"本地 sidecar 在复制过程中发生变化，原文件保持不变：{transfer.SourcePath}");
                 stagedPaths.Add(stagedPath);
             }
 
             if (!Directory.Exists(plan.TargetDirectory))
             {
+                ValidateTargetRootAvailability(plan);
                 Directory.CreateDirectory(plan.TargetDirectory);
                 createdTargetDirectory = true;
             }
@@ -547,6 +573,8 @@ public sealed class FileOrganizationService
             IReadOnlyList<string> commitStagedPaths = stagedPaths;
             if (crossVolumeCopy)
             {
+                progress?.Report(new FileTransactionProgress(FileTransactionStage.Preparing,
+                    "Preparing verified-copy target staging directory", TemporaryPath: targetStagingRoot));
                 Directory.CreateDirectory(targetPayloadRoot);
                 var targetCopies = new List<string>(stagedPaths.Count);
                 foreach (var stagedPath in stagedPaths)
@@ -571,6 +599,7 @@ public sealed class FileOrganizationService
                     fullVerification,
                     progress,
                     cancellationToken);
+                copiedSourceSha256 = sourceHash;
                 var targetLength = new FileInfo(targetStagedVideoPath).Length;
                 if (sourceLength != targetLength)
                 {
@@ -606,7 +635,7 @@ public sealed class FileOrganizationService
                 .Select(path => (StagedPath: path, FinalPath: Path.Combine(
                     plan.TargetDirectory,
                     Path.GetRelativePath(targetPayloadRoot, path))))
-                .GroupBy(mapping => mapping.FinalPath, StringComparer.OrdinalIgnoreCase)
+                .GroupBy(mapping => mapping.FinalPath, FileSystemPathSemantics.PathComparer)
                 .Select(group => group.Single())
                 .ToArray();
             if (plan.VideoWillMove && (File.Exists(plan.TargetVideoPath) || Directory.Exists(plan.TargetVideoPath)))
@@ -624,9 +653,11 @@ public sealed class FileOrganizationService
             progress?.Report(new FileTransactionProgress(
                 FileTransactionStage.Committing,
                 "正在提交目标影片与 metadata…"));
+            ValidateSourceExpectations(plan.SourceFileExpectations);
             foreach (var mapping in mappings)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                ValidateTargetExpectations(plan.PreviewTargetExpectations.Where(expected => PathsEqual(expected.Path, mapping.FinalPath)));
                 Directory.CreateDirectory(Path.GetDirectoryName(mapping.FinalPath)!);
                 if (File.Exists(mapping.FinalPath))
                 {
@@ -637,6 +668,7 @@ public sealed class FileOrganizationService
                     Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
                     await FileSharingRetry.MoveAsync(mapping.FinalPath, backupPath, cancellationToken);
                     backups.Add((backupPath, mapping.FinalPath));
+                    ValidateBackedUpTarget(plan.PreviewTargetExpectations, mapping.FinalPath, backupPath);
                 }
                 await FileSharingRetry.MoveAsync(mapping.StagedPath, mapping.FinalPath, cancellationToken);
                 committedOutputs.Add(mapping.FinalPath);
@@ -657,10 +689,12 @@ public sealed class FileOrganizationService
                 {
                     continue;
                 }
+                ValidateSourceExpectations(plan.SourceFileExpectations.Where(expected => PathsEqual(expected.Path, sourcePath)));
                 var backupPath = Path.Combine(sourceRetireRoot, $"{index:D2}-{Path.GetFileName(sourcePath)}");
                 Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
                 await FileSharingRetry.MoveAsync(sourcePath, backupPath, cancellationToken);
                 backups.Add((backupPath, sourcePath));
+                ValidateRetiredSource(plan.SourceFileExpectations, sourcePath, backupPath);
             }
 
             if (plan.VideoWillMove)
@@ -679,6 +713,7 @@ public sealed class FileOrganizationService
                         "movie",
                         Path.GetFileName(plan.SourceVideoPath));
                     Directory.CreateDirectory(Path.GetDirectoryName(sourceVideoBackupPath)!);
+                    await ValidateCopiedSourceAsync(plan.SourceVideoPath, copiedSourceSha256, cancellationToken);
                     await FileSharingRetry.MoveAsync(plan.SourceVideoPath, sourceVideoBackupPath, cancellationToken);
                     sourceVideoRetired = true;
                 }
@@ -722,6 +757,7 @@ public sealed class FileOrganizationService
                 targetVideoCommitted,
                 sourceVideoRetired,
                 sourceVideoBackupPath,
+                copiedSourceSha256,
                 committedOutputs,
                 backups);
             rollbackSucceeded = rollbackErrors.Count == 0;
@@ -733,7 +769,7 @@ public sealed class FileOrganizationService
                 AppLog.Error($"文件恢复不完整，临时备份保留在 {recoveryPaths}", new AggregateException(rollbackErrors));
                 throw new FileRecoveryException(
                     $"保存失败且自动恢复不完整。请保留现场并检查：{recoveryPaths}",
-                    new[] { sourceStagingRoot, targetStagingRoot }.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                    new[] { sourceStagingRoot, targetStagingRoot }.Distinct(FileSystemPathSemantics.PathComparer).ToArray(),
                     new AggregateException(new[] { exception }.Concat(rollbackErrors)));
             }
             AppLog.Info("文件恢复完成，原影片和 sidecar 保持不变");
@@ -747,7 +783,7 @@ public sealed class FileOrganizationService
             if (rollbackSucceeded)
             {
                 var cleanupIssues = new List<TemporaryCleanupIssue>();
-                foreach (var path in new[] { sourceStagingRoot, targetStagingRoot }.Distinct(StringComparer.OrdinalIgnoreCase))
+                foreach (var path in new[] { sourceStagingRoot, targetStagingRoot }.Distinct(FileSystemPathSemantics.PathComparer))
                     if (await _cleanupDirectory(path) is { } issue) cleanupIssues.Add(issue);
                 if (completedResult is not null) completedResult.CleanupIssues = cleanupIssues;
                 if (cleanupIssues.Count > 0 && !operationSucceeded)
@@ -790,6 +826,7 @@ public sealed class FileOrganizationService
         }
 
         ValidateSourceExpectations(plan.SourceFileExpectations);
+        ValidateTargetExpectations(plan.PreviewTargetExpectations);
         var currentConflicts = GetPlannedWritePaths(plan, metadata).Where(File.Exists).ToArray();
         if (currentConflicts.Length > 0 && !allowOverwrite)
         {
@@ -819,6 +856,7 @@ public sealed class FileOrganizationService
         var committedOutputs = new List<string>();
         var backups = new List<(string BackupPath, string OriginalPath)>();
         var committedVideoTargets = new List<string>();
+        var copiedSourceHashes = new Dictionary<string, string?>(FileSystemPathSemantics.PathComparer);
         var retiredVideoSources = new List<(string BackupPath, string OriginalPath)>();
         var sameVolumeMoves = new List<VideoFileTransfer>();
         var createdTargetDirectory = false;
@@ -843,6 +881,8 @@ public sealed class FileOrganizationService
 
         try
         {
+            progress?.Report(new FileTransactionProgress(FileTransactionStage.Preparing,
+                "Preparing transaction staging directory", TemporaryPath: sourceStagingRoot));
             Directory.CreateDirectory(sourceStagingRoot);
             var stagedResult = HasOutputs(plan.OutputGenerationOptions)
                 ? await _outputService.SaveAsync(
@@ -859,6 +899,7 @@ public sealed class FileOrganizationService
 
             timing.Begin("stageAndVerify");
             ValidateSourceExpectations(plan.SourceFileExpectations);
+            ValidateTargetExpectations(plan.PreviewTargetExpectations);
             var stagedPaths = new[] { stagedResult.NfoPath, stagedResult.PosterPath, stagedResult.FanartPath }
                 .Where(path => path is not null)
                 .Select(path => path!)
@@ -879,11 +920,14 @@ public sealed class FileOrganizationService
                 var stagedPath = Path.Combine(sourceStagingRoot, relativePath);
                 Directory.CreateDirectory(Path.GetDirectoryName(stagedPath)!);
                 File.Copy(transfer.SourcePath, stagedPath, overwrite: false);
+                if (!string.Equals(ComputeSha256(stagedPath), transfer.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+                    throw new IOException($"本地 sidecar 在复制过程中发生变化，原文件保持不变：{transfer.SourcePath}");
                 stagedPaths.Add(stagedPath);
             }
 
             if (!Directory.Exists(plan.TargetDirectory))
             {
+                ValidateTargetRootAvailability(plan);
                 Directory.CreateDirectory(plan.TargetDirectory);
                 createdTargetDirectory = true;
             }
@@ -892,6 +936,8 @@ public sealed class FileOrganizationService
             var stagedVideos = new List<(VideoFileTransfer Transfer, string StagedPath)>();
             if (crossVolumeCopy)
             {
+                progress?.Report(new FileTransactionProgress(FileTransactionStage.Preparing,
+                    "Preparing verified-copy target staging directory", TemporaryPath: targetStagingRoot));
                 Directory.CreateDirectory(targetPayloadRoot);
                 var targetCopies = new List<string>(stagedPaths.Count);
                 foreach (var stagedPath in stagedPaths)
@@ -920,6 +966,7 @@ public sealed class FileOrganizationService
                         fullVerification,
                         progress,
                         cancellationToken);
+                    copiedSourceHashes[transfer.SourcePath] = sourceHash;
                     var targetLength = new FileInfo(stagedVideoPath).Length;
                     if (sourceLength != targetLength)
                     {
@@ -943,7 +990,7 @@ public sealed class FileOrganizationService
                 .Select(path => (StagedPath: path, FinalPath: Path.Combine(
                     plan.TargetDirectory,
                     Path.GetRelativePath(targetPayloadRoot, path))))
-                .GroupBy(mapping => mapping.FinalPath, StringComparer.OrdinalIgnoreCase)
+                .GroupBy(mapping => mapping.FinalPath, FileSystemPathSemantics.PathComparer)
                 .Select(group => group.Single())
                 .ToArray();
             var lateVideoConflicts = plan.VideoTransfers
@@ -967,9 +1014,11 @@ public sealed class FileOrganizationService
             progress?.Report(new FileTransactionProgress(
                 FileTransactionStage.Committing,
                 "正在提交多分段影片与 metadata…"));
+            ValidateSourceExpectations(plan.SourceFileExpectations);
             foreach (var mapping in mappings)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                ValidateTargetExpectations(plan.PreviewTargetExpectations.Where(expected => PathsEqual(expected.Path, mapping.FinalPath)));
                 Directory.CreateDirectory(Path.GetDirectoryName(mapping.FinalPath)!);
                 if (File.Exists(mapping.FinalPath))
                 {
@@ -980,6 +1029,7 @@ public sealed class FileOrganizationService
                     Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
                     await FileSharingRetry.MoveAsync(mapping.FinalPath, backupPath, cancellationToken);
                     backups.Add((backupPath, mapping.FinalPath));
+                    ValidateBackedUpTarget(plan.PreviewTargetExpectations, mapping.FinalPath, backupPath);
                 }
                 await FileSharingRetry.MoveAsync(mapping.StagedPath, mapping.FinalPath, cancellationToken);
                 committedOutputs.Add(mapping.FinalPath);
@@ -1000,10 +1050,12 @@ public sealed class FileOrganizationService
                 {
                     continue;
                 }
+                ValidateSourceExpectations(plan.SourceFileExpectations.Where(expected => PathsEqual(expected.Path, sourcePath)));
                 var backupPath = Path.Combine(sourceRetireRoot, $"sidecar-{index:D2}-{Path.GetFileName(sourcePath)}");
                 Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
                 await FileSharingRetry.MoveAsync(sourcePath, backupPath, cancellationToken);
                 backups.Add((backupPath, sourcePath));
+                ValidateRetiredSource(plan.SourceFileExpectations, sourcePath, backupPath);
             }
 
             var movingVideoTransfers = plan.VideoTransfers.Where(transfer => transfer.WillMove).ToArray();
@@ -1023,6 +1075,7 @@ public sealed class FileOrganizationService
                         "movie",
                         $"{index:D2}-{Path.GetFileName(transfer.SourcePath)}");
                     Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
+                    await ValidateCopiedSourceAsync(transfer.SourcePath, copiedSourceHashes.GetValueOrDefault(transfer.SourcePath), cancellationToken);
                     await FileSharingRetry.MoveAsync(transfer.SourcePath, backupPath, cancellationToken);
                     retiredVideoSources.Add((backupPath, transfer.SourcePath));
                 }
@@ -1078,14 +1131,9 @@ public sealed class FileOrganizationService
             {
                 var matchingSource = plan.VideoTransfers.First(transfer =>
                     PathsEqual(transfer.TargetPath, targetPath)).SourcePath;
-                if (File.Exists(matchingSource))
-                {
+                if (await CanRemoveCommittedCopyAsync(matchingSource, targetPath,
+                        copiedSourceHashes.GetValueOrDefault(matchingSource), rollbackErrors))
                     await TryRollbackAsync(() => FileSharingRetry.DeleteAsync(targetPath), rollbackErrors);
-                }
-                else
-                {
-                    rollbackErrors.Add(new IOException($"来源分段尚未恢复，因此保留目标分段：{targetPath}"));
-                }
             }
             foreach (var outputPath in committedOutputs.AsEnumerable().Reverse())
             {
@@ -1108,7 +1156,7 @@ public sealed class FileOrganizationService
                     : sourceStagingRoot;
                 throw new FileRecoveryException(
                     $"多分段保存失败且自动恢复不完整。请保留现场并检查：{recoveryPaths}",
-                    new[] { sourceStagingRoot, targetStagingRoot }.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                    new[] { sourceStagingRoot, targetStagingRoot }.Distinct(FileSystemPathSemantics.PathComparer).ToArray(),
                     new AggregateException(new[] { exception }.Concat(rollbackErrors)));
             }
             AppLog.Info("多分段文件恢复完成，原影片和 sidecar 保持不变");
@@ -1122,7 +1170,7 @@ public sealed class FileOrganizationService
             if (rollbackSucceeded)
             {
                 var cleanupIssues = new List<TemporaryCleanupIssue>();
-                foreach (var path in new[] { sourceStagingRoot, targetStagingRoot }.Distinct(StringComparer.OrdinalIgnoreCase))
+                foreach (var path in new[] { sourceStagingRoot, targetStagingRoot }.Distinct(FileSystemPathSemantics.PathComparer))
                     if (await _cleanupDirectory(path) is { } issue) cleanupIssues.Add(issue);
                 if (completedResult is not null) completedResult.CleanupIssues = cleanupIssues;
                 if (cleanupIssues.Count > 0 && !operationSucceeded)
@@ -1275,6 +1323,7 @@ public sealed class FileOrganizationService
     {
         foreach (var expectation in expectations)
         {
+            FileSystemPathSemantics.ValidateCanonicalPath(expectation.Path);
             if (!File.Exists(expectation.Path))
             {
                 throw new IOException($"{expectation.Description} 在预览后消失，未执行保存：{expectation.Path}");
@@ -1284,6 +1333,43 @@ public sealed class FileOrganizationService
                 throw new IOException($"{expectation.Description} 在预览后发生变化，未执行保存：{expectation.Path}");
             }
         }
+    }
+
+    private static void ValidateTargetExpectations(IEnumerable<TargetFileExpectation> expectations)
+    {
+        foreach (var expectation in expectations)
+        {
+            FileSystemPathSemantics.ValidateCanonicalPath(expectation.Path);
+            FileSystemPathSemantics.ValidateUnambiguousPath(expectation.Path);
+            var exists = File.Exists(expectation.Path);
+            if (Directory.Exists(expectation.Path) || exists != expectation.Exists ||
+                new FileInfo(expectation.Path).LinkTarget is not null)
+                throw new IOException($"Target occupancy changed after preview: {expectation.Path}");
+            if (exists && expectation.ExpectedSha256 is { } hash &&
+                !string.Equals(ComputeSha256(expectation.Path), hash, StringComparison.OrdinalIgnoreCase))
+                throw new IOException($"Target contents changed after preview: {expectation.Path}");
+        }
+    }
+
+    private static void ValidateBackedUpTarget(IEnumerable<TargetFileExpectation> expectations,
+        string originalPath, string backupPath)
+    {
+        var expected = expectations.FirstOrDefault(item => PathsEqual(item.Path, originalPath));
+        if (expected is null) return;
+        // Validate the bytes actually moved, closing the check-to-backup window. The backup
+        // is registered first, so any unexpected external version is restored on failure.
+        if (!expected.Exists || expected.ExpectedSha256 is { } hash &&
+            !string.Equals(ComputeSha256(backupPath), hash, StringComparison.OrdinalIgnoreCase))
+            throw new IOException($"Target changed while preparing its backup: {originalPath}");
+    }
+
+    private static void ValidateRetiredSource(IEnumerable<SourceFileExpectation> expectations,
+        string originalPath, string backupPath)
+    {
+        var expected = expectations.FirstOrDefault(item => PathsEqual(item.Path, originalPath));
+        if (expected is not null &&
+            !string.Equals(ComputeSha256(backupPath), expected.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+            throw new IOException($"Source changed while preparing its retirement backup: {originalPath}");
     }
 
     private static IReadOnlyList<string> GetPlannedWritePaths(SavePlan plan, MovieMetadata metadata) =>
@@ -1297,7 +1383,7 @@ public sealed class FileOrganizationService
             .Concat(plan.SidecarTransfers
                 .Where(transfer => !PathsEqual(transfer.SourcePath, transfer.DestinationPath))
                 .Select(transfer => transfer.DestinationPath))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Distinct(FileSystemPathSemantics.PathComparer)
             .ToArray();
 
     private static void AddOverwriteConflict(string path, bool exists, ICollection<string> conflicts)
@@ -1317,10 +1403,39 @@ public sealed class FileOrganizationService
     }
 
     private static string? NormalizePath(string? path) =>
-        string.IsNullOrWhiteSpace(path) ? null : Path.GetFullPath(path);
+        string.IsNullOrWhiteSpace(path) ? null : FileSystemPathSemantics.CanonicalizePath(path);
 
-    private static string ComputeSha256(string path) =>
-        Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
+    private static string ComputeSha256(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA256.HashData(stream));
+    }
+
+    private static async Task ValidateCopiedSourceAsync(string sourcePath, string? copiedSha256,
+        CancellationToken cancellationToken)
+    {
+        FileSystemPathSemantics.ValidateCanonicalPath(sourcePath);
+        if (!File.Exists(sourcePath) || copiedSha256 is not null &&
+            !string.Equals(await ComputeSha256Async(sourcePath, null, cancellationToken), copiedSha256,
+                StringComparison.OrdinalIgnoreCase))
+            throw new IOException($"来源影片在复制后发生变化，未移除来源：{sourcePath}");
+    }
+
+    private static async Task<bool> CanRemoveCommittedCopyAsync(string sourcePath, string targetPath,
+        string? copiedSha256, ICollection<Exception> errors)
+    {
+        try
+        {
+            // A different file at the original path is not proof that the verified copy is redundant.
+            await ValidateCopiedSourceAsync(sourcePath, copiedSha256, CancellationToken.None);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            errors.Add(new IOException($"来源影片未能确认恢复原内容，已保留校验后的目标供恢复：{targetPath}", exception));
+            return false;
+        }
+    }
 
     private static void EnsureTargetCapacity(string sourceVideoPath, string targetDirectory)
     {
@@ -1329,6 +1444,9 @@ public sealed class FileOrganizationService
 
     private static void EnsureTargetCapacity(IEnumerable<string> sourceVideoPaths, string targetDirectory)
     {
+        // Unix path roots do not identify mounts. Until a verified mount query is available,
+        // let transactional writes report capacity errors instead of checking the wrong disk.
+        if (!OperatingSystem.IsWindows()) return;
         const long metadataReserve = 32L * 1024 * 1024;
         var targetRoot = Path.GetPathRoot(Path.GetFullPath(targetDirectory));
         if (string.IsNullOrWhiteSpace(targetRoot) || targetRoot.StartsWith("\\\\", StringComparison.Ordinal))
@@ -1499,6 +1617,7 @@ public sealed class FileOrganizationService
         bool targetVideoCommitted,
         bool sourceVideoRetired,
         string? sourceVideoBackupPath,
+        string? copiedSourceSha256,
         IReadOnlyList<string> committedOutputs,
         IReadOnlyList<(string BackupPath, string OriginalPath)> backups)
     {
@@ -1519,14 +1638,8 @@ public sealed class FileOrganizationService
 
             if (targetVideoCommitted)
             {
-                if (File.Exists(plan.SourceVideoPath))
-                {
+                if (await CanRemoveCommittedCopyAsync(plan.SourceVideoPath, plan.TargetVideoPath, copiedSourceSha256, errors))
                     await TryRollbackAsync(() => FileSharingRetry.DeleteAsync(plan.TargetVideoPath), errors);
-                }
-                else
-                {
-                    errors.Add(new IOException("来源影片尚未恢复，因此保留已校验的目标影片。"));
-                }
             }
         }
         else if (videoMoved)
@@ -1572,9 +1685,33 @@ public sealed class FileOrganizationService
         }
     }
 
-    private static bool PathsEqual(string left, string right) =>
-        Path.GetFullPath(left).TrimEnd(Path.DirectorySeparatorChar)
-            .Equals(Path.GetFullPath(right).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase);
+    private static bool PathsEqual(string left, string right) => FileSystemPathSemantics.PathsEqual(left, right);
+
+    private static void ValidatePlanPathSafety(SavePlan plan)
+    {
+        ValidateTargetRootAvailability(plan);
+        foreach (var path in plan.Changes.SelectMany(change => new[] { change.SourcePath, change.DestinationPath })
+                     .Concat(plan.SourceFileExpectations.Select(item => (string?)item.Path))
+                     .Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(FileSystemPathSemantics.PathComparer))
+        {
+            FileSystemPathSemantics.ValidateCanonicalPath(path!);
+            FileSystemPathSemantics.ValidateUnambiguousPath(path!);
+        }
+        FileSystemPathSemantics.ValidateCanonicalPath(plan.SourceVideoPath);
+        FileSystemPathSemantics.ValidateCanonicalPath(plan.TargetDirectory);
+        if (!OperatingSystem.IsWindows() && plan.VideoWillMove &&
+            (!plan.RequiresVerifiedVideoCopy || plan.OrganizationOptions.CrossVolumeVerification != CrossVolumeVerificationMode.FullSha256))
+            throw new IOException("Portable video transfers require full SHA-256 verified copy.");
+    }
+
+    private static void ValidateTargetRootAvailability(SavePlan plan)
+    {
+        if (!plan.OrganizationOptions.UsesCustomRoot) return;
+        var root = CustomRootHistory.NormalizePath(plan.OrganizationOptions.CustomRootDirectory);
+        if (!Directory.Exists(root))
+            throw new DirectoryNotFoundException($"The selected destination root is no longer available; it will not be recreated: {root}");
+        FileSystemPathSemantics.ValidateExistingContainer(root);
+    }
 
     private static void TryDeleteEmptyTree(string path)
     {
