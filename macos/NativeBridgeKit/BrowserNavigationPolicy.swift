@@ -27,7 +27,11 @@ public enum BrowserNavigationPolicy {
         BrowserPageCapture.allowsNavigation(url) || (!isMainFrame && allowsInternalFrame(url))
     }
     private static func allowsInternalFrame(_ url: URL?) -> Bool {
-        let address = url?.absoluteString.lowercased().split(separator: "#", maxSplits: 1).first.map(String.init) ?? ""
+        // macOS 15 Foundation encodes the fragment marker of an opaque about:
+        // URL. Recognize only that representation of these two inert subframes;
+        // do not generally decode URLs or expand main-page/popup permissions.
+        let address = url?.absoluteString.lowercased().replacingOccurrences(of: "%23", with: "#")
+            .split(separator: "#", maxSplits: 1).first.map(String.init) ?? ""
         return ["about:blank", "about:srcdoc"].contains(address)
     }
 
