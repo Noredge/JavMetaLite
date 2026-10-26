@@ -1684,8 +1684,8 @@ class ProviderWorkerTests(unittest.TestCase):
     def r18(movie, content, title='Synthetic R18 title', **extra):
         return {'dvd_id': movie, 'content_id': content, 'title': title, **extra}
 
-    def configure(self, routes=None, **options):
-        self.assertIn('result', self.worker.request('fixture.configure', {'routes': routes or [], **options}))
+    def configure(self, routes=None, worker=None, **options):
+        self.assertIn('result', (worker or self.worker).request('fixture.configure', {'routes': routes or [], **options}))
 
     @staticmethod
     def route(url, *responses): return {'url': url, 'responses': list(responses)}
@@ -1693,17 +1693,17 @@ class ProviderWorkerTests(unittest.TestCase):
     @staticmethod
     def ok(value): return {'status': 200, 'json': value}
 
-    def requests(self, kind='http'):
-        records = self.worker.request('fixture.requests')['result']['requests']
+    def requests(self, kind='http', worker=None):
+        records = (worker or self.worker).request('fixture.requests')['result']['requests']
         return [record for record in records if record['kind'] == kind]
 
-    def wait_requests(self, count=1, kind='http'):
+    def wait_requests(self, count=1, kind='http', worker=None):
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
-            rows = self.requests(kind)
+            rows = self.requests(kind, worker=worker)
             if len(rows) >= count: return rows
             time.sleep(.005)
-        self.fail(f'Missing {kind} fixture events: {self.requests(kind)}')
+        self.fail(f'Missing {kind} fixture events: {self.requests(kind, worker=worker)}')
 
     def search(self, job, mode, retry=False):
         response = self.worker.request('jobs.retryFailedSources' if retry else 'jobs.search', {'jobId': job['jobId'], 'sourceMode': mode})
@@ -1916,23 +1916,43 @@ class ProviderWorkerTests(unittest.TestCase):
         self.assertEqual('REVISION_CONFLICT',self.worker.request('browser.resolveTarget',{**params,'expectedReviewRevision':job['reviewRevision']-1})['error']['data']['reason'])
 
     def test_69_browser_resolution_cancellation_mismatch_and_stale_results_cannot_mutate_review(self):
-        _,job=self.worker.import_video('IPX-081.mp4',nfo=None)
-        params={'jobId':job['jobId'],'expectedReviewRevision':job['reviewRevision'],'source':'r18dev'}
-        url=self.combined_url('ipx00081')
-        self.configure([self.route(url,{'status':200,'json':self.r18('IPX-081','ipx00081'),'waitForCancellation':True})])
-        response=self.worker.request('browser.resolveTarget',params);operation=response['result']['operationId']
-        self.wait_requests();self.worker.request('operations.cancel',{'operationId':operation})
-        self.assertEqual('canceled',self.worker.operation(operation)['status'])
-        self.assertEqual(job,self.worker.get_job(job['jobId']))
-        self.configure([self.route(url,self.ok(self.r18('IPX-999','ipx00999')))])
-        response=self.worker.request('browser.resolveTarget',params);done=self.worker.operation(response['result']['operationId'])
-        self.assertEqual('PAGE_ID_MISMATCH',done['error']['data']['reason'])
-        self.configure([self.route(url,{'status':200,'json':self.r18('IPX-081','ipx00081'),'delayMilliseconds':80})],resetRequests=True)
-        response=self.worker.request('browser.resolveTarget',params);self.wait_requests()
-        changed=self.worker.edit(job,{'title':'Newer edit stays'})
-        done=self.worker.operation(response['result']['operationId'])
-        self.assertEqual('REVISION_CONFLICT',done['error']['data']['reason'])
-        self.assertEqual(changed,self.worker.get_job(job['jobId']))
+        # This exercises ordering, not provider timeout (covered by test_44).
+        # An explicit gate keeps the HTTP response pending until the edit commits;
+        # an 80 ms delay raced the fixture's 150 ms timeout on loaded CI runners.
+        config = Path(self.temp.name) / 'browser resolution.json'
+        config.write_text(json.dumps({'providerTimeoutMilliseconds': 10000}))
+        env = {**os.environ, 'JAVMETALITE_REGRESSION_CONFIG': str(config)}
+        with Worker(Path(self.temp.name) / 'browser', executable=SEARCH_TEST_HOST, environment=env) as worker:
+            video, job = worker.import_video('IPX-081.mp4', nfo=None)
+            original = video.read_bytes()
+            params = {'jobId': job['jobId'], 'expectedReviewRevision': job['reviewRevision'], 'source': 'r18dev'}
+            url = self.combined_url('ipx00081')
+            self.configure([self.route(url, {'status': 200, 'json': self.r18('IPX-081', 'ipx00081'),
+                'waitForCancellation': True})], worker=worker)
+            response = worker.request('browser.resolveTarget', params); operation = response['result']['operationId']
+            self.wait_requests(worker=worker); worker.request('operations.cancel', {'operationId': operation})
+            self.assertEqual('canceled', worker.operation(operation)['status'])
+            self.assertEqual(job, worker.get_job(job['jobId']))
+            self.configure([self.route(url, self.ok(self.r18('IPX-999', 'ipx00999')))], worker=worker)
+            response = worker.request('browser.resolveTarget', params); done = worker.operation(response['result']['operationId'])
+            self.assertEqual('PAGE_ID_MISMATCH', done['error']['data']['reason'], done)
+            gate = Path(self.temp.name) / 'hold browser response'
+            gate.touch()
+            try:
+                self.configure([self.route(url, {'status': 200, 'json': self.r18('IPX-081', 'ipx00081'),
+                    'responseGateFile': str(gate)})], resetRequests=True, worker=worker)
+                response = worker.request('browser.resolveTarget', params); operation = response['result']['operationId']
+                self.wait_requests(kind='httpResponseHeld', worker=worker)
+                self.assertEqual('running', worker.request('operations.get', {'operationId': operation})['result']['status'])
+                changed = worker.edit(job, {'title': 'Newer edit stays'})
+            finally:
+                gate.unlink(missing_ok=True)
+            done = worker.operation(operation)
+            self.assertEqual('REVISION_CONFLICT', done['error']['data']['reason'], done)
+            self.assertEqual(changed, worker.get_job(job['jobId']))
+            self.assertEqual(original, video.read_bytes())
+            self.assertFalse(video.with_suffix('.nfo').exists())
+            self.assertEqual([], list(worker.data.glob('recovery/*.json')))
 
     def test_64_custom_profile_selects_each_fresh_field_and_retains_manual_candidates(self):
         _, job = self.worker.import_video('IPX-081.mp4', nfo=None)

@@ -180,6 +180,14 @@ sealed class FixedHttp : HttpMessageHandler
             catch (OperationCanceledException) { lock (_gate) _requests.Add(new { kind = "httpCanceled", url }); throw; }
         }
         if (fixedResponse.TryGetProperty("delayMilliseconds", out var delay)) await Task.Delay(delay.GetInt32(), token);
+        if (fixedResponse.TryGetProperty("responseGateFile", out var gate))
+        {
+            var path = gate.GetString()!;
+            if (!Path.IsPathFullyQualified(path)) throw new ArgumentException("Absolute response gate path required.");
+            lock (_gate) _requests.Add(new { kind = "httpResponseHeld", url });
+            while (File.Exists(path)) await Task.Delay(10, token);
+            token.ThrowIfCancellationRequested();
+        }
         var response = new HttpResponseMessage((HttpStatusCode)fixedResponse.GetProperty("status").GetInt32()) { RequestMessage = request,
             Content = new StringContent(fixedResponse.TryGetProperty("json", out var body) ? body.GetRawText() : "{}", Encoding.UTF8, "application/json") };
         if (fixedResponse.TryGetProperty("retryAfterSeconds", out var retry)) response.Headers.RetryAfter = new(TimeSpan.FromSeconds(retry.GetDouble()));

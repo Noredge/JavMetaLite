@@ -1,4 +1,16 @@
-# JavMetaLite — Windows事务回归与取消夹具修复
+# JavMetaLite — 四语言说明与main合并准备
+
+更新：2026-10-25，America/Los_Angeles。[PR #11](https://github.com/Noredge/JavMetaLite/pull/11)以merge commit合并mac至main，并保留mac分支；当前仍在合并前门禁阶段。
+
+- 英文、简中、繁中、日文README统一简述Mac功能、Apple Silicon/macOS15+要求、CI产物下载与构建命令；Windows截图/步骤明确标注，避免混淆。四份本地链接、版本和命令检查通过。
+- PR Mac回归暴露浏览器地址解析用例的时序问题：原夹具以80ms延迟配合150ms预算，可能先超时，无法检验预期的revision冲突。改为测试专用HTTP响应门闩，确认请求挂起后编辑、再释放响应；此用例使用10秒预算，独立150ms真实超时回归不变。保留取消、影片不匹配、revision冲突及不落盘断言；定向两项及连续30轮通过。
+- 仅改RegressionHost和协议测试，未修改生产Core/Worker/WPF/Swift、revision、NFO round-trip、冲突预检或文件事务逻辑。本机完整11套门禁exit0：Portable52/526断言、Swift68、协议74、queue4/retention5、发布工具36/manifest15、445keys/3590四语检查及Xcode源文件/编译布局检查。远端双平台仍须在当前提交通过，首轮失败记录保留。
+
+只签名、不公证。未新增原生手动/物理设备验证；既有长期压力、真实卷/SMB/断电、完整IME/VoiceOver、Intel及Developer ID/Gatekeeper等未验证范围保持。
+
+---
+
+# JavMetaLite — Windows事务回归与取消夹具修复（历史记录）
 
 更新：2026-10-25，America/Los_Angeles。修复基线`21ac04a`；[此前Windows CI](https://github.com/Noredge/JavMetaLite/actions/runs/40230254346)出现事务断言失败，随后在响应体取消用例挂起并触及20分钟上限，未执行Windows打包。本轮只改测试、CI诊断和文档，未修改生产Core/Worker/WPF/Swift或安全保护代码。
 
