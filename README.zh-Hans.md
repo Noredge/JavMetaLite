@@ -4,13 +4,14 @@
 
 **简体中文** · [繁體中文](README.zh-Hant.md) · [English](README.md) · [日本語](README.ja.md)
 
-[![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
+[![Windows CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
+[![macOS CI](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml)
 
-> 当前版本：**1.2.3**。
+> Windows **1.2.3** · macOS **0.4.0 预览版**。
 
-用于本地影片资料审核与整理的 Windows 工具，支持单片编辑、批量处理和 Jellyfin 兼容输出。
+用于本地影片资料审核与整理的 Windows／macOS 工具，支持单片编辑、批量处理和 Jellyfin 兼容输出。
 
-![单片工作区，v1.2.0](docs/images/javmetalite-v1.2.0-main-single.zh-Hans.png)
+![Windows 单片工作区，v1.2.0](docs/images/javmetalite-v1.2.0-main-single.zh-Hans.png)
 
 图片与资料均为合成演示。[更多截图](docs/SCREENSHOTS-v1.2.0.md)。
 
@@ -23,7 +24,7 @@
 - 图片查看器支持比较与本地图片删除，主界面提供低分辨率封套提示。
 - 保存前预览文件变更，可保持影片原位或整理到指定文件夹；支持简、繁、英、日四语言。
 
-## 快速开始
+## 快速开始（Windows）
 
 需要 Windows 10/11 x64；无需另装 .NET Runtime，内置浏览器需要 Microsoft Edge WebView2 Runtime。
 
@@ -39,7 +40,7 @@
 - 请备份重要媒体。保存遇到失败或取消会停止；恢复失败时请保留恢复目录。
 - 来源网站可能含成人内容，请遵守其条款及适用的年龄与法律要求。
 
-## 从源码构建
+## 从源码构建（Windows）
 
 在 Windows 10/11 x64 上安装 Git 和 [global.json](global.json) 指定的准确 .NET SDK 版本（目前为 10.0.400），然后在 PowerShell 中执行：
 
@@ -59,10 +60,25 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj -c Release --no-bu
 
 EXE 所在文件夹、ZIP 和 SHA-256 文件均输出到 `release/`。完整测试命令见[开发与测试](TESTING.md)。
 
+## macOS 预览版
+
+**Apple Silicon · macOS 15+。** 原生编辑器同屏展示海报与完整封套，支持资料、图片编辑和勾选批量查询、保存。默认预览保存变更，保留未编辑的 NFO 内容，写入前检查文件冲突；常用设置自动记忆。
+
+从成功的 [macOS CI 运行](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml?query=branch%3Amain)下载 `macos-arm64-local-build-and-evidence`，解压其中 `macos/` 下的 App ZIP，打开 `JavMetaLite.app`。已内置运行时。
+
+自行构建需安装 [global.json](global.json) 指定的 SDK，以及带 macOS 15+ SDK 的 Xcode 或 Command Line Tools。在仓库根目录执行：
+
+```sh
+./scripts/macos/package.sh --arch arm64 --configuration Release --sign-mode adhoc
+./scripts/macos/test.sh --arch arm64 --configuration Release
+```
+
+产物位于 `artifacts/macos/`。CI 包使用 ad-hoc 签名，不公证；Intel 尚未验证。[Mac 指南](macos/README.md) · [验证状态](docs/macos/STATUS.md)。
+
 ## 更多
 
 [版本说明](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [更新历史](CHANGELOG.md) · [开发与测试](TESTING.md)
 
-日志和偏好设置位于 `%LOCALAPPDATA%\JavMetaLite`。
+Windows 日志和偏好设置位于 `%LOCALAPPDATA%\JavMetaLite`。
 
 [MIT 许可证](LICENSE) · © 2026 Noredge · [第三方声明](THIRD_PARTY_NOTICES.md)。本项目与来源网站无隶属关系，项目许可证不包含网站资料的授权。

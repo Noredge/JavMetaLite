@@ -9,5 +9,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\JavMetaLite.Core\JavMetaLite.Core.csproj" />
+    <ProjectReference Include="..\JavMetaLite.Imaging.Windows\JavMetaLite.Imaging.Windows.csproj" />
   </ItemGroup>
 </Project>

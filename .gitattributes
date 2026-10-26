@@ -1,0 +1,3 @@
+# Vendored notices are verified against their upstream byte hashes.
+# Preserve original line endings and do not rewrite upstream whitespace.
+docs/macos/licenses/* -text -whitespace

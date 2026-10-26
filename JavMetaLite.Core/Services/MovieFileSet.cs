@@ -38,11 +38,11 @@ public sealed class MovieFileSet
     public static MovieFileSet CreateConfirmedParts(IEnumerable<string> orderedPaths, string movieBaseName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(movieBaseName);
-        var paths = orderedPaths.Select(Path.GetFullPath).ToArray();
-        if (paths.Length < 2 || paths.Distinct(StringComparer.OrdinalIgnoreCase).Count() != paths.Length)
+        var paths = orderedPaths.Select(FileSystemPathSemantics.CanonicalizePath).ToArray();
+        if (paths.Length < 2 || paths.Distinct(FileSystemPathSemantics.PathComparer).Count() != paths.Length)
             throw new ArgumentException("需要至少两个不同的影片文件。", nameof(orderedPaths));
         var directory = Path.GetDirectoryName(paths[0]);
-        if (paths.Any(path => !string.Equals(Path.GetDirectoryName(path), directory, StringComparison.OrdinalIgnoreCase)))
+        if (paths.Any(path => !string.Equals(Path.GetDirectoryName(path), directory, FileSystemPathSemantics.PathComparison)))
             throw new InvalidOperationException("手动分段必须位于同一来源目录。");
         return new MovieFileSet(paths.Select((path, index) =>
             new MovieFilePart(path, movieBaseName, index + 1)).ToArray(), $"multipart|{directory}|{movieBaseName}");
@@ -53,7 +53,7 @@ public sealed class MovieFileSet
         ArgumentNullException.ThrowIfNull(paths);
         var parts = paths
             .Select(Analyze)
-            .DistinctBy(part => part.Path, StringComparer.OrdinalIgnoreCase)
+            .DistinctBy(part => part.Path, FileSystemPathSemantics.PathComparer)
             .ToArray();
         if (parts.Length == 0)
         {
@@ -61,7 +61,7 @@ public sealed class MovieFileSet
         }
 
         var groupKey = GetGroupKey(parts[0]);
-        if (parts.Any(part => !string.Equals(GetGroupKey(part), groupKey, StringComparison.OrdinalIgnoreCase)))
+        if (parts.Any(part => !string.Equals(GetGroupKey(part), groupKey, FileSystemPathSemantics.PathComparison)))
         {
             throw new InvalidOperationException("这些影片文件不属于同一个 CD 分段组。 ");
         }
@@ -77,7 +77,7 @@ public sealed class MovieFileSet
 
         var ordered = parts
             .OrderBy(part => part.PartNumber ?? 0)
-            .ThenBy(part => part.Path, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(part => part.Path, FileSystemPathSemantics.PathComparer)
             .ToArray();
         return new MovieFileSet(ordered, groupKey);
     }
@@ -95,7 +95,7 @@ public sealed class MovieFileSet
         var siblings = Directory.EnumerateFiles(directory)
             .Where(VideoFileSupport.IsSupportedExistingFile)
             .Select(Analyze)
-            .Where(part => string.Equals(GetGroupKey(part), groupKey, StringComparison.OrdinalIgnoreCase))
+            .Where(part => string.Equals(GetGroupKey(part), groupKey, FileSystemPathSemantics.PathComparison))
             .Select(part => part.Path)
             .ToArray();
         return Create(siblings);
@@ -107,17 +107,17 @@ public sealed class MovieFileSet
         var selectedParts = paths
             .Where(VideoFileSupport.IsSupportedExistingFile)
             .Select(Analyze)
-            .DistinctBy(part => part.Path, StringComparer.OrdinalIgnoreCase)
+            .DistinctBy(part => part.Path, FileSystemPathSemantics.PathComparer)
             .ToArray();
         var selectedMultipartKeys = selectedParts
             .Where(part => part.IsMultipart)
             .Select(GetGroupKey)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            .ToHashSet(FileSystemPathSemantics.PathComparer);
         var expandedParts = new List<MovieFilePart>(selectedParts);
         foreach (var directory in selectedParts
                      .Where(part => part.IsMultipart)
                      .Select(part => Path.GetDirectoryName(part.Path)!)
-                     .Distinct(StringComparer.OrdinalIgnoreCase))
+                     .Distinct(FileSystemPathSemantics.PathComparer))
         {
             expandedParts.AddRange(Directory.EnumerateFiles(directory)
                 .Where(VideoFileSupport.IsSupportedExistingFile)
@@ -126,10 +126,10 @@ public sealed class MovieFileSet
         }
 
         return expandedParts
-            .DistinctBy(part => part.Path, StringComparer.OrdinalIgnoreCase)
-            .GroupBy(GetGroupKey, StringComparer.OrdinalIgnoreCase)
+            .DistinctBy(part => part.Path, FileSystemPathSemantics.PathComparer)
+            .GroupBy(GetGroupKey, FileSystemPathSemantics.PathComparer)
             .Select(group => Create(group.Select(part => part.Path)))
-            .OrderBy(set => set.PrimaryPath, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(set => set.PrimaryPath, FileSystemPathSemantics.PathComparer)
             .ToArray();
     }
 
@@ -138,7 +138,7 @@ public sealed class MovieFileSet
     private static MovieFilePart Analyze(string videoPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(videoPath);
-        var fullPath = Path.GetFullPath(videoPath);
+        var fullPath = FileSystemPathSemantics.CanonicalizePath(videoPath);
         var stem = Path.GetFileNameWithoutExtension(fullPath);
         var match = CdSuffixPattern.Match(stem);
         if (!match.Success || !int.TryParse(match.Groups["number"].Value, out var partNumber) || partNumber <= 0)

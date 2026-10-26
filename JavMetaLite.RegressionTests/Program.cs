@@ -40,10 +40,21 @@ internal static class Program
         foreach (var test in tests)
         {
             var timer = Stopwatch.StartNew();
+            Task? execution = null;
+            Console.WriteLine($"START [{test.Category}] {test.Name}");
             try
             {
-                await test.Run();
+                execution = test.Run();
+                await execution.WaitAsync(TimeSpan.FromMinutes(2));
                 Console.WriteLine($"PASS  [{test.Category}] {test.Name} ({timer.ElapsedMilliseconds} ms)");
+            }
+            catch (TimeoutException) when (execution is { IsCompleted: false })
+            {
+                Console.Error.WriteLine($"REGRESSION TIMEOUT [{test.Category}] {test.Name}: exceeded 2 minutes; remaining cases were not run.");
+                // Do not continue other filesystem tests beside a hung fixture.
+                // Terminate the test process even if a broken fixture owns a foreground thread.
+                Environment.Exit(1);
+                return 1;
             }
             catch (Exception exception)
             {

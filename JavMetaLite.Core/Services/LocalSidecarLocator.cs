@@ -1,3 +1,4 @@
+using System.Text;
 using JavMetaLite.Core.Models;
 
 namespace JavMetaLite.Core.Services;
@@ -13,7 +14,7 @@ public static class LocalSidecarLocator
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(videoPath);
 
-        var fullVideoPath = Path.GetFullPath(videoPath);
+        var fullVideoPath = FileSystemPathSemantics.CanonicalizePath(videoPath);
         if (!File.Exists(fullVideoPath))
         {
             throw new FileNotFoundException("影片文件不存在。", fullVideoPath);
@@ -30,7 +31,20 @@ public static class LocalSidecarLocator
             throw new InvalidDataException("影片文件名无效。");
         }
 
-        var files = Directory.EnumerateFiles(directory)
+        var entries = Directory.EnumerateFiles(directory).ToArray();
+        if (!OperatingSystem.IsWindows())
+        {
+            // The parent was canonicalized above. Ordinary directory entries can reuse that
+            // spelling; only link entries need a full resolution. Recheck ancestry afterward
+            // so a changed parent cannot silently change the meaning of the lexical keys.
+            FileSystemPathSemantics.ValidateCanonicalPath(directory);
+            var conflicts = entries.GroupBy(path => new FileInfo(path).LinkTarget is null
+                ? path.Normalize(NormalizationForm.FormC).ToUpperInvariant()
+                : FileSystemPathSemantics.ConflictKey(path)).Any(group => group.Count() > 1);
+            FileSystemPathSemantics.ValidateCanonicalPath(directory);
+            if (conflicts) throw new IOException("Ambiguous case or Unicode sidecar names require review before importing this folder.");
+        }
+        var files = entries
             .Select(path => (Name: Path.GetFileName(path), Path: path))
             .Where(file => !string.IsNullOrWhiteSpace(file.Name))
             .ToDictionary(file => file.Name!, file => file.Path, StringComparer.OrdinalIgnoreCase);

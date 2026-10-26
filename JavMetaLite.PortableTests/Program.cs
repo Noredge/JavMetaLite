@@ -1,0 +1,569 @@
+using System.Net;
+using System.Security.Cryptography;
+using System.Text;
+using System.Xml.Linq;
+using JavMetaLite.Core.Models;
+using JavMetaLite.Core.Services;
+using JavMetaLite.Imaging.Skia;
+using SkiaSharp;
+using SaveOptions = JavMetaLite.Core.Models.SaveOptions;
+
+internal static partial class Program
+{
+    private static readonly SkiaArtworkImageProcessor Images = new();
+    private static readonly SaveOptions NfoOnly = new(true, false, false, false, false, true);
+    private static readonly OrganizationOptions InPlace = new(false, false);
+    private static int _assertions;
+    private static readonly (string Name, Func<Task> Run)[] Tests =
+    [
+        ("NFO round-trip transaction preserves unknown XML, actor structure, strings and video", RoundTrip),
+        ("New NFO is created through transaction; video remains unchanged", NewNfo),
+        ("Malformed NFO and DTD block local overwrite", UnsafeNfo),
+        ("Oversized NFO is rejected", LargeNfo),
+        ("External NFO modification invalidates transaction", ExternalModification),
+        ("Target appearing or changing during staging is not overwritten", TargetRace),
+        ("Review revision rejects stale save and retains manual edits on retry", ReviewRevision),
+        ("Video target is never overwritten", TargetVideoConflict),
+        ("Canceled transaction preserves original files", Cancellation),
+        ("Discovery groups dotted-prefix/CD inputs and skips symlink loops", Discovery),
+        ("Unicode/space paths survive original-position NFO save", UnicodePaths),
+        ("Unknown Unix volume relation uses verified copy", ConservativeVolume),
+        ("Unavailable custom root is not recreated during execute", MissingCustomRoot),
+        ("Batch conflicts protect read inputs and shared extrafanart namespace", BatchConflicts),
+        ("Batch stops after failure with prior success retained", BatchFailure),
+        ("Committed cleanup warning stops next batch item", CleanupWarning),
+        ("Verified-copy cancellation restores original video", VerifiedCopyCancellation),
+        ("Case aliases are refused for destructive plans", CaseAlias),
+        ("Existing containers use exact metadata names without changing file alias safeguards", ExistingContainer),
+        ("Parent symlink swap after preview is refused", ParentSwap),
+        ("Confirmed multipart preserves ordering and uses verified copy", ConfirmedParts),
+        ("LibreDMM provider parsing and failure paths use injected HTTP", Provider),
+        ("Skia right-half crop, portrait, JPEG retention, transparency and invalid bytes", ImagesTest),
+        ("Skia EXIF raw-pixel contract and image resource limits", ImageLimits),
+        ("Artwork and verified-video organization commit real outputs", ArtworkOrganization),
+        ("Preserved sidecars migrate byte-for-byte with video", PreservedSidecarMigration),
+        ("Late copied-source mutation retains verified recovery copies", LateVideoMutation),
+        ("Source sidecar modified during video copy blocks commit", LateSidecarMutation),
+        ("Multipart cancel after commit restores all original parts and sidecars", MultipartCommitCancellation),
+        ("Batch cancel during second movie retains first and stops third", BatchMidCopyCancellation),
+        ("Post-commit journal warning remains completed and stops batch", PostCommitWarning),
+        ("Stalled artwork response body times out before transaction commit", ArtworkBodyTimeout),
+        ("Windows/shared response body cancellation drains without changing single/multipart files", DownloadBodyCancellation),
+        ("Windows/shared fatal response body cancels siblings before single/multipart writes", FatalDownloadCancellation),
+        ("Incomplete sample replacement retains existing local artwork", SampleReplacementFailure),
+        ("Duplicate CD group is diagnosed without dropping other imports", DuplicateGroupIsolation),
+        ("New local-artwork symlink is rejected before plan normalization", ArtworkSymlink),
+        ("Artwork-only organization refresh retains full unsaved review for later NFO save", RefreshUnsavedBaseline),
+        ("R18 actual content-ID fallback parses structured actors through injected HTTP", R18Response),
+        ("Partial multi-source failure and targeted retry retain manual and artwork review", MultiSourceReviewRetry),
+        ("Manual browser import uses captured JAVLibrary and real injected Libre/R18 parsers", ManualBrowserProviders),
+        ("Manual browser import rejects hostile pages, mismatched IDs and oversized UTF8", ManualBrowserGuards),
+        ("Explicit browser import retains manual candidates and NFO round-trip baseline", ManualBrowserReviewRoundTrip),
+        ("Fresh directory scans detect late sidecars and reject link aliases", FreshSidecarsAndAliases),
+        ("T01/T02/P08/R01 filename, basename, discovery and loader agree", RegressionParsingEntrypoints),
+        ("P09 explicit CD grouping and manually confirmed a/b keep file identity", RegressionExplicitParts),
+        ("X07/P11 legacy sidecars retain names in place and use standard names after move", RegressionLegacyNames),
+        ("R03 folder sidecars belong only to a single movie or explicit CD group", RegressionFolderOwnership),
+        ("X08/P11 nonempty sample directories and unrelated empty directories survive migration", RegressionExtrafanartCleanup),
+        ("R02 filesystem case and Unicode aliases deduplicate without merging different files", RegressionFilesystemIdentity),
+        ("R04 second CD target collision during commit rolls back first part", RegressionSecondPartCommitFailure),
+        ("T07/R05 canceled copy with cleanup failure reports retained recovery paths", RegressionCancelCleanupFailure)
+    ];
+
+    public static async Task<int> Main()
+    {
+        var failures = 0;
+        using var logs = new Temp();
+        AppLog.ConfigureDirectory(logs.Path);
+        var tests = Tests.ToList();
+        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("JAVMETALITE_PRIVATE_PARSING_CASES")))
+            tests.Add(("T01/T02/B/C/H private handoff names verified without logging names", RegressionPrivateNames));
+        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("JAVMETALITE_CASE_SENSITIVE_ROOT")))
+            tests.Add(("R04/R05 real local-image device boundary uses verified copy and safe cancellation", RegressionImageVolumeTransfer));
+        foreach (var test in tests)
+        {
+            try { await test.Run(); Console.WriteLine($"PASS {test.Name}"); }
+            catch (Exception error) { failures++; Console.Error.WriteLine($"FAIL {test.Name}\n{error}"); }
+        }
+        Console.WriteLine($"PORTABLE {(failures == 0 ? "PASS" : "FAIL")}: {tests.Count - failures}/{tests.Count} cases; {_assertions} assertions");
+        return failures == 0 ? 0 : 1;
+    }
+
+    private static async Task RoundTrip()
+    {
+        using var temp = new Temp();
+        var video = temp.Write("DEMO-001.mp4", "SYNTHETIC VIDEO; NOT PLAYABLE");
+        var nfo = temp.Write("movie.nfo", Fixture("round-trip.nfo"));
+        var originalVideo = SHA256.HashData(await File.ReadAllBytesAsync(video));
+        using var job = new MovieJob();
+        var loaded = await MovieJobLoader.LoadAsync(job, video, Images);
+        Equal(LocalMetadataLoadStatus.Loaded, loaded.MetadataStatus);
+        Check(job.LocalMetadataBundle!.HasUnknownXml, "Unknown XML not detected");
+        job.MetadataReview.SetManualValue(MetadataField.Title, "编辑后的片名\nSecond line");
+        var plan = FileOrganizationService.BuildPlan(video, job.Metadata, NfoOnly, InPlace, job.CreateLocalSaveContext());
+        Check(!plan.HasBlockingConflicts, string.Join(";", plan.BlockingConflicts));
+        Check(!plan.VideoWillMove, "NFO-only save must not move video");
+        using var output = new OutputService(Images);
+        var result = await new FileOrganizationService(output).ExecuteAsync(plan, job.Metadata, true);
+        Check(FileSystemPathSemantics.PathsEqual(nfo, result.Outputs.NfoPath!), "Original NFO name changed");
+        var xml = XDocument.Load(nfo);
+        Equal("keep-me", xml.Root!.Attribute("customAttribute")!.Value);
+        Equal("KEEP UNKNOWN XML", xml.Root.Element("customNode")!.Element("nested")!.Value);
+        Equal("keep", xml.Root.Element("actor")!.Element("customActor")!.Value);
+        Equal("演示", xml.Root.Element("actor")!.Element("role")!.Value);
+        Equal("2026 年 春", xml.Root.Element("premiered")!.Value);
+        Equal("約 90 分", xml.Root.Element("runtime")!.Value);
+        Equal("未评分", xml.Root.Element("rating")!.Value);
+        Check(xml.DescendantNodes().OfType<XComment>().Any(), "Comment lost");
+        var currentVideo = SHA256.HashData(await File.ReadAllBytesAsync(video));
+        Check(originalVideo.SequenceEqual(currentVideo), "Video changed");
+        using var reloaded = new MovieJob();
+        await MovieJobLoader.LoadAsync(reloaded, video, Images);
+        Equal("编辑后的片名\nSecond line", reloaded.Metadata.Title);
+        Equal("https://example.invalid/actor.jpg", reloaded.Metadata.Actors.Single().ImageUrl);
+    }
+
+    private static async Task NewNfo()
+    {
+        using var temp = new Temp();
+        var video = temp.Write("DEMO-002.mp4", "SYNTHETIC");
+        using var job = new MovieJob();
+        await MovieJobLoader.LoadAsync(job, video, Images);
+        job.MetadataReview.SetManualValue(MetadataField.Title, "A new NFO");
+        using var output = new OutputService(Images);
+        var plan = FileOrganizationService.BuildPlan(video, job.Metadata, NfoOnly, InPlace, job.CreateLocalSaveContext());
+        var saved = await new FileOrganizationService(output).ExecuteAsync(plan, job.Metadata, false);
+        Equal("A new NFO", XDocument.Load(saved.Outputs.NfoPath!).Root!.Element("title")!.Value);
+        Equal("SYNTHETIC", File.ReadAllText(video));
+    }
+
+    private static async Task UnsafeNfo()
+    {
+        foreach (var xml in new[] { "<movie><title>broken", "<!DOCTYPE movie [<!ENTITY x SYSTEM 'file:///etc/passwd'>]><movie><title>&x;</title></movie>" })
+        {
+            using var temp = new Temp();
+            var video = temp.Write("DEMO-003.mp4", "SYNTHETIC");
+            var nfo = temp.Write("DEMO-003.nfo", xml);
+            using var job = new MovieJob();
+            var result = await MovieJobLoader.LoadAsync(job, video, Images);
+            Equal(LocalMetadataLoadStatus.NfoReadFailed, result.MetadataStatus);
+            Check(job.LocalNfoSaveBlocked, "Unsafe NFO not blocked");
+            await Throws<InvalidOperationException>(() => { job.BeginSave(job.ReviewRevision); return Task.CompletedTask; });
+            Equal(xml, File.ReadAllText(nfo));
+        }
+    }
+
+    private static async Task LargeNfo()
+    {
+        using var temp = new Temp();
+        var video = temp.Write("DEMO-004.mp4", "SYNTHETIC");
+        var nfo = temp.Write("DEMO-004.nfo", new string('x', (int)NfoReader.MaximumNfoBytes + 1));
+        await Throws<InvalidDataException>(() => NfoReader.ReadAsync(new LocalSidecarPaths(video, nfo, null, null)));
+    }
+
+    private static async Task ExternalModification()
+    {
+        using var temp = new Temp();
+        var video = temp.Write("DEMO-001.mp4", "SYNTHETIC");
+        var nfo = temp.Write("movie.nfo", Fixture("round-trip.nfo"));
+        using var job = new MovieJob();
+        await MovieJobLoader.LoadAsync(job, video, Images);
+        job.Metadata.Title = "Should not overwrite external data";
+        var plan = FileOrganizationService.BuildPlan(video, job.Metadata, NfoOnly, InPlace, job.CreateLocalSaveContext());
+        var external = "<movie><title>External edit</title></movie>";
+        File.WriteAllText(nfo, external);
+        using var output = new OutputService(Images);
+        await Throws<IOException>(() => new FileOrganizationService(output).ExecuteAsync(plan, job.Metadata, true));
+        Equal(external, File.ReadAllText(nfo));
+        Equal("SYNTHETIC", File.ReadAllText(video));
+    }
+
+
+    private static async Task TargetRace()
+    {
+        foreach (var existed in new[] { false, true })
+        {
+            using var temp = new Temp();
+            var video = temp.Write("DEMO-051.mp4", "SYNTHETIC");
+            var nfo = Path.ChangeExtension(video, ".nfo");
+            var old = "<movie><title>Before preview</title></movie>";
+            if (existed) File.WriteAllText(nfo, old);
+            var metadata = new MovieMetadata { Id = "DEMO-051", Title = "Planned value" };
+            var plan = FileOrganizationService.BuildPlan(video, metadata, NfoOnly, InPlace) with
+            {
+                PreviewTargetExpectations = [new(FileSystemPathSemantics.CanonicalizePath(nfo), existed, existed ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(nfo))) : null)]
+            };
+            var external = "<movie><title>External write during commit</title></movie>";
+            var progress = new ImmediateProgress<FileTransactionProgress>(p => { if (p.Stage == FileTransactionStage.Committing) File.WriteAllText(nfo, external); });
+            using var output = new OutputService(Images);
+            await Throws<IOException>(() => new FileOrganizationService(output).ExecuteAsync(plan, metadata, true, default, progress));
+            Equal(external, File.ReadAllText(nfo));
+            Equal("SYNTHETIC", File.ReadAllText(video));
+        }
+    }
+
+    private static async Task ReviewRevision()
+    {
+        using var temp = new Temp();
+        using var job = new MovieJob();
+        job.ResetForVideo(temp.Write("DEMO-001.mp4", "SYNTHETIC"), "DEMO-001");
+        var old = job.ReviewRevision;
+        job.MetadataReview.SetManualValue(MetadataField.Title, "Manual choice");
+        Check(job.ReviewRevision > old, "Manual edit did not advance review revision");
+        await Throws<InvalidOperationException>(() => { job.BeginSave(old); return Task.CompletedTask; });
+        var online = new MovieMetadata { Id = "DEMO-001", Title = "Online title", SourceName = "libredmm", SourceDisplayName = "LibreDMM" };
+        job.ApplyOnlineSources(online, [online]);
+        Check(job.MetadataReview.GetCandidates(MetadataField.Title).Any(x => x.Value == "Manual choice"), "Manual candidate discarded by initial search");
+        job.MetadataReview.SetManualValue(MetadataField.Title, "Manual choice");
+        job.ApplyRetriedOnlineSources(online, [online], []);
+        Equal("Manual choice", job.Metadata.Title);
+        job.MetadataReview.SetManualValue(MetadataField.Title, "");
+        Equal("", job.Metadata.Title);
+    }
+
+    private static async Task TargetVideoConflict()
+    {
+        using var temp = new Temp();
+        var video = temp.Write("input.mp4", "ORIGINAL");
+        var target = temp.Write("DEMO-001.mp4", "EXISTING TARGET");
+        var metadata = new MovieMetadata { Id = "DEMO-001", Title = "Synthetic" };
+        var plan = FileOrganizationService.BuildPlan(video, metadata, NfoOnly, new(false, true));
+        Check(plan.HasBlockingConflicts, "Existing video target not blocked");
+        using var output = new OutputService(Images);
+        await Throws<IOException>(() => new FileOrganizationService(output).ExecuteAsync(plan, metadata, true));
+        Equal("EXISTING TARGET", File.ReadAllText(target));
+        Equal("ORIGINAL", File.ReadAllText(video));
+    }
+
+    private static async Task Cancellation()
+    {
+        using var temp = new Temp();
+        var video = temp.Write("DEMO-005.mp4", "SYNTHETIC");
+        var metadata = new MovieMetadata { Id = "DEMO-005", Title = "Synthetic" };
+        var plan = FileOrganizationService.BuildPlan(video, metadata, NfoOnly, InPlace);
+        using var token = new CancellationTokenSource();
+        token.Cancel();
+        using var output = new OutputService(Images);
+        await Throws<OperationCanceledException>(() => new FileOrganizationService(output).ExecuteAsync(plan, metadata, false, token.Token));
+        Equal("SYNTHETIC", File.ReadAllText(video));
+        Check(!File.Exists(Path.ChangeExtension(video, ".nfo")), "Canceled save wrote NFO");
+    }
+
+    private static async Task Discovery()
+    {
+        using var temp = new Temp();
+        var dotted = temp.Write("www.example.invalid@DEMO-001.mp4", "SYNTHETIC");
+        temp.Write("parts/DEMO-002-cd1.mp4", "SYNTHETIC");
+        temp.Write("parts/DEMO-002-cd2.mp4", "SYNTHETIC");
+        Directory.CreateSymbolicLink(Path.Combine(temp.Path, "parts/loop"), temp.Path);
+        using var token = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var found = await MovieInputDiscovery.DiscoverAsync([temp.Path, dotted], true, token.Token);
+        Equal(3, found.VideoPaths.Count);
+        Equal(2, found.MovieFileSets.Count);
+        Check(found.MovieFileSets.Any(x => x.VideoPaths.Count == 2), "CD pair was not grouped");
+        Check(found.SkippedDirectoryCount >= 1, "Directory symlink not skipped");
+        Equal("DEMO-001", MovieIdParser.TryExtract(dotted));
+    }
+
+    private static async Task UnicodePaths()
+    {
+        using var temp = new Temp();
+        var video = temp.Write("中文 日本語 🎬 espace/DEMO-001.mp4", "SYNTHETIC");
+        var metadata = new MovieMetadata { Id = "DEMO-001", Title = "中文 日本語 🎬" };
+        using var output = new OutputService(Images);
+        var result = await new FileOrganizationService(output).ExecuteAsync(FileOrganizationService.BuildPlan(video, metadata, NfoOnly, InPlace), metadata, false);
+        Equal("中文 日本語 🎬", XDocument.Load(result.Outputs.NfoPath!).Root!.Element("title")!.Value);
+        Check(File.Exists(video), "Video lost");
+    }
+
+
+    private static async Task MissingCustomRoot()
+    {
+        using var temp = new Temp();
+        var video = temp.Write("incoming/DEMO-071.mp4", "KEEP SOURCE VIDEO");
+        var root = Path.Combine(temp.Path, "mounted-target");
+        Directory.CreateDirectory(root);
+        var metadata = new MovieMetadata { Id = "DEMO-071", Title = "Synthetic unavailable target" };
+        var plan = FileOrganizationService.BuildPlan(video, metadata, NfoOnly, new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, true, root));
+        Check(!plan.HasBlockingConflicts, "Synthetic target was not available at preview");
+        Directory.Delete(root);
+        using var output = new OutputService(Images);
+        await Throws<IOException>(() => new FileOrganizationService(output).ExecuteAsync(plan, metadata, true));
+        Check(!Directory.Exists(root), "Unavailable mount root was silently recreated");
+        Equal("KEEP SOURCE VIDEO", File.ReadAllText(video));
+    }
+
+    private static Task ConservativeVolume()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Check(OrganizationPathPlanner.RequiresVerifiedCopy("/Volumes/A/DEMO-001.mp4", "/Volumes/B/DEMO-001.mp4"), "Unix root equality used as same-volume evidence");
+            Check(OrganizationPathPlanner.RequiresVerifiedCopy("/tmp/a.mp4", "/tmp/b.mp4"), "Unknown same-volume optimization must be disabled");
+            Check(!OrganizationPathPlanner.RequiresVerifiedCopy("/tmp/a.mp4", "/tmp/a.mp4"), "In-place save must not copy video");
+        }
+        return Task.CompletedTask;
+    }
+
+    private static Task BatchConflicts()
+    {
+        using var temp = new Temp();
+        using var first = new MovieJob();
+        using var second = new MovieJob();
+        var video1 = temp.Write("DEMO-001.mp4", "1");
+        var video2 = temp.Write("DEMO-002.mp4", "2");
+        first.ResetForVideo(video1, "DEMO-001"); second.ResetForVideo(video2, "DEMO-002");
+        var p1 = FileOrganizationService.BuildPlan(video1, first.Metadata, NfoOnly, InPlace);
+        var p2 = FileOrganizationService.BuildPlan(video2, second.Metadata, NfoOnly, InPlace);
+        var shared = Path.Combine(temp.Path, "shared.nfo");
+        var write = p1 with { Changes = [new(PlannedChangeKind.OverwriteFile, "replace", shared)] };
+        var read = p2 with { Changes = [new(PlannedChangeKind.KeepFile, "keep", shared)] };
+        var a = new BatchSavePlanItem(first, write, first.ReviewRevision);
+        var b = new BatchSavePlanItem(second, read, second.ReviewRevision);
+        Check(BatchSavePathConflicts.Find([a, b]).Count == 2, "Read/write conflict missed");
+        Check(BatchSavePathConflicts.Find([a], [b]).ContainsKey(first), "Skipped task input not protected");
+        var extra1 = p1 with { Changes = [new(PlannedChangeKind.CreateFile, "sample", Path.Combine(temp.Path, "extrafanart/a.jpg"))] };
+        var extra2 = p2 with { Changes = [new(PlannedChangeKind.CreateFile, "sample", Path.Combine(temp.Path, "extrafanart/b.jpg"))] };
+        Check(BatchSavePathConflicts.Find([new(first, extra1, 0), new(second, extra2, 0)]).Count == 2, "Shared extrafanart namespace missed");
+        return Task.CompletedTask;
+    }
+
+    private static async Task BatchFailure()
+    {
+        using var temp = new Temp();
+        var jobs = Enumerable.Range(1, 3).Select(i => new MovieJob()).ToArray();
+        try
+        {
+            var prepared = jobs.Select((job, index) =>
+            {
+                var video = temp.Write($"DEMO-00{index + 1}.mp4", "SYNTHETIC");
+                job.ResetForVideo(video, $"DEMO-00{index + 1}");
+                job.InitializeSaveConfiguration(new(NfoOnly, InPlace));
+                var plan = FileOrganizationService.BuildPlan(video, job.Metadata, NfoOnly, InPlace);
+                return new PreparedMovieSave(job, plan, job.ReviewRevision, false);
+            }).ToArray();
+            using var output = new OutputService(Images);
+            var count = 0;
+            var result = await BatchSaveCoordinator.ExecuteAsync(prepared, async (item, token) =>
+            {
+                count++;
+                if (count == 2) throw new IOException("Synthetic second-item failure");
+                return await new FileOrganizationService(output).ExecuteAsync(item.Plan, item.Job.Metadata, false, token);
+            });
+            Equal(1, result.CompletedCount); Equal(1, result.FailedCount); Equal(1, result.NotStartedCount);
+            Check(File.Exists(Path.ChangeExtension(prepared[0].Plan.SourceVideoPath, ".nfo")), "Completed first save rolled back");
+            Check(!File.Exists(Path.ChangeExtension(prepared[2].Plan.SourceVideoPath, ".nfo")), "Third save ran after failure");
+        }
+        finally { foreach (var job in jobs) job.Dispose(); }
+    }
+
+
+    private static async Task CleanupWarning()
+    {
+        using var temp = new Temp();
+        using var first = new MovieJob(); using var second = new MovieJob();
+        var jobs = new[] { first, second };
+        var prepared = jobs.Select((job, index) =>
+        {
+            var video = temp.Write($"DEMO-0{index + 11}.mp4", "SYNTHETIC");
+            job.ResetForVideo(video, $"DEMO-0{index + 11}");
+            job.InitializeSaveConfiguration(new(NfoOnly, InPlace));
+            return new PreparedMovieSave(job, FileOrganizationService.BuildPlan(video, job.Metadata, NfoOnly, InPlace), job.ReviewRevision, false);
+        }).ToArray();
+        using var output = new OutputService(Images);
+        var service = new FileOrganizationService(output, path => Task.FromResult<TemporaryCleanupIssue?>(new(path, "Synthetic inaccessible staging directory")));
+        var result = await BatchSaveCoordinator.ExecuteAsync(prepared, (item, token) => service.ExecuteAsync(item.Plan, item.Job.Metadata, false, token));
+        Equal(1, result.CompletedCount); Equal(0, result.FailedCount); Equal(1, result.NotStartedCount);
+        Check(result.Items[0].SaveResult!.CleanupIssues.Count > 0, "Cleanup issue concealed");
+        Check(File.Exists(result.Items[0].SaveResult!.Outputs.NfoPath), "Committed output lost");
+        Check(!File.Exists(Path.ChangeExtension(prepared[1].Plan.SourceVideoPath, ".nfo")), "Next item executed after cleanup warning");
+    }
+
+    private static async Task VerifiedCopyCancellation()
+    {
+        using var temp = new Temp();
+        var video = temp.Write("incoming/DEMO-021.mp4", new string('v', 2 * 1024 * 1024));
+        var hash = SHA256.HashData(File.ReadAllBytes(video));
+        var root = Path.Combine(temp.Path, "library"); Directory.CreateDirectory(root);
+        var metadata = new MovieMetadata { Id = "DEMO-021", Title = "Synthetic copy cancellation" };
+        var plan = FileOrganizationService.BuildPlan(video, metadata, NfoOnly, new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, true, root));
+        Check(plan.RequiresVerifiedVideoCopy, "Mac move bypassed conservative verification");
+        using var token = new CancellationTokenSource();
+        var progress = new ImmediateProgress<FileTransactionProgress>(p => { if (p.Stage == FileTransactionStage.CopyingMovie && p.BytesProcessed > 0) token.Cancel(); });
+        using var output = new OutputService(Images);
+        await Throws<OperationCanceledException>(() => new FileOrganizationService(output).ExecuteAsync(plan, metadata, false, token.Token, progress));
+        Check(hash.SequenceEqual(SHA256.HashData(File.ReadAllBytes(video))), "Canceled copy damaged source");
+        Check(!File.Exists(plan.TargetVideoPath), "Canceled copy left committed target");
+        Check(!Directory.EnumerateDirectories(temp.Path, ".JavMetaLite*", SearchOption.AllDirectories).Any(), "Canceled copy left staging artifacts");
+    }
+
+    private static Task ExistingContainer()
+    {
+        if (!OperatingSystem.IsMacOS()) return Task.CompletedTask;
+        using var temp = new Temp();
+        var folder = Path.Combine(temp.Path, "Container-北岸"); Directory.CreateDirectory(folder);
+        FileSystemPathSemantics.ValidateExistingContainer(folder);
+        var alias = Path.Combine(temp.Path, "container-北岸");
+        if (OperatingSystem.IsMacOS() && Directory.Exists(alias))
+            ThrowsSync<IOException>(() => FileSystemPathSemantics.ValidateExistingContainer(alias));
+        var link = Path.Combine(temp.Path, "linked");
+        if (!OperatingSystem.IsWindows())
+        {
+            Directory.CreateSymbolicLink(link, folder);
+            ThrowsSync<IOException>(() => FileSystemPathSemantics.ValidateExistingContainer(link));
+        }
+        var file = temp.Write("not-a-directory", "KEEP");
+        ThrowsSync<DirectoryNotFoundException>(() => FileSystemPathSemantics.ValidateExistingContainer(file));
+        Equal("KEEP", File.ReadAllText(file));
+        return Task.CompletedTask;
+    }
+
+    private static async Task CaseAlias()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        using var temp = new Temp();
+        var video = temp.Write("DEMO-031.mp4", "SYNTHETIC");
+        var alias = Path.Combine(temp.Path, "demo-031.mp4");
+        if (!File.Exists(alias))
+        {
+            // On a case-sensitive volume the spelling is a genuinely separate file.
+            File.WriteAllText(alias, "DISTINCT FILE");
+        }
+        await Throws<IOException>(() => { FileOrganizationService.BuildPlan(alias, new MovieMetadata { Id = "DEMO-031" }, NfoOnly, InPlace); return Task.CompletedTask; });
+        Equal("SYNTHETIC", File.ReadAllText(video));
+    }
+
+
+    private static async Task ParentSwap()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        using var temp = new Temp();
+        var video = temp.Write("original/DEMO-061.mp4", "ORIGINAL VIDEO");
+        var otherVideo = temp.Write("other/DEMO-061.mp4", "OTHER VIDEO");
+        var otherNfo = temp.Write("other/DEMO-061.nfo", "<movie><title>Keep other NFO</title></movie>");
+        var metadata = new MovieMetadata { Id = "DEMO-061", Title = "Planned" };
+        var plan = FileOrganizationService.BuildPlan(video, metadata, NfoOnly, InPlace);
+        var sourceDirectory = Path.GetDirectoryName(video)!;
+        var oldDirectory = Path.Combine(temp.Path, "moved-original");
+        Directory.Move(sourceDirectory, oldDirectory);
+        Directory.CreateSymbolicLink(sourceDirectory, Path.GetDirectoryName(otherVideo)!);
+        using var output = new OutputService(Images);
+        await Throws<IOException>(() => new FileOrganizationService(output).ExecuteAsync(plan, metadata, true));
+        Equal("<movie><title>Keep other NFO</title></movie>", File.ReadAllText(otherNfo));
+        Equal("ORIGINAL VIDEO", File.ReadAllText(Path.Combine(oldDirectory, "DEMO-061.mp4")));
+        Equal("OTHER VIDEO", File.ReadAllText(otherVideo));
+    }
+
+    private static async Task ConfirmedParts()
+    {
+        using var temp = new Temp();
+        var one = temp.Write("incoming/first.mp4", "FIRST SYNTHETIC PART");
+        var two = temp.Write("incoming/second.mp4", "SECOND SYNTHETIC PART");
+        var metadata = new MovieMetadata { Id = "DEMO-041", Title = "Confirmed synthetic parts" };
+        var plan = FileOrganizationService.BuildConfirmedMultipartPlan([two, one], metadata, NfoOnly, new(true, true));
+        Equal(2, plan.VideoTransfers.Count);
+        Check(FileSystemPathSemantics.PathsEqual(two, plan.VideoTransfers[0].SourcePath), "Explicit ordering lost");
+        using var output = new OutputService(Images);
+        var result = await new FileOrganizationService(output).ExecuteAsync(plan, metadata, false);
+        Equal(2, result.VideoPaths.Count);
+        Equal("SECOND SYNTHETIC PART", File.ReadAllText(result.VideoPaths[0]));
+        Equal("FIRST SYNTHETIC PART", File.ReadAllText(result.VideoPaths[1]));
+        Check(!File.Exists(one) && !File.Exists(two), "Committed sources not retired");
+    }
+
+    private static Task ImageLimits()
+    {
+        using var bitmap = new SKBitmap(6, 3); bitmap.Erase(SKColors.CornflowerBlue);
+        using var image = SKImage.FromBitmap(bitmap);
+        var jpeg = image.Encode(SKEncodedImageFormat.Jpeg, 95).ToArray();
+        // APP1 EXIF, little-endian TIFF, orientation 6. WPF's existing contract uses encoded pixels.
+        byte[] exif = [0xff, 0xe1, 0, 34, 0x45, 0x78, 0x69, 0x66, 0, 0, 0x49, 0x49, 0x2a, 0, 8, 0, 0, 0, 1, 0, 0x12, 1, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0];
+        var oriented = jpeg.Take(2).Concat(exif).Concat(jpeg.Skip(2)).ToArray();
+        Equal((6, 3), Images.GetDimensions(oriented));
+        Equal((3, 3), Images.GetDimensions(Images.CreatePoster(oriented, true)));
+        Check(oriented.SequenceEqual(Images.CreateFanartJpeg(oriented)), "EXIF JPEG fanart metadata changed");
+        ThrowsSync<InvalidDataException>(() => Images.GetDimensions(new byte[SkiaArtworkImageProcessor.MaximumEncodedBytes + 1]));
+        var large = jpeg.ToArray();
+        for (var i = 0; i < large.Length - 10; i++)
+        {
+            if (large[i] == 0xff && (large[i + 1] == 0xc0 || large[i + 1] == 0xc2))
+            {
+                large[i + 5] = 0x27; large[i + 6] = 0x10; // height = 10000
+                large[i + 7] = 0x27; large[i + 8] = 0x10; // width = 10000
+                break;
+            }
+        }
+        try { Images.GetDimensions(large); throw new Exception("Oversized decoded image accepted"); }
+        catch (InvalidDataException error) { Check(error.Message.Contains("pixel limit"), "Oversized image was not rejected by pixel guard"); }
+        return Task.CompletedTask;
+    }
+
+    private static async Task Provider()
+    {
+        using var http = new HttpClient(new ReplyHandler(HttpStatusCode.OK, Fixture("libredmm.json")));
+        using var provider = new LibreDmmClient(http);
+        var metadata = await provider.SearchAsync("DEMO-001");
+        Equal("Synthetic provider title", metadata.Title);
+        Equal("DEMO-001", metadata.Id);
+        foreach (var status in new[] { HttpStatusCode.NotFound, HttpStatusCode.TooManyRequests })
+        {
+            using var failedHttp = new HttpClient(new ReplyHandler(status, "{}"));
+            using var failedProvider = new LibreDmmClient(failedHttp);
+            var attempt = await MetadataSearchCoordinator.SearchAttemptAsync("DEMO-001", failedProvider);
+            Check(!attempt.Success && attempt.Error is not null, $"{status} unexpectedly succeeded");
+        }
+    }
+
+    private static Task ImagesTest()
+    {
+        using var bitmap = new SKBitmap(5, 2);
+        bitmap.Erase(SKColors.Red);
+        for (var y = 0; y < 2; y++) for (var x = 2; x < 5; x++) bitmap.SetPixel(x, y, SKColors.Blue);
+        using var image = SKImage.FromBitmap(bitmap);
+        var png = image.Encode(SKEncodedImageFormat.Png, 100).ToArray();
+        var poster = Images.CreatePoster(png, true);
+        using var decoded = SKBitmap.Decode(poster);
+        Equal(2, decoded.Width); Equal(2, decoded.Height);
+        Equal(SKColors.Blue, decoded.GetPixel(0, 0));
+        var jpg = image.Encode(SKEncodedImageFormat.Jpeg, 95).ToArray();
+        Check(jpg.SequenceEqual(Images.CreateFanartJpeg(jpg)), "JPEG fanart bytes not preserved");
+        using var portraitBitmap = new SKBitmap(2, 5);
+        portraitBitmap.Erase(SKColors.Transparent);
+        using var portrait = SKImage.FromBitmap(portraitBitmap);
+        var transparent = portrait.Encode(SKEncodedImageFormat.Png, 100).ToArray();
+        Equal((2, 5), Images.GetDimensions(Images.CreatePoster(transparent, true)));
+        using var flattened = SKBitmap.Decode(Images.CreateFanartJpeg(transparent));
+        Check(flattened.GetPixel(0, 0).Alpha == 255, "JPEG flatten did not remove alpha");
+        ThrowsSync<Exception>(() => Images.GetDimensions([]));
+        ThrowsSync<Exception>(() => Images.CreatePoster([1, 2, 3], false));
+        return Task.CompletedTask;
+    }
+
+    private static string Fixture(string name)
+    {
+        var path = new DirectoryInfo(Environment.CurrentDirectory);
+        while (path is not null && !File.Exists(System.IO.Path.Combine(path.FullName, "global.json"))) path = path.Parent;
+        return File.ReadAllText(System.IO.Path.Combine(path?.FullName ?? throw new Exception("Run tests from repository root"), "fixtures/macos", name));
+    }
+    private static void Check(bool value, string message) { _assertions++; if (!value) throw new Exception(message); }
+    private static void Equal<T>(T expected, T actual) => Check(EqualityComparer<T>.Default.Equals(expected, actual), $"Expected {expected}; got {actual}");
+    private static async Task Throws<T>(Func<Task> action) where T : Exception
+    { _assertions++; try { await action(); } catch (T) { return; } throw new Exception($"Expected {typeof(T).Name}"); }
+    private static void ThrowsSync<T>(Action action) where T : Exception
+    { _assertions++; try { action(); } catch (T) { return; } throw new Exception($"Expected {typeof(T).Name}"); }
+    private sealed class Temp : IDisposable
+    {
+        public string Path { get; }
+        public Temp(string? root = null)
+        {
+            Path = System.IO.Path.Combine(root ?? System.IO.Path.GetTempPath(), "JavMetaLite-portable-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path);
+        }
+        public string Write(string relative, string text) { var file = System.IO.Path.Combine(Path, relative); Directory.CreateDirectory(System.IO.Path.GetDirectoryName(file)!); File.WriteAllText(file, text, new UTF8Encoding(false)); return file; }
+        public void Dispose() { try { Directory.Delete(Path, true); } catch (IOException) { } }
+    }
+    private sealed class ImmediateProgress<T>(Action<T> report) : IProgress<T> { public void Report(T value) => report(value); }
+    private sealed class ReplyHandler(HttpStatusCode status, string body) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body), RequestMessage = request });
+    }
+}

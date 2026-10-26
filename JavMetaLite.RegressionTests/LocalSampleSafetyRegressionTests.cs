@@ -29,7 +29,7 @@ internal static class LocalSampleSafetyRegressionTests
                 $"extrafanart/fanart{i + 1}.jpg", TestImageFactory.CreateJpeg(100 + i, 80))).ToArray();
             var localHashes = local.Select(AssertEx.Sha256).ToArray();
             using var job = new MovieJob();
-            await MovieJobLoader.LoadAsync(job, videos);
+            await MovieJobLoader.LoadAsync(job, videos, WindowsArtworkImageProcessor.Instance);
             var online = new MovieMetadata
             {
                 Id = "SAFE-551", Title = "Synthetic sample preservation", SourceName = "libredmm",
@@ -45,7 +45,7 @@ internal static class LocalSampleSafetyRegressionTests
             AssertEx.Equal(101, plannedSamples, "Preview truncated local files or counted more than 50 online selections.");
             using var handler = new LocalSampleHandler();
             using var client = new HttpClient(handler);
-            using var output = new OutputService(client);
+            using var output = new OutputService(WindowsArtworkImageProcessor.Instance, client);
             var result = await new FileOrganizationService(output).ExecuteAsync(plan, job.Metadata, true);
             AssertEx.Equal(50, handler.SampleRequests);
             AssertEx.Equal(101, result.Outputs.ExtrafanartPaths.Count);
@@ -70,7 +70,7 @@ internal static class LocalSampleSafetyRegressionTests
         AssertEx.Equal(52, OutputService.GetExpectedOutputFiles(video, metadata, SamplesOnly).Count);
         using var handler = new LocalSampleHandler();
         using var client = new HttpClient(handler);
-        using var output = new OutputService(client);
+        using var output = new OutputService(WindowsArtworkImageProcessor.Instance, client);
         var result = await output.SaveAsync(video, metadata, SamplesOnly);
         AssertEx.Equal(50, handler.SampleRequests);
         AssertEx.Equal(52, result.ExtrafanartPaths.Count);
@@ -89,7 +89,7 @@ internal static class LocalSampleSafetyRegressionTests
             var nfo = workspace.WriteFile(multipart ? "movie.nfo" : "SAFE-551.nfo", "<movie><title>Original title</title></movie>"u8.ToArray());
             var originals = videos.Concat([local, nfo]).ToDictionary(path => path, AssertEx.Sha256);
             using var job = new MovieJob();
-            await MovieJobLoader.LoadAsync(job, videos);
+            await MovieJobLoader.LoadAsync(job, videos, WindowsArtworkImageProcessor.Instance);
             var online = new MovieMetadata
             {
                 Id = "SAFE-551", Title = "Updated title", SourceName = "libredmm",
@@ -102,7 +102,7 @@ internal static class LocalSampleSafetyRegressionTests
                 new(false, false), job.CreateLocalSaveContext());
             using var handler = new LocalSampleHandler(local);
             using var client = new HttpClient(handler);
-            using var output = new OutputService(client);
+            using var output = new OutputService(WindowsArtworkImageProcessor.Instance, client);
             try
             {
                 await AssertEx.ThrowsAsync<IOException>(

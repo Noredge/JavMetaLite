@@ -4,13 +4,14 @@
 
 [简体中文](README.zh-Hans.md) · [繁體中文](README.zh-Hant.md) · **English** · [日本語](README.ja.md)
 
-[![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
+[![Windows CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
+[![macOS CI](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml)
 
-> Current version: **1.2.3**.
+> Windows **1.2.3** · macOS **0.4.0 preview**.
 
-A Windows app for reviewing and organizing local movie metadata, individually or in batches, with Jellyfin-compatible output.
+A Windows and macOS app for reviewing and organizing local movie metadata, individually or in batches, with Jellyfin-compatible output.
 
-![Single-movie workspace, v1.2.0](docs/images/javmetalite-v1.2.0-main-single.en.png)
+![Windows single-movie workspace, v1.2.0](docs/images/javmetalite-v1.2.0-main-single.en.png)
 
 Synthetic demo data. [More screenshots](docs/SCREENSHOTS-v1.2.0.md).
 
@@ -23,7 +24,7 @@ Synthetic demo data. [More screenshots](docs/SCREENSHOTS-v1.2.0.md).
 - Compare and delete local images in the viewer; the main window flags low-resolution covers for review.
 - Preview file changes before saving; keep movies in place or organize them into a chosen folder. Four UI languages supported.
 
-## Quick start
+## Quick start (Windows)
 
 Windows 10/11 x64. No separate .NET Runtime installation; the embedded browser requires Microsoft Edge WebView2 Runtime.
 
@@ -39,7 +40,7 @@ Windows 10/11 x64. No separate .NET Runtime installation; the embedded browser r
 - Back up important media. Saves stop on failure or cancellation; keep recovery folders if restoration fails.
 - Sources may contain adult material. Respect their terms and applicable age/legal requirements.
 
-## Build from source
+## Build from source (Windows)
 
 On Windows 10/11 x64, install Git and the exact .NET SDK pinned in [global.json](global.json) (currently 10.0.400). In PowerShell:
 
@@ -59,10 +60,25 @@ The build restores NuGet packages automatically; the first build needs network a
 
 The EXE folder, ZIP and SHA-256 files are written to `release/`. See [Development and testing](TESTING.md) for the full test suite.
 
+## macOS preview
+
+**Apple Silicon · macOS 15+.** The native editor shows the poster and full cover together, with metadata/artwork editing and checkbox-based batch queries and saves. Save preview is on by default; unedited NFO content is preserved and file conflicts are checked before writing. Common settings are remembered.
+
+Download `macos-arm64-local-build-and-evidence` from a successful [macOS CI run](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml?query=branch%3Amain). Unpack the artifact and its app ZIP under `macos/`, then open `JavMetaLite.app`. The runtime is bundled.
+
+To build from the repository root, install the SDK pinned in [global.json](global.json) and Xcode or Command Line Tools with a macOS 15+ SDK:
+
+```sh
+./scripts/macos/package.sh --arch arm64 --configuration Release --sign-mode adhoc
+./scripts/macos/test.sh --arch arm64 --configuration Release
+```
+
+Output: `artifacts/macos/`. CI builds use ad-hoc signing and are not notarized; Intel is unverified. [Mac guide](macos/README.md) · [Verification status](docs/macos/STATUS.md).
+
 ## More
 
 [Release notes](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [Changelog](CHANGELOG.md) · [Development and testing](TESTING.md)
 
-Logs and preferences are under `%LOCALAPPDATA%\JavMetaLite`.
+Windows logs and preferences are under `%LOCALAPPDATA%\JavMetaLite`.
 
 [MIT License](LICENSE) · © 2026 Noredge · [Third-party notices](THIRD_PARTY_NOTICES.md). Not affiliated with source sites; their data is not covered by this project's license.

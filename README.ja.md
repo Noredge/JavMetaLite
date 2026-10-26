@@ -4,13 +4,14 @@
 
 [简体中文](README.zh-Hans.md) · [繁體中文](README.zh-Hant.md) · [English](README.md) · **日本語**
 
-[![CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
+[![Windows CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
+[![macOS CI](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml)
 
-> 現在のバージョン：**1.2.3**。
+> Windows **1.2.3** · macOS **0.4.0 プレビュー版**。
 
-ローカル動画の情報を確認・整理する Windows アプリです。単体編集と一括処理に対応し、Jellyfin 用のメタデータや画像を出力できます。
+ローカル動画の情報を確認・整理する Windows／macOS アプリです。単体編集と一括処理に対応し、Jellyfin 用のメタデータや画像を出力できます。
 
-![単体編集画面、v1.2.0](docs/images/javmetalite-v1.2.0-main-single.ja.png)
+![Windows 単体編集画面、v1.2.0](docs/images/javmetalite-v1.2.0-main-single.ja.png)
 
 画像と情報は合成デモです。[その他の画面](docs/SCREENSHOTS-v1.2.0.md)。
 
@@ -23,7 +24,7 @@
 - ビューアーでの画像比較とローカル画像削除、メイン画面での低解像度ジャケットの注意表示。
 - 保存前の変更プレビュー、動画の元の場所への保存または指定フォルダーへの整理。簡体字中国語・繁体字中国語・英語・日本語に対応。
 
-## クイックスタート
+## クイックスタート（Windows）
 
 Windows 10/11 x64 が必要です。.NET Runtime の別途インストールは不要ですが、内蔵ブラウザーには Microsoft Edge WebView2 Runtime が必要です。
 
@@ -39,7 +40,7 @@ Windows 10/11 x64 が必要です。.NET Runtime の別途インストールは�
 - 重要な動画はバックアップしてください。保存は失敗またはキャンセルで停止します。復元失敗時は復元用フォルダーを保持してください。
 - 取得元には成人向けコンテンツが含まれる場合があります。サイトの規約、適用される年齢条件・法令を守ってください。
 
-## ソースからビルド
+## ソースからビルド（Windows）
 
 Windows 10/11 x64 に Git と [global.json](global.json) で指定された .NET SDK（現在は 10.0.400）をインストールし、PowerShell で実行します。
 
@@ -59,10 +60,25 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj -c Release --no-bu
 
 EXE を含むフォルダー、ZIP、SHA-256 ファイルは `release/` に出力されます。全テストの実行方法は[開発とテスト](TESTING.md)を参照してください。
 
+## macOS プレビュー版
+
+**Apple Silicon · macOS 15 以降。** ネイティブエディターでポスターとジャケット全体を同時に表示し、情報・画像の編集、チェックした動画の一括検索・保存ができます。標準で保存前に変更を確認し、未編集の NFO 内容を保持してファイルの競合を確認します。設定は自動保存されます。
+
+成功した [macOS CI 実行](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml?query=branch%3Amain)から `macos-arm64-local-build-and-evidence` を取得し、内部の `macos/` にある App ZIP を展開して `JavMetaLite.app` を開きます。ランタイムは同梱されています。
+
+ビルドには [global.json](global.json) 指定の SDK と、macOS 15 以降の SDK を含む Xcode または Command Line Tools が必要です。リポジトリのルートで実行します。
+
+```sh
+./scripts/macos/package.sh --arch arm64 --configuration Release --sign-mode adhoc
+./scripts/macos/test.sh --arch arm64 --configuration Release
+```
+
+出力先は `artifacts/macos/` です。CI 版はアドホック署名のみで、公証していません。Intel は未検証です。[Mac ガイド](macos/README.md) · [検証状況](docs/macos/STATUS.md)。
+
 ## 詳細
 
 [リリースノート](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [変更履歴](CHANGELOG.md) · [開発とテスト](TESTING.md)
 
-ログと設定は `%LOCALAPPDATA%\JavMetaLite` に保存されます。
+Windows のログと設定は `%LOCALAPPDATA%\JavMetaLite` に保存されます。
 
 [MIT License](LICENSE) · © 2026 Noredge · [サードパーティーについて](THIRD_PARTY_NOTICES.md)。取得元サイトとは提携しておらず、本プロジェクトのライセンスはサイトのデータには適用されません。

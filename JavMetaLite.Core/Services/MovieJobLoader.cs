@@ -26,15 +26,17 @@ public static class MovieJobLoader
     public static async Task<MovieJobLoadResult> LoadAsync(
         MovieJob job,
         string videoPath,
+        IArtworkImageProcessor imageProcessor,
         CancellationToken cancellationToken = default)
     {
         var fileSet = MovieFileSet.Discover(videoPath);
-        return await LoadAsync(job, fileSet.VideoPaths, cancellationToken);
+        return await LoadAsync(job, fileSet.VideoPaths, imageProcessor, cancellationToken);
     }
 
     public static async Task<MovieJobLoadResult> LoadAsync(
         MovieJob job,
         IEnumerable<string> videoPaths,
+        IArtworkImageProcessor imageProcessor,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(job);
@@ -89,7 +91,7 @@ public static class MovieJobLoader
             }
         }
 
-        var artworkDiscovery = await LocalArtworkDiscovery.DiscoverAsync(sidecars, cancellationToken);
+        var artworkDiscovery = await LocalArtworkDiscovery.DiscoverAsync(sidecars, imageProcessor, cancellationToken);
         job.SetLocalArtwork(artworkDiscovery.Candidate);
         job.SetLocalExtrafanart(artworkDiscovery.ExtrafanartPaths);
         if (artworkDiscovery.FanartResolution is { } resolution)

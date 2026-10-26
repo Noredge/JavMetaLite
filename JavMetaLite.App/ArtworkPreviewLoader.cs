@@ -12,7 +12,7 @@ internal static class ArtworkPreviewLoader
 
     public static Task<ArtworkPreview> LoadLocalAsync(string path, CancellationToken token) => Task.Run(async () =>
     {
-        var image = await ArtworkLocationHelper.ReadLocalImageWithDimensionsAsync(path, token);
+        var image = await ArtworkLocationHelper.ReadLocalImageWithDimensionsAsync(path, WindowsArtworkImageProcessor.Instance, token);
         token.ThrowIfCancellationRequested();
         var bitmap = PosterBitmapFactory.CreateFrozen(image.Bytes, Math.Min(MainPreviewWidth, image.Width));
         token.ThrowIfCancellationRequested();

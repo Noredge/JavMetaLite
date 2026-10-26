@@ -98,7 +98,7 @@ public partial class MainWindow : Window
     internal MainWindow(AppPreferencesStore preferencesStore)
     {
         _preferencesStore = preferencesStore;
-        _outputService = new OutputService();
+        _outputService = new OutputService(WindowsArtworkImageProcessor.Instance);
         _fileOrganizationService = new FileOrganizationService(_outputService);
         LocalizationService.ApplyLanguage(LocalizationService.CurrentLanguageCode);
         InitializeComponent();
@@ -2702,7 +2702,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var result = await MovieJobLoader.LoadAsync(_activeJob, path, CurrentOperationToken);
+        var result = await MovieJobLoader.LoadAsync(_activeJob, path, WindowsArtworkImageProcessor.Instance, CurrentOperationToken);
         _activeJob.InitializeSaveConfiguration(CaptureCurrentSaveConfiguration());
         _jobLoadResults[_activeJob] = result;
         _jobPreviews.Remove(_activeJob);
@@ -3343,7 +3343,7 @@ public partial class MainWindow : Window
         RunBusyAsync(LocalizationService.Get("Status.ReadingLocalCover"), async () =>
         {
             var bytes = await ArtworkLocationHelper.ReadLocalImageAsync(
-                path,
+                path, WindowsArtworkImageProcessor.Instance,
                 CurrentOperationToken);
             var dimensions = PosterImageProcessor.GetDimensions(bytes);
             var manualArtworkCandidate = ArtworkCoverCandidate.CreateCompleteCover(
@@ -3977,7 +3977,7 @@ public partial class MainWindow : Window
         if (ArtworkLocationHelper.TryGetLocalPath(url, out var localPath))
         {
             return await ArtworkLocationHelper.ReadLocalImageAsync(
-                localPath,
+                localPath, WindowsArtworkImageProcessor.Instance,
                 token);
         }
 
@@ -4057,7 +4057,7 @@ public partial class MainWindow : Window
         token.ThrowIfCancellationRequested();
         if (ArtworkLocationHelper.TryGetLocalPath(location, out var path))
         {
-            var image = await ArtworkLocationHelper.ReadLocalImageWithDimensionsAsync(path, token);
+            var image = await ArtworkLocationHelper.ReadLocalImageWithDimensionsAsync(path, WindowsArtworkImageProcessor.Instance, token);
             return new(image.Width, image.Height);
         }
         var key = ArtworkLocationHelper.Normalize(location);

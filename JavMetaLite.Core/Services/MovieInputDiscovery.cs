@@ -10,8 +10,8 @@ public sealed record MovieInputDiscoveryResult(
 {
     public IReadOnlyList<string> VideoPaths => MovieFileSets
         .SelectMany(fileSet => fileSet.VideoPaths)
-        .Distinct(StringComparer.OrdinalIgnoreCase)
-        .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+        .Distinct(FileSystemPathSemantics.PathComparer)
+        .OrderBy(path => path, FileSystemPathSemantics.PathComparer)
         .ToArray();
 }
 
@@ -34,17 +34,18 @@ public static class MovieInputDiscovery
         var normalizedInputs = inputPaths
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Select(Path.GetFullPath)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .Distinct(FileSystemPathSemantics.PathComparer)
+            .OrderBy(path => path, FileSystemPathSemantics.PathComparer)
             .ToArray();
         if (normalizedInputs.Length == 0)
         {
             throw new ArgumentException("至少需要一个影片文件或文件夹。", nameof(inputPaths));
         }
 
-        var videoPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var seenFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var visitedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var videoPaths = new HashSet<string>(FileSystemPathSemantics.PathComparer);
+        var seenFiles = new HashSet<string>(FileSystemPathSemantics.PathComparer);
+        var seenIdentities = new Dictionary<MacFileIdentity, string>();
+        var visitedDirectories = new HashSet<string>(FileSystemPathSemantics.PathComparer);
         var pendingDirectories = new Stack<string>();
         var diagnostics = new List<MovieFileDiscoveryDiagnostic>();
         var ignoredFileCount = 0;
@@ -88,7 +89,7 @@ public static class MovieInputDiscovery
                 continue;
             }
 
-            foreach (var file in files.OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            foreach (var file in files.OrderBy(path => path, FileSystemPathSemantics.PathComparer))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 AddFile(file);
@@ -111,12 +112,13 @@ public static class MovieInputDiscovery
             }
 
             foreach (var subdirectory in subdirectories
-                         .OrderByDescending(path => path, StringComparer.OrdinalIgnoreCase))
+                         .OrderByDescending(path => path, FileSystemPathSemantics.PathComparer))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
-                    if ((File.GetAttributes(subdirectory) & FileAttributes.ReparsePoint) != 0)
+                    if ((File.GetAttributes(subdirectory) & (FileAttributes.ReparsePoint | FileAttributes.Hidden | FileAttributes.System)) != 0 ||
+                        Path.GetFileName(subdirectory).StartsWith('.'))
                     {
                         skippedDirectoryCount++;
                         continue;
@@ -132,17 +134,28 @@ public static class MovieInputDiscovery
             }
         }
 
+        // One malformed CD group must not discard unrelated successfully discovered movies.
+        var fileSets = new List<MovieFileSet>();
+        foreach (var group in videoPaths.GroupBy(MovieFileSet.GetGroupKey, FileSystemPathSemantics.PathComparer))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try { fileSets.AddRange(MovieFileSet.Group(group)); }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                diagnostics.Add(MovieFileDiscoveryDiagnostic.FromException(group.First(), exception));
+            }
+        }
         return new MovieInputDiscoveryResult(
             normalizedInputs,
             includeSubdirectories,
-            MovieFileSet.Group(videoPaths),
+            fileSets.OrderBy(set => set.PrimaryPath, FileSystemPathSemantics.PathComparer).ToArray(),
             ignoredFileCount,
             skippedDirectoryCount,
             diagnostics);
 
         void AddFile(string path)
         {
-            var fullPath = Path.GetFullPath(path);
+            var fullPath = FileSystemPathSemantics.CanonicalizePath(path);
             if (!seenFiles.Add(fullPath))
             {
                 return;
@@ -150,6 +163,17 @@ public static class MovieInputDiscovery
 
             if (VideoFileSupport.IsSupportedExistingFile(fullPath))
             {
+                if (MacFileIdentity.TryRead(fullPath, out var identity, out var identityError))
+                {
+                    // Re-read the earlier path before coalescing: an external replacement
+                    // during this discovery must not cause a different current file to vanish.
+                    if (seenIdentities.TryGetValue(identity, out var earlierPath) &&
+                        MacFileIdentity.TryRead(earlierPath, out var currentIdentity, out _) && currentIdentity == identity)
+                        return;
+                    seenIdentities[identity] = fullPath;
+                }
+                else if (identityError is not null)
+                    diagnostics.Add(MovieFileDiscoveryDiagnostic.FromException(fullPath, identityError));
                 videoPaths.Add(fullPath);
             }
             else

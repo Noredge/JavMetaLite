@@ -1,0 +1,7 @@
+{
+  "initialize": {"jsonrpc":"2.0","id":"golden-1","method":"initialize","params":{"protocolVersion":1,"clientVersion":"0.1.0-dev","locale":"zh-Hans"}},
+  "edit": {"jsonrpc":"2.0","id":"golden-2","method":"jobs.applyEdits","params":{"jobId":"job-demo","expectedReviewRevision":7,"edits":{"title":"合成资料 · 星夜","plot":"第一行\nSecond line","releaseDate":"legacy-date","rating":"N/A","actorsText":"测试演员"}}},
+  "staleError": {"jsonrpc":"2.0","id":"golden-3","error":{"code":-32010,"message":"Save preview is no longer valid.","data":{"reason":"PLAN_STALE","retryable":true,"requiresNewPreview":true}}},
+  "progress": {"jsonrpc":"2.0","method":"operation.progress","params":{"operationId":"op-demo","jobId":"job-demo","sequence":4,"phase":"Committing","canCancel":true,"details":{"completedBytes":0,"totalBytes":0}}},
+  "metadata": {"id":"DEMO-001","title":"合成资料","originalTitle":"Synthetic title","releaseDate":"legacy-date","director":"Test director","maker":"Synthetic Studio","label":"Demo label","series":"","runtimeMinutes":"unknown","actorsText":"Demo Actor","genresText":"Test, Documentary","plot":"第一行\nSecond line","rating":"N/A","contentId":"demo00001","posterUrl":"","coverUrl":"","fallbackCoverUrl":"","sourceUrl":"https://example.invalid/demo","sourceName":"local-nfo","sourceDisplayName":"本地 NFO","actors":[{"name":"Demo Actor","imageUrl":"https://example.invalid/actor.jpg"}],"screenshotUrls":[]}
+}

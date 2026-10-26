@@ -28,7 +28,7 @@ internal static class MovieQueueImport
         var job = new MovieJob();
         try
         {
-            var result = await MovieJobLoader.LoadAsync(job, fileSet.VideoPaths, token);
+            var result = await MovieJobLoader.LoadAsync(job, fileSet.VideoPaths, WindowsArtworkImageProcessor.Instance, token);
             token.ThrowIfCancellationRequested();
             return (job, result);
         }

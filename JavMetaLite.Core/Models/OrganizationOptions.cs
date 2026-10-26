@@ -99,8 +99,7 @@ public sealed record VideoFileTransfer(
     int? PartNumber,
     bool RequiresVerifiedCopy)
 {
-    public bool WillMove => !Path.GetFullPath(SourcePath)
-        .Equals(Path.GetFullPath(TargetPath), StringComparison.OrdinalIgnoreCase);
+    public bool WillMove => !JavMetaLite.Core.Services.FileSystemPathSemantics.PathsEqual(SourcePath, TargetPath);
 }
 
 public sealed record SavePlan(
@@ -132,6 +131,9 @@ public sealed record SavePlan(
     public IReadOnlyList<LocalSidecarTransfer> SidecarTransfers { get; init; } = [];
 
     public IReadOnlyList<SourceFileExpectation> SourceFileExpectations { get; init; } = [];
+
+    // Optional immutable preview snapshots. Existing Windows plans retain their defaults.
+    public IReadOnlyList<TargetFileExpectation> PreviewTargetExpectations { get; init; } = [];
 
     public IReadOnlyList<string> SourcePathsToRetire { get; init; } = [];
 
@@ -176,6 +178,8 @@ public sealed record SourceFileExpectation(
     string ExpectedSha256,
     string Description);
 
+public sealed record TargetFileExpectation(string Path, bool Exists, string? ExpectedSha256);
+
 public sealed record TemporaryCleanupIssue(string Path, string Error);
 
 public sealed record OrganizedSaveResult(
@@ -185,6 +189,13 @@ public sealed record OrganizedSaveResult(
 {
     public IReadOnlyList<string> VideoPaths { get; init; } = [VideoPath];
     public IReadOnlyList<TemporaryCleanupIssue> CleanupIssues { get; internal set; } = [];
+
+    // Commit has already succeeded; journal/reload cleanup cannot turn it into a failed movie.
+    public OrganizedSaveResult WithAdditionalCleanupIssues(IEnumerable<TemporaryCleanupIssue> issues)
+    {
+        ArgumentNullException.ThrowIfNull(issues);
+        return this with { CleanupIssues = CleanupIssues.Concat(issues).ToArray() };
+    }
 }
 
 public enum FileTransactionStage

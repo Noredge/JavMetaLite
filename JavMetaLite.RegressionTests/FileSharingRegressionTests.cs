@@ -214,7 +214,7 @@ internal static class FileSharingRegressionTests
             File.WriteAllBytes(Fanart, [1, 2, 3]);
             OldFanartHash = AssertEx.Sha256(Fanart);
             _http = new HttpClient(new StaticImageHandler(TestImageFactory.CreateJpeg()));
-            _output = new OutputService(_http);
+            _output = new OutputService(WindowsArtworkImageProcessor.Instance, _http);
             Organizer = new FileOrganizationService(_output);
         }
 

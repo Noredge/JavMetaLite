@@ -11,9 +11,11 @@ public sealed class OutputService : IDisposable
     private const int MaximumOnlineScreenshots = 50;
     private readonly HttpClient _httpClient;
     private readonly bool _ownsClient;
+    private readonly IArtworkImageProcessor _imageProcessor;
 
-    public OutputService(HttpClient? httpClient = null)
+    public OutputService(IArtworkImageProcessor imageProcessor, HttpClient? httpClient = null)
     {
+        _imageProcessor = imageProcessor ?? throw new ArgumentNullException(nameof(imageProcessor));
         _ownsClient = httpClient is null;
         _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(45) };
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) JavMetaLite/0.4");
@@ -195,9 +197,9 @@ public sealed class OutputService : IDisposable
             timing.Begin("imageProcess");
             var png = Path.GetExtension(path).Equals(".png", StringComparison.OrdinalIgnoreCase);
             var bytes = poster
-                ? PosterImageProcessor.CreatePoster(image.Bytes, png)
-                : png ? PosterImageProcessor.CreateFanartPng(image.Bytes)
-                    : PosterImageProcessor.CreateFanartJpeg(image.Bytes);
+                ? _imageProcessor.CreatePoster(image.Bytes, png)
+                : png ? _imageProcessor.CreateFanartPng(image.Bytes)
+                    : _imageProcessor.CreateFanartJpeg(image.Bytes);
             timing.Begin("imageWrite");
             await WriteImageAsync(path, bytes, options.OverwriteExisting, cancellationToken);
         }
@@ -374,8 +376,8 @@ public sealed class OutputService : IDisposable
     {
         if (ArtworkLocationHelper.TryGetLocalPath(url, out var localPath))
         {
-            var bytes = await ArtworkLocationHelper.ReadLocalImageAsync(localPath, cancellationToken);
-            var dimensions = PosterImageProcessor.GetDimensions(bytes);
+            var bytes = await ArtworkLocationHelper.ReadLocalImageAsync(localPath, _imageProcessor, cancellationToken);
+            var dimensions = _imageProcessor.GetDimensions(bytes);
             return new DownloadedImage(
                 localPath,
                 bytes,
@@ -389,6 +391,11 @@ public sealed class OutputService : IDisposable
         {
             try
             {
+                // ResponseHeadersRead ends HttpClient's timeout at headers. Keep a deadline
+                // across body reads too, so a stalled provider cannot hold a save indefinitely.
+                using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                deadline.CancelAfter(_httpClient.Timeout == Timeout.InfiniteTimeSpan
+                    ? TimeSpan.FromSeconds(45) : _httpClient.Timeout);
                 using var request = new HttpRequestMessage(HttpMethod.Get, candidate);
                 if (Uri.TryCreate(candidate, UriKind.Absolute, out var uri) &&
                     (uri.Host.EndsWith(".dmm.co.jp", StringComparison.OrdinalIgnoreCase) ||
@@ -397,7 +404,7 @@ public sealed class OutputService : IDisposable
                     request.Headers.Referrer = new Uri("https://www.dmm.co.jp/");
                 }
 
-                using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
                 response.EnsureSuccessStatusCode();
                 var mediaType = response.Content.Headers.ContentType?.MediaType;
                 if (!string.IsNullOrWhiteSpace(mediaType) &&
@@ -407,13 +414,16 @@ public sealed class OutputService : IDisposable
                     throw new InvalidDataException("图片地址没有返回图片。 ");
                 }
 
-                var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+                if (response.Content.Headers.ContentLength > ArtworkLocationHelper.MaximumLocalImageBytes)
+                    throw new InvalidDataException("Image exceeds the encoded byte limit.");
+                await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token);
+                var bytes = await ArtworkLocationHelper.ReadBoundedImageAsync(stream, deadline.Token);
                 if (bytes.Length < 128)
                 {
                     throw new InvalidDataException("下载到的图片太小，可能是网站错误页面。 ");
                 }
 
-                var dimensions = PosterImageProcessor.GetDimensions(bytes);
+                var dimensions = _imageProcessor.GetDimensions(bytes);
                 return new DownloadedImage(
                     candidate,
                     bytes,
@@ -424,6 +434,10 @@ public sealed class OutputService : IDisposable
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 throw;
+            }
+            catch (OperationCanceledException exception)
+            {
+                lastError = new IOException("Image response body exceeded the download deadline.", exception);
             }
             catch (Exception exception) when (IsRecoverableImageError(exception))
             {

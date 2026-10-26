@@ -9,6 +9,9 @@ public static class OrganizationPathPlanner
         bool usesMultipartNaming)
     {
         ArgumentNullException.ThrowIfNull(options);
+        if (!OperatingSystem.IsWindows() && options.CrossVolumeVerification != CrossVolumeVerificationMode.FullSha256)
+            options = new OrganizationOptions(options.TargetMode, options.RenameVideo, options.CustomRootDirectory,
+                CrossVolumeVerificationMode.FullSha256);
         return usesMultipartNaming && options.TargetMode is OrganizationTargetMode.VideoDirectory
             ? new OrganizationOptions(
                 OrganizationTargetMode.SourceNumberFolder,
@@ -24,7 +27,7 @@ public static class OrganizationPathPlanner
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var sourceVideoPath = Path.GetFullPath(videoPath);
+        var sourceVideoPath = FileSystemPathSemantics.CanonicalizePath(videoPath);
         var sourceDirectory = Path.GetDirectoryName(sourceVideoPath)
             ?? throw new InvalidOperationException("无法确定所选影片的文件夹。");
         var normalizedId = options.CreateMovieFolder || options.RenameVideo
@@ -46,7 +49,7 @@ public static class OrganizationPathPlanner
             OrganizationTargetMode.CustomRootNumberFolder => AppendIdUnlessAlreadySelected(targetRootDirectory, normalizedId),
             _ => throw new InvalidOperationException($"不支持的整理目标模式：{options.TargetMode}")
         };
-        targetDirectory = Path.GetFullPath(targetDirectory);
+        targetDirectory = FileSystemPathSemantics.CanonicalizePath(targetDirectory);
 
         var targetBaseName = options.RenameVideo
             ? normalizedId
@@ -69,16 +72,8 @@ public static class OrganizationPathPlanner
 
     public static bool RequiresVerifiedCopy(string sourcePath, string targetPath)
     {
-        var sourceRoot = Path.GetPathRoot(Path.GetFullPath(sourcePath));
-        var targetRoot = Path.GetPathRoot(Path.GetFullPath(targetPath));
-        if (string.IsNullOrWhiteSpace(sourceRoot) || string.IsNullOrWhiteSpace(targetRoot) ||
-            !Path.TrimEndingDirectorySeparator(sourceRoot)
-                .Equals(Path.TrimEndingDirectorySeparator(targetRoot), StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return false;
+        if (FileSystemPathSemantics.PathsEqual(sourcePath, targetPath)) return false;
+        return FileSystemPathSemantics.GetVolumeRelation(sourcePath, targetPath) != VolumeRelation.Same;
     }
 
     private static string AppendIdUnlessAlreadySelected(string rootDirectory, string normalizedId)
@@ -98,6 +93,7 @@ public static class OrganizationPathPlanner
             throw new InvalidOperationException("整理文件前需要有效的影片番号。");
         }
         if (normalized.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            normalized.IndexOfAny("<>:\"/\\|?*".ToCharArray()) >= 0 || normalized.Any(char.IsControl) ||
             normalized.EndsWith('.') || normalized.EndsWith(' '))
         {
             throw new InvalidOperationException($"影片番号不能作为 Windows 文件名：{id}");
