@@ -64,7 +64,7 @@ EXE を含むフォルダー、ZIP、SHA-256 ファイルは `release/` に出�
 
 **Apple Silicon · macOS 15 以降。** ネイティブエディターでポスターとジャケット全体を同時に表示し、情報・画像の編集、チェックした動画の一括検索・保存ができます。標準で保存前に変更を確認し、未編集の NFO 内容を保持してファイルの競合を確認します。設定は自動保存されます。
 
-成功した [macOS CI 実行](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml?query=branch%3Amain)から `macos-arm64-local-build-and-evidence` を取得し、内部の `macos/` にある App ZIP を展開して `JavMetaLite.app` を開きます。ランタイムは同梱されています。
+[macOS 0.4.0 Preview 1](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.1) から App ZIP を取得し、展開して `JavMetaLite.app` を開きます。.NET のインストールは不要です。
 
 ビルドには [global.json](global.json) 指定の SDK と、macOS 15 以降の SDK を含む Xcode または Command Line Tools が必要です。リポジトリのルートで実行します。
 

@@ -7,5 +7,6 @@
 - [Screenshots](SCREENSHOTS-v1.2.0.md)
 - [Maintenance workflow / 维护路线](MAINTENANCE.zh-Hans.md)
 - [Development and testing](../TESTING.md)
+- [macOS guide](../macos/README.md) · [status](macos/STATUS.md) · [testing](macos/TESTING.md) · [releasing](macos/RELEASING.md)
 
-Historical preview plans, handoff notes and local acceptance logs are kept outside the public documentation.
+Development history is available in Git commits. Public documentation describes current behavior, maintenance commands and verification limits.

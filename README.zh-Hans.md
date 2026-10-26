@@ -64,7 +64,7 @@ EXE 所在文件夹、ZIP 和 SHA-256 文件均输出到 `release/`。完整测�
 
 **Apple Silicon · macOS 15+。** 原生编辑器同屏展示海报与完整封套，支持资料、图片编辑和勾选批量查询、保存。默认预览保存变更，保留未编辑的 NFO 内容，写入前检查文件冲突；常用设置自动记忆。
 
-从成功的 [macOS CI 运行](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml?query=branch%3Amain)下载 `macos-arm64-local-build-and-evidence`，解压其中 `macos/` 下的 App ZIP，打开 `JavMetaLite.app`。已内置运行时。
+从 [macOS 0.4.0 Preview 1](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.1) 下载 App ZIP，解压后打开 `JavMetaLite.app`，无需安装 .NET。
 
 自行构建需安装 [global.json](global.json) 指定的 SDK，以及带 macOS 15+ SDK 的 Xcode 或 Command Line Tools。在仓库根目录执行：
 

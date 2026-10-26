@@ -64,7 +64,7 @@ The EXE folder, ZIP and SHA-256 files are written to `release/`. See [Developmen
 
 **Apple Silicon · macOS 15+.** The native editor shows the poster and full cover together, with metadata/artwork editing and checkbox-based batch queries and saves. Save preview is on by default; unedited NFO content is preserved and file conflicts are checked before writing. Common settings are remembered.
 
-Download `macos-arm64-local-build-and-evidence` from a successful [macOS CI run](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml?query=branch%3Amain). Unpack the artifact and its app ZIP under `macos/`, then open `JavMetaLite.app`. The runtime is bundled.
+Download the App ZIP from [macOS 0.4.0 Preview 1](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.1), extract it and open `JavMetaLite.app`. The runtime is bundled.
 
 To build from the repository root, install the SDK pinned in [global.json](global.json) and Xcode or Command Line Tools with a macOS 15+ SDK:
 

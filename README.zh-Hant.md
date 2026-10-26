@@ -64,7 +64,7 @@ EXE 所在資料夾、ZIP 和 SHA-256 檔案均輸出至 `release/`。完整測�
 
 **Apple Silicon · macOS 15+。** 原生編輯器同時顯示海報與完整封套，支援資料、圖片編輯，以及勾選影片後批次查詢、儲存。預設先預覽儲存變更，保留未編輯的 NFO 內容，寫入前檢查檔案衝突；常用設定會自動記住。
 
-從成功的 [macOS CI 執行](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml?query=branch%3Amain)下載 `macos-arm64-local-build-and-evidence`，解壓縮其中 `macos/` 下的 App ZIP，再開啟 `JavMetaLite.app`。已內含執行階段。
+從 [macOS 0.4.0 Preview 1](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.1) 下載 App ZIP，解壓縮後開啟 `JavMetaLite.app`，無需安裝 .NET。
 
 自行建置需安裝 [global.json](global.json) 指定的 SDK，以及含 macOS 15+ SDK 的 Xcode 或 Command Line Tools。在儲存庫根目錄執行：
 

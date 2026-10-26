@@ -1,4 +1,4 @@
-# Worker protocol v1 (M6, Worker 0.4.0-dev)
+# Worker protocol v1
 
 UTF-8 JSON-RPC 2.0, one JSON object per LF-terminated line; 8 MiB maximum frame, string IDs only. Unknown optional fields are ignored; unknown commands return -32601. Notifications never execute commands. stdout contains protocol only; stderr is drained independently. All methods except initialize require a successful protocolVersion=1 handshake. Incompatible reinitialization disables commands.
 
@@ -133,7 +133,7 @@ Save result: `outcome,savedJobIds,notStartedJobIds,failedJobId?,cleanupWarnings,
 Committed NFOs are reloaded to form the next round-trip baseline. With NFO output disabled, the baseline is refreshed independently: full metadata, actors' image URLs, selected source candidates and manual decisions stay intact, while migrated artwork paths update. Such unsaved metadata remains dirty. A post-commit reload/journal failure is a cleanup/recovery warning, never a false claim of rollback.
 
 
-## M5 explicit browser import
+## Explicit browser import
 
 - `browser.getTargets {jobId}` returns `targets:[{source,displayName,url}],maximumHtmlBytes:2097152`. It uses existing Core routes and does not perform network resolution.
 - `browser.getSupport {source,url}` returns `supported,reason?`, without fetching anything. Only supported HTTP(S) detail URLs are eligible: exact provider host or www variant; no credentials, nondefault ports or unsupported schemes. JAVLibrary requires its video detail query.
@@ -143,7 +143,7 @@ The job ID/revision are checked before and after asynchronous work. Parsed metad
 
 The native WKWebView uses its own nonpersistent website store, with no native message handlers, no other-browser cookies and no shell/file bridge. HTML capture happens only on explicit import; the client binds the page capture to job/revision/navigation generation and checks its byte bound again. Live website verification is performed by the user; fixture tests do not prove site availability.
 
-## M5 local image Trash lease
+## Local image Trash lease
 
 This is a separate native Trash operation, not an NFO transaction. Worker never permanently deletes a user image and never accepts an arbitrary path to trash.
 
