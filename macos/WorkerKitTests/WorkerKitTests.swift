@@ -170,6 +170,52 @@ struct WorkerKitTests {
         #expect(preview.jobIDs.contains("second"))
         #expect(preview.jobs.count == 1)
     }
+    @Test func closedWorkerInputFailsWithoutTerminatingClientOrReplayingSave() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("JavMetaLite pipe fixture \(UUID())", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let script = directory.appendingPathComponent("closed_input.py")
+        let release = directory.appendingPathComponent("release")
+        let received = directory.appendingPathComponent("received.txt")
+        try #"""
+import json,os,sys,time
+from pathlib import Path
+release=Path(sys.argv[1]);received=Path(sys.argv[2])
+for line in sys.stdin:
+    frame=json.loads(line)
+    with received.open('a') as output: output.write(frame['method']+'\n')
+    if frame['method']=='initialize': result={'protocolVersion':1}
+    elif frame['method']=='fixture.closeInput':
+        os.close(0)
+        print(json.dumps({'jsonrpc':'2.0','id':frame['id'],'result':{'closed':True}}),flush=True)
+        while not release.exists(): time.sleep(.01)
+        break
+    else: raise RuntimeError('A failed request must not be replayed')
+    print(json.dumps({'jsonrpc':'2.0','id':frame['id'],'result':result}),flush=True)
+"""#.write(to: script, atomically: true, encoding: .utf8)
+        let client = WorkerClient(requestTimeout: .seconds(5))
+        func finish() async {
+            try? Data().write(to: release)
+            await client.shutdown()
+            for _ in 0..<100 {
+                if !(await client.isRunning()) { break }
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+        }
+        do {
+            _ = try await client.start(executable: URL(fileURLWithPath: "/usr/bin/python3"), arguments: [script.path, release.path, received.path])
+            let result = try await client.request("fixture.closeInput")
+            #expect(result["closed"].boolValue)
+            #expect(await client.isRunning(), "The engine must remain alive with its input closed to exercise the write race.")
+            do {
+                _ = try await client.request("save.execute", params: .object(["planId": .string("must-not-replay")]))
+                Issue.record("Writing to the closed pipe must fail.")
+            } catch { /* EPIPE must be reported without killing this process. */ }
+            #expect(try String(contentsOf: received, encoding: .utf8) == "initialize\nfixture.closeInput\n")
+            await finish()
+            #expect(!(await client.isRunning()))
+        } catch { await finish(); throw error }
+    }
     @Test func testSaveTimeoutNeverRetriesAndStatusRemainsQueryable() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("JavMetaLite timeout fixture \(UUID())", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

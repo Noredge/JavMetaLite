@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 public actor WorkerClient {
     private var process: Process?
@@ -41,6 +42,12 @@ public actor WorkerClient {
             let generation = sessionGeneration
             let task = Process()
             let stdinPipe = Pipe(), stdoutPipe = Pipe(), stderrPipe = Pipe()
+            // The engine can close stdin between isRunning and write. Keep the
+            // resulting EPIPE throwable instead of terminating the Mac app.
+            // Scope this to our descriptor; do not change process-wide signals.
+            guard fcntl(stdinPipe.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1) != -1 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
             task.executableURL = executable
             task.arguments = arguments
             if let environment { task.environment = environment }

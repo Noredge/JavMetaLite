@@ -4,7 +4,8 @@
 
 - 英文、简中、繁中、日文README统一简述Mac功能、Apple Silicon/macOS15+要求、CI产物下载与构建命令；Windows截图/步骤明确标注，避免混淆。四份本地链接、版本和命令检查通过。
 - PR Mac回归暴露浏览器地址解析用例的时序问题：原夹具以80ms延迟配合150ms预算，可能先超时，无法检验预期的revision冲突。改为测试专用HTTP响应门闩，确认请求挂起后编辑、再释放响应；此用例使用10秒预算，独立150ms真实超时回归不变。保留取消、影片不匹配、revision冲突及不落盘断言；定向两项及连续30轮通过。
-- 仅改RegressionHost和协议测试，未修改生产Core/Worker/WPF/Swift、revision、NFO round-trip、冲突预检或文件事务逻辑。本机完整11套门禁exit0：Portable52/526断言、Swift68、协议74、queue4/retention5、发布工具36/manifest15、445keys/3590四语检查及Xcode源文件/编译布局检查。远端双平台仍须在当前提交通过，首轮失败记录保留。
+- 随后Mac运行暴露Swift进程SIGPIPE退出。独立探针在SIGPIPE默认处置下使用实际WorkerClient，复现Worker仍活着但stdin已关闭时写请求导致exit -13；在stdin写端设置F_SETNOSIGPIPE后探针exit0，返回EPIPE。保护仅作用于该文件描述符，不修改全局信号处置；增加真实关闭管道且不重放save.execute的回归。
+- Core/Worker/WPF及revision、NFO round-trip、冲突预检和文件事务逻辑保持；Swift仅增加上述管道保护。修复后本机完整11套门禁exit0：Portable52/526断言、Swift69、协议74、queue4/retention5、发布工具36/manifest15、445keys/3590四语检查及Xcode源文件/编译布局检查。远端双平台仍须在当前提交通过，失败记录保留。
 
 只签名、不公证。未新增原生手动/物理设备验证；既有长期压力、真实卷/SMB/断电、完整IME/VoiceOver、Intel及Developer ID/Gatekeeper等未验证范围保持。
 
