@@ -1,4 +1,30 @@
-# JavMetaLite — 四语言说明与main合并准备
+# JavMetaLite — mac已合并main
+
+更新：2026-10-25，America/Los_Angeles。[PR #11](https://github.com/Noredge/JavMetaLite/pull/11)已通过merge commit合并；[合并提交 `08170a2`](https://github.com/Noredge/JavMetaLite/commit/08170a267c5761434f117d92540789e961692035)包含mac分支，`mac`保留在`cabaa04`，没有删除或重写历史。
+
+- 英文、简中、繁中、日文README已统一精简Mac功能、Apple Silicon/macOS15+要求、CI下载和构建说明；Windows步骤/截图单独标注，四语本地链接、版本与命令检查通过。
+- 合并前修复两项Mac门禁问题：浏览器revision用例改为显式HTTP响应门闩，取消/影片不匹配/revision及150ms独立超时断言保留；Swift管道写端设置F_SETNOSIGPIPE，断管返回EPIPE，避免SIGPIPE结束客户端，不改全局信号或重放保存。独立探针修复前exit -13、修复后exit0；浏览器用例连续30轮及本机完整11套门禁通过。
+- revision、NFO round-trip、全队列冲突预检、指纹和文件事务/恢复逻辑保持。未修改生产Core/Worker/WPF安全规则。
+
+合并后的同一提交`08170a2`已完成以下两套CI，均为success：
+
+| 平台 | 实际结果 |
+| --- | --- |
+| [Windows CI](https://github.com/Noredge/JavMetaLite/actions/runs/40253387027) | 46项smoke、66/66项事务回归、WPF自动检查及便携包校验通过。 |
+| [Mac CI](https://github.com/Noredge/JavMetaLite/actions/runs/40253387126) | 完整11套门禁、Portable52/526断言、Swift69、协议74、queue4/retention5、445keys/3590四语检查通过；自包含App签名/打包/解包校验及解包后生产Worker50、queue4、retention5通过。 |
+
+本次后续提交仅补记本报告；最新main检查状态见下方徽章及对应Actions运行，不将合并前结果代替合并后结果。
+
+[![Windows CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml?query=branch%3Amain)
+[![macOS CI](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml?query=branch%3Amain)
+
+只签名、不公证；CI使用ad-hoc签名，不代表Developer ID或Gatekeeper验收。本轮未重新进行完整原生UI/Windows个人电脑手动验收，未替换此前冻结的本机App。长期压力、真实大影片/大队列、物理卷/SMB/满盘/断电、完整IME/VoiceOver/手势、live站点、Intel和完整平台矩阵等既有未验证范围保持。8份本地历史快照及本地产物保留，未上传。
+
+以下各节保留当时的历史状态，不代表当前合并结论。
+
+---
+
+# JavMetaLite — 四语言说明与main合并准备（历史记录）
 
 更新：2026-10-25，America/Los_Angeles。[PR #11](https://github.com/Noredge/JavMetaLite/pull/11)以merge commit合并mac至main，并保留mac分支；当前仍在合并前门禁阶段。
 
