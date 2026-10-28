@@ -445,3 +445,16 @@
 "reviewSaveConsent" = "保存を確定すると、一覧にある既存の NFO と画像の置換を含む変更を適用します。動画は上書きしません。";
 
 "preferencesSavedAutomatically" = "設定は自動的に記憶され、次回起動時に復元されます。";
+"engineExited" = "メタデータエンジンが終了しました";
+"engineExitedEndMessage" = "エンジンのプロセスは終了しました。保存結果は未確認です。最後に受信した確認内容と未送信の下書きを書き出してから終了してください。再起動後に復旧記録と元のファイルを確認してください。";
+"exportReviewRecovery" = "確認内容を書き出す…";
+"recoveryExportMessage" = "ローカルパス、確認済みメタデータ、未送信の下書きを JSON に書き出します。動画ファイルの変更や保存結果の確定は行いません。";
+"recoveryExportUnavailable" = "エンジンの終了とネイティブのファイル操作の完了を確認してから書き出してください。";
+"recoveryExportJSON" = "書き出し先に JSON ファイルを選択してください。";
+"exportAndQuit" = "書き出して終了…";
+"exportAndClose" = "書き出して閉じる…";
+"endWithoutExport" = "書き出さずに終了…";
+"endWithoutExportMessage" = "アプリを終了すると、書き出していない確認内容と下書きが失われます。保存結果は未確認のままで、既存のトランザクション復旧ファイルは保持されます。";
+"confirmEndSession" = "セッションを終了";
+"endSession" = "セッションを終了…";
+"error.ARTWORK_CACHE_CAPACITY" = "プレビューキャッシュが満杯です。不要な動画をキューから取り除いて再試行してください。使用中の画像は保持されます。";

@@ -6,6 +6,7 @@ import WorkerKit
 #endif
 
 struct CachedArtwork: View {
+    @EnvironmentObject var store: WorkspaceStore
     let url: URL
     var maximumPixelSize: Int = 600
     var posterCrop = false
@@ -18,6 +19,8 @@ struct CachedArtwork: View {
             else { Image(systemName: "photo").foregroundStyle(.secondary).accessibilityLabel(tr("artworkLoading")) }
         }.task(id: requestKey) {
             let key = requestKey
+            guard let reader = store.beginArtworkURLRead(url) else { return }
+            defer { store.endArtworkURLRead(reader) }
             let loaded = await ArtworkThumbnailCache.shared.image(url: url, maximumPixelSize: maximumPixelSize, posterCrop: posterCrop)
             if !Task.isCancelled { image = loaded?.image; loadedKey = key }
         }
@@ -55,9 +58,7 @@ struct PrimaryArtworkPreview: View {
             }.buttonStyle(.plain).disabled(artwork == nil || store.working || store.statusUnconfirmed)
                 .accessibilityLabel(tr("artwork." + kind) + " · " + tr("viewArtwork")).help(tr("viewArtwork"))
             if height >= 100 { Text(tr("artwork." + kind)).font(.caption).foregroundStyle(.secondary) }
-        }.task(id: (artwork.map { store.artworkRequestKey($0, job: job) } ?? job.jobID) + "/\(kind)/\(store.artworkLoadGeneration)") {
-            if let artwork { store.loadArtwork(artwork, jobID: job.jobID, scope: height < 100 ? "queue" : "detail") }
-        }
+        }.modifier(ArtworkReadLifetime(artwork: artwork, job: job, scope: height < 100 ? "queue" : "detail"))
     }
 }
 
@@ -144,7 +145,9 @@ struct ArtworkViewer: View {
         .onDisappear { store.closeArtworkViewer() }
         .task(id: url) {
             decodedImage = nil; loadedURL = ""; nativeSize = .zero; scale = 1; zoom(.fit)
-            guard let url, let dimensions = await ArtworkDimensions.read(url: url),
+            guard let url, let reader = store.beginArtworkURLRead(url) else { return }
+            defer { store.endArtworkURLRead(reader) }
+            guard let dimensions = await ArtworkDimensions.read(url: url),
                   let decoded = await ArtworkThumbnailCache.shared.image(url: url, maximumPixelSize: 8192), !Task.isCancelled else { return }
             nativeSize = dimensions; decodedImage = decoded.image; loadedURL = url.path
         }
@@ -157,5 +160,27 @@ struct ArtworkViewer: View {
             .accessibilityLabel(tr(offset < 0 ? "artworkPrevious" : "artworkNext"))
             .accessibilityIdentifier(offset < 0 ? "previousArtwork" : "nextArtwork")
             .disabled(offset < 0 ? store.viewerIndex <= 0 : store.viewerIndex + 1 >= store.viewerArtwork.count)
+    }
+}
+
+/// A view owns its preview while visible; its decoder owns a separate URL read
+/// until asynchronous decoding has really returned, including cancellation.
+struct ArtworkReadLifetime: ViewModifier {
+    @EnvironmentObject var store: WorkspaceStore
+    let artwork: JSONValue?
+    let job: MovieJobSnapshot
+    var scope = "detail"
+    @ViewState private var readerID = UUID()
+    private var identity: String {
+        (artwork.map { store.artworkRequestKey($0, job: job) } ?? job.jobID) + "/\(store.artworkLoadGeneration)"
+    }
+    func body(content: Content) -> some View {
+        content.onAppear { retain() }
+            .onChange(of: identity) { _, _ in retain() }
+            .onDisappear { store.endArtworkRead(readerID) }
+    }
+    private func retain() {
+        if let artwork { store.beginArtworkRead(artwork, jobID: job.jobID, readerID: readerID, scope: scope) }
+        else { store.endArtworkRead(readerID) }
     }
 }

@@ -22,9 +22,11 @@ internal sealed partial class Workspace : IAsyncDisposable
     private readonly Func<IEnumerable<string>, bool, CancellationToken, Task<MovieInputDiscoveryResult>> _inputDiscovery;
     private readonly Func<DateTimeOffset> _utcNow;
     private readonly Func<CancellationToken, Task> _beforePreviewRead;
+    private readonly Action<string, string, CancellationToken>? _afterSidecarInventoryCaptured;
     private readonly string _sessionId = Guid.NewGuid().ToString("N");
     private readonly string _dataRoot;
     private readonly string _cacheRoot;
+    private readonly ArtworkDiskCache _artworkCache;
     private readonly string _recoveryRoot;
     private readonly AppPreferencesStore _preferencesStore;
     private readonly List<string> _recoveryWarnings = [];
@@ -39,7 +41,9 @@ internal sealed partial class Workspace : IAsyncDisposable
         Func<OutputService, FileOrganizationService>? organizationFactory = null,
         Func<IEnumerable<string>, bool, CancellationToken, Task<MovieInputDiscoveryResult>>? inputDiscovery = null,
         Func<DateTimeOffset>? utcNow = null,
-        Func<CancellationToken, Task>? beforePreviewRead = null)
+        Func<CancellationToken, Task>? beforePreviewRead = null,
+        ArtworkDiskCacheLimits? artworkCacheLimits = null,
+        Action<string, string, CancellationToken>? afterSidecarInventoryCaptured = null)
     {
         _wire = wire;
         _providerFactory = providerFactory ?? (source => source switch
@@ -49,11 +53,12 @@ internal sealed partial class Workspace : IAsyncDisposable
         _inputDiscovery = inputDiscovery ?? MovieInputDiscovery.DiscoverAsync;
         _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
         _beforePreviewRead = beforePreviewRead ?? (_ => Task.CompletedTask);
+        _afterSidecarInventoryCaptured = afterSidecarInventoryCaptured;
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         _dataRoot = dataRoot ?? Path.Combine(home, "Library", "Application Support", "JavMetaLite");
-        _cacheRoot = Path.Combine(dataRoot is null ? Path.Combine(home, "Library", "Caches", "JavMetaLite") : Path.Combine(dataRoot, "cache"), "artwork", _sessionId);
+        _cacheRoot = FileSystemPathSemantics.CanonicalizePath(Path.Combine(dataRoot is null ? Path.Combine(home, "Library", "Caches", "JavMetaLite") : Path.Combine(dataRoot, "cache"), "artwork", _sessionId));
         _recoveryRoot = Path.Combine(_dataRoot, "recovery");
-        Directory.CreateDirectory(_cacheRoot);
+        _artworkCache = new ArtworkDiskCache(_cacheRoot, artworkCacheLimits);
         Directory.CreateDirectory(_recoveryRoot);
         AppLog.ConfigureDirectory(dataRoot is null ? Path.Combine(home, "Library", "Logs", "JavMetaLite") : Path.Combine(dataRoot, "logs"));
         _preferencesStore = new AppPreferencesStore(_dataRoot);
@@ -78,13 +83,13 @@ internal sealed partial class Workspace : IAsyncDisposable
             { _initialized = false; throw new RpcError(-32010, "PROTOCOL_VERSION_MISMATCH", "Client and bundled engine versions do not match."); }
             _initialized = true;
             return new { protocolVersion = 1, workerVersion = "0.4.0-dev", sessionId = _sessionId, cacheRoot = _cacheRoot,
-                capabilities = new { readLocal = true, searchLibreDmm = true, writeNfo = true, searchR18Dev = true, writeArtwork = true, organizeVideo = true, manualBrowserImport = true, localArtworkTrash = true, batchSave = true, confirmParts = true, discoverInputs = true, selectReviewSource = true },
+                capabilities = new { readLocal = true, searchLibreDmm = true, writeNfo = true, searchR18Dev = true, writeArtwork = true, organizeVideo = true, manualBrowserImport = true, localArtworkTrash = true, batchSave = true, confirmParts = true, discoverInputs = true, selectReviewSource = true, artworkPreviewLeases = true },
                 discoveryLimits = new { maximumTokens = MaximumDiscoveries, maximumItems = MaximumDiscoveryItems, maximumResultBytes = MaximumDiscoveryBytes, expiresAfterSeconds = DiscoveryLifetime.TotalSeconds } };
         }
         if (!_initialized) throw new RpcError(-32010, "NOT_INITIALIZED", "Initialize the engine before sending commands.");
         switch (method)
         {
-            case "workspace.getSnapshot": lock (_gate) { PruneDiscoveries(); PruneRetainedState(); return new { protocolVersion = 1, jobs = _jobs.Values.Select(Snapshot).ToArray(), activeOperations = _operations.Values.Where(x => x.Status == "running").Select(OperationSnapshot).ToArray(), recoveryWarnings = _recoveryWarnings.ToArray(), activeTrash = TrashSnapshot(), retention = RetentionSnapshot() }; }
+            case "workspace.getSnapshot": lock (_gate) { PruneDiscoveries(); PruneRetainedState(); return new { protocolVersion = 1, jobs = _jobs.Values.Select(Snapshot).ToArray(), activeOperations = _operations.Values.Where(x => x.Status == "running").Select(OperationSnapshot).ToArray(), recoveryWarnings = _recoveryWarnings.ToArray(), activeTrash = TrashSnapshot(), retention = RetentionSnapshot(), artworkCache = _artworkCache.Snapshot() }; }
             case "workspace.importInputs": return Import(p);
             case "workspace.discoverInputs": return DiscoverInputs(p);
             case "workspace.importDiscovery": return ImportDiscovery(p);
@@ -97,6 +102,10 @@ internal sealed partial class Workspace : IAsyncDisposable
             case "jobs.retryFailedSources": return Search(p, true);
             case "jobs.remove": return RemoveJobs(p);
             case "artwork.getPreview": return await GetArtworkPreview(p);
+            case "artwork.releasePreview":
+                var leaseId = Text(p, "leaseId");
+                _artworkCache.Release(leaseId);
+                return new { released = true, leaseId };
             case "artwork.select": return SelectArtwork(p);
             case "artwork.selectSource": return SelectArtworkSource(p);
             case "artwork.prepareTrash": return await PrepareTrash(p);
@@ -183,13 +192,13 @@ internal sealed partial class Workspace : IAsyncDisposable
         });
     }
 
-    private async Task<Entry> LoadDiscoveredEntry(MovieFileSet fileSet, CancellationToken token)
+    private async Task<Entry> LoadDiscoveredEntry(MovieFileSet fileSet, CancellationToken token, LocalSidecarInventoryScope? inventory = null)
     {
         var job = new MovieJob();
         try
         {
             // IEnumerable overload preserves the exact reviewed parts; it does not discover new siblings.
-            var loaded = await MovieJobLoader.LoadAsync(job, fileSet.VideoPaths, _images, token);
+            var loaded = await MovieJobLoader.LoadAsync(job, fileSet.VideoPaths, _images, inventory, token);
             var entry = new Entry(job);
             if (loaded.MetadataError is not null) entry.Warnings.Add(loaded.MetadataError.Message);
             if (loaded.ArtworkDiscovery is { } artwork) entry.Warnings.AddRange(artwork.Diagnostics);
@@ -309,7 +318,7 @@ internal sealed partial class Workspace : IAsyncDisposable
             foreach (var entry in entries) EnsureIdle(entry);
             foreach (var entry in entries) _jobs.Remove(entry.Id);
             QueueChanged();
-            foreach (var entry in entries) entry.Job.Dispose();
+            foreach (var entry in entries) { _artworkCache.RemoveJob(entry.Id); entry.Job.Dispose(); }
             return new { removed = true, removedIds = ids, removedCount = ids.Length };
         }
     }

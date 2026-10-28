@@ -222,6 +222,12 @@ struct WorkspaceView: View {
                 if store.engineStarting {
                     ProgressView().controlSize(.small)
                     Text(tr("engineStarting")); Spacer()
+                } else if store.engineProcessExited {
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                    Text(tr("engineExited")); Spacer()
+                    if store.canRetryEngineStart { Button(tr("retryEngineStart")) { store.retryEngineStart() } }
+                    Button(tr("exportReviewRecovery")) { store.presentReviewRecoveryExport() }.disabled(!store.canEndExitedEngineSession)
+                    Button(tr("endSession")) { NSApp.terminate(nil) }.disabled(!store.canEndExitedEngineSession)
                 } else if store.engineStartupFailed && !store.statusUnconfirmed {
                     Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
                     Text(tr("engineStartupFailed")); Spacer()
@@ -266,7 +272,7 @@ struct QueueRow: View {
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("queueOpen-" + job.jobID)
         }.padding(.vertical, 4).help(job.videoPaths.joined(separator: "\n"))
-        .task(id: "\(job.jobID)-\(job.reviewRevision)-\(store.artworkLoadGeneration)") { if let artwork = job.artwork.first(where: { $0["selected"].boolValue && $0["kind"].stringValue != "sample" }) ?? job.artwork.first { store.loadArtwork(artwork, jobID: job.jobID, scope: "queue") } }
+        .modifier(ArtworkReadLifetime(artwork: job.artwork.first(where: { $0["selected"].boolValue && $0["kind"].stringValue != "sample" }) ?? job.artwork.first, job: job, scope: "queue"))
     }
 }
 

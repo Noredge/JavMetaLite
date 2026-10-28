@@ -140,7 +140,7 @@ struct EditorView: View {
                                         Button(art["selected"].boolValue ? tr("selectedCoverSource") : tr("useCoverSource")) { store.selectArtworkSource(art["source"].stringValue, jobID: job.jobID) }.disabled(art["selected"].boolValue)
                                     }
                                 }
-                            }.frame(width: columnWidth, alignment: .leading).disabled(store.working || store.statusUnconfirmed).task(id: store.artworkRequestKey(art, job: job) + "/" + String(store.artworkLoadGeneration)) { store.loadArtwork(art, jobID: job.jobID) }
+                            }.frame(width: columnWidth, alignment: .leading).disabled(store.working || store.statusUnconfirmed).modifier(ArtworkReadLifetime(artwork: art, job: job))
                         }
                     }.frame(width: contentWidth, alignment: .leading)
                 }

@@ -41,6 +41,7 @@ if [ -f "$SCRIPT_DIR/test_worker.py" ]; then
   run_logged protocol python3 "$SCRIPT_DIR/test_worker.py" "$WORKER" --require-search-host
   run_logged queue-interactions python3 "$SCRIPT_DIR/test_queue_interactions.py" "$WORKER"
   run_logged retention python3 "$SCRIPT_DIR/test_worker_retention.py" "$WORKER"
+  run_logged artwork-cache python3 "$SCRIPT_DIR/test_worker_artwork_cache.py" "$WORKER" --require-search-host
 fi
 printf 'Automated test logs: %s\n' "$LOG_DIR"
 echo 'Interactive native UI, IME/VoiceOver, real removable volumes, SMB, live providers and notarization require separate recorded checks.'

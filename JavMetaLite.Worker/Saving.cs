@@ -59,7 +59,7 @@ internal sealed partial class Workspace
                                     if (current.Plan.SaveOptions.WriteNfo) current.Entry.SavedRevision = current.Entry.Job.ReviewRevision;
                                     foreach (var secondary in current.SourceEntries.Skip(1))
                                     {
-                                        _jobs.Remove(secondary.Id); secondary.Job.Dispose();
+                                        _jobs.Remove(secondary.Id); _artworkCache.RemoveJob(secondary.Id); secondary.Job.Dispose();
                                     }
                                     // Output paths and sidecar ownership have changed; all other plans expire.
                                     QueueChanged();

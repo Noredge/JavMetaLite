@@ -156,7 +156,9 @@ public actor WorkerClient {
         guard generation == sessionGeneration else { return }
         input = nil; process = nil; handshake = .null
         failPending(RPCFailure(code: -32000, message: "The metadata engine exited (\(status)). Save state must be checked before retrying.", data: .object(["reason": .string("WORKER_UNAVAILABLE")])))
-        if !shuttingDown { notification?(.object(["method": .string("worker.unavailable"), "params": .object(["exitCode": .number(Double(status))])])) }
+        // Only Process termination establishes that no engine work can continue.
+        // A request timeout or broken transport is deliberately a different event.
+        if !shuttingDown { notification?(.object(["method": .string("worker.exited"), "params": .object(["exitCode": .number(Double(status))])])) }
     }
     private func failPending(_ error: Error) {
         let waiting = pending.values; pending.removeAll()

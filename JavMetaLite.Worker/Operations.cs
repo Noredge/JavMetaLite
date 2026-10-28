@@ -83,8 +83,9 @@ internal sealed partial class Workspace
         _http.Dispose();
         _searchSlots.Dispose();
         _artworkSlots.Dispose();
-        // Only this session's generated preview cache is disposable. Recovery is never touched.
-        try { Directory.Delete(_cacheRoot, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        // Ownership and all in-flight readers are settled before cache disposal.
+        // Only this session's generated preview cache is disposable; never recovery.
+        _artworkCache.Dispose();
     }
 
     private sealed class Operation(string? jobId, bool readOnly)

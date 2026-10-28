@@ -125,6 +125,8 @@ internal sealed partial class Workspace
                 var duplicates = new HashSet<string>(StringComparer.Ordinal);
                 var skipped = new List<DiscoveryItem>();
                 var committed = false;
+                var inventory = new LocalSidecarInventoryScope((directory, token) =>
+                    _afterSidecarInventoryCaptured?.Invoke("importDiscovery", directory, token));
                 try
                 {
                     Progress(op, "validatingDiscovery");
@@ -136,11 +138,13 @@ internal sealed partial class Workspace
                         {
                             if (ExistingDiscoveryJob(item, existingJobs) is { } existing) { duplicates.Add(existing.Id); skipped.Add(item); continue; }
                         }
-                        var entry = await LoadDiscoveredEntry(item.FileSet, op.Cancellation.Token);
+                        var entry = await LoadDiscoveredEntry(item.FileSet, op.Cancellation.Token, inventory);
                         staged.Add((item, entry));
                         Progress(op, "loadingLocal", new { loaded = staged.Count, total = items.Length });
                     }
                     foreach (var item in items) ValidateDiscoveredItem(item, op.Cancellation.Token);
+                    try { inventory.ValidateReusedDirectories(op.Cancellation.Token); }
+                    catch (SidecarInventoryChangedException) { throw new RpcError(-32010, "SOURCE_CHANGED", "A sidecar directory changed during import. Discover inputs again."); }
                     lock (_gate)
                     {
                         op.Cancellation.Token.ThrowIfCancellationRequested();

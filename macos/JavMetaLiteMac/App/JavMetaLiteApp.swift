@@ -64,6 +64,9 @@ extension Notification.Name { static let focusQueueSearch = Notification.Name("J
             return .terminateCancel
         }
         guard store.commitEditing() else { return .terminateCancel }
+        if store.engineProcessExited {
+            return store.confirmEndExitedEngineSession() ? .terminateNow : .terminateCancel
+        }
         if store.working || store.statusUnconfirmed {
             let alert = NSAlert(); alert.messageText = tr(store.statusUnconfirmed ? "statusUnconfirmed" : "operationInProgress"); alert.informativeText = tr(store.statusUnconfirmed ? "unconfirmedStopMessage" : "safeStopMessage")
             alert.addButton(withTitle: tr("keepOpen")); alert.addButton(withTitle: tr(store.statusUnconfirmed ? "checkStatus" : "cancelOperation"))
@@ -142,6 +145,7 @@ struct WindowBridge: NSViewRepresentable {
                 return false
             }
             guard store.commitEditing() else { return false }
+            if store.engineProcessExited { return store.confirmEndExitedEngineSession(closingWindow: true) }
             if store.working || store.statusUnconfirmed {
                 let alert = NSAlert(); alert.messageText = tr(store.statusUnconfirmed ? "statusUnconfirmed" : "operationInProgress"); alert.informativeText = tr(store.statusUnconfirmed ? "unconfirmedStopMessage" : "safeStopMessage")
                 alert.addButton(withTitle: tr("keepOpen")); alert.addButton(withTitle: tr(store.statusUnconfirmed ? "checkStatus" : "cancelOperation"))

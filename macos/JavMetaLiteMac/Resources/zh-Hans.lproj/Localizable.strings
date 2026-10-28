@@ -445,3 +445,16 @@
 "reviewSaveConsent" = "确认保存即应用下列变更，包括替换列出的已有 NFO 和图片；视频不会被覆盖。";
 
 "preferencesSavedAutomatically" = "设置会自动记住，下次打开时恢复。";
+"engineExited" = "资料引擎已退出";
+"engineExitedEndMessage" = "引擎进程已结束，保存结果仍未确认。请先导出最后收到的审核资料与未提交草稿，再结束会话。重新打开后应检查恢复记录并重新读取文件。";
+"exportReviewRecovery" = "导出审核草稿…";
+"recoveryExportMessage" = "导出含本机路径、审核资料与未提交草稿的 JSON 参考文件；不会写入影片文件，也不代表保存结果已确认。";
+"recoveryExportUnavailable" = "请等待引擎进程确认退出及原生文件操作结束后，再导出恢复参考文件。";
+"recoveryExportJSON" = "请选择 JSON 文件作为恢复参考文件。";
+"exportAndQuit" = "导出草稿并退出…";
+"exportAndClose" = "导出草稿并关闭…";
+"endWithoutExport" = "不导出，结束会话…";
+"endWithoutExportMessage" = "退出后，未导出的审核修改和草稿将丢失。保存结果仍未确认，已有事务恢复文件会保留。";
+"confirmEndSession" = "确认结束会话";
+"endSession" = "结束会话…";
+"error.ARTWORK_CACHE_CAPACITY" = "预览缓存已满。请从队列移除不再需要的影片后重试；正在使用的图片会保留。";

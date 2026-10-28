@@ -91,16 +91,25 @@ public struct RPCFailure: Error, LocalizedError, Sendable {
 public struct LineFramer: Sendable {
     public static let maximumBytes = 8 * 1024 * 1024
     private var buffer = Data()
+    private var scannedBytes = 0
     public init() {}
     public mutating func append(_ bytes: Data) throws -> [Data] {
         buffer.append(bytes)
         var lines: [Data] = []
-        while let newline = buffer.firstIndex(of: 10) {
-            guard newline <= Self.maximumBytes else { throw RPCFailure(code: -32600, message: "Protocol message exceeds 8 MiB.") }
-            let line = Data(buffer[..<newline])
-            buffer.removeSubrange(...newline)
+        var lineStart = buffer.startIndex
+        // The existing unfinished prefix contains no newline. Search only the
+        // appended bytes, and compact completed frames once after scanning.
+        var searchStart = buffer.index(buffer.startIndex, offsetBy: scannedBytes)
+        while let newline = buffer[searchStart..<buffer.endIndex].firstIndex(of: 10) {
+            let length = buffer.distance(from: lineStart, to: newline)
+            guard length <= Self.maximumBytes else { throw RPCFailure(code: -32600, message: "Protocol message exceeds 8 MiB.") }
+            let line = Data(buffer[lineStart..<newline])
             if !line.isEmpty { lines.append(line) }
+            lineStart = buffer.index(after: newline)
+            searchStart = lineStart
         }
+        if lineStart != buffer.startIndex { buffer.removeSubrange(buffer.startIndex..<lineStart) }
+        scannedBytes = buffer.count
         guard buffer.count <= Self.maximumBytes else { throw RPCFailure(code: -32600, message: "Protocol message exceeds 8 MiB.") }
         return lines
     }

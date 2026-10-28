@@ -117,16 +117,18 @@ internal sealed partial class Workspace
             ? JsonSerializer.Deserialize<MovieMetadata>(JsonSerializer.SerializeToUtf8Bytes(entry.Job.Metadata, JsonDefaults.Options), JsonDefaults.Options)!
             : null);
 
-    private static async Task<PreviewItem[]> PreparePreviewItemsAsync(PreviewEntry[] selected, PreviewEntry[] all,
+    private async Task<PreviewItem[]> PreparePreviewItemsAsync(PreviewEntry[] selected, PreviewEntry[] all,
         MovieSaveConfiguration config, bool confirmedParts, CancellationToken token)
     {
         if (confirmedParts) ValidateConfirmedParts(selected);
+        var inventory = new LocalSidecarInventoryScope((directory, cancellation) =>
+            _afterSidecarInventoryCaptured?.Invoke("save.preview", directory, cancellation));
         var inputs = new Dictionary<PreviewEntry, string[]>();
         foreach (var captured in all)
         {
             token.ThrowIfCancellationRequested();
-            var sidecars = captured.Metadata is null ? LocateSidecars(captured.VideoPaths)
-                : ValidateNfoBaseline(captured.VideoPaths, captured.Context.MetadataBundle?.Sidecars.NfoPath);
+            var sidecars = captured.Metadata is null ? LocateSidecars(captured.VideoPaths, inventory, token)
+                : ValidateNfoBaseline(captured.VideoPaths, captured.Context.MetadataBundle?.Sidecars.NfoPath, inventory, token);
             inputs[captured] = captured.VideoPaths.Concat(captured.Context.LocalExtrafanartPaths)
                 .Concat(new[] { sidecars.NfoPath, sidecars.PosterPath, sidecars.FanartPath }.OfType<string>())
                 .Concat(sidecars.ExtrafanartPaths).Distinct(FileSystemPathSemantics.PathComparer).ToArray();
@@ -191,6 +193,8 @@ internal sealed partial class Workspace
             item.Plan = item.Plan with { PreviewTargetExpectations = writes.Select(path => stamps.Single(s => FileSystemPathSemantics.PathsEqual(s.Path, path)))
                 .Select(stamp => new TargetFileExpectation(stamp.Path, stamp.Exists, stamp.Hash)).ToArray() };
         }
+        try { inventory.ValidateReusedDirectories(token); }
+        catch (SidecarInventoryChangedException) { throw new RpcError(-32010, "SOURCE_CHANGED", "A sidecar directory changed while preparing this preview. Refresh the inputs and try again."); }
         return items;
     }
 
@@ -252,7 +256,8 @@ internal sealed partial class Workspace
         return item;
     }
     private static LocalSidecarPaths LocateSidecars(Entry entry) => LocateSidecars(entry.Job.VideoPaths);
-    private static LocalSidecarPaths LocateSidecars(IReadOnlyList<string> videoPaths)
+    private static LocalSidecarPaths LocateSidecars(IReadOnlyList<string> videoPaths,
+        LocalSidecarInventoryScope? inventory = null, CancellationToken token = default)
     {
         // Imports resolve user-selected aliases once. A registered source must not be
         // silently rebound to a different movie by a later file or ancestor link.
@@ -265,13 +270,14 @@ internal sealed partial class Workspace
             throw new RpcError(-32010, "SOURCE_CHANGED", "A registered video path was redirected. Resolve the link and reimport before saving.");
         }
         var set = MovieFileSet.Create(videoPaths);
-        return LocalSidecarLocator.Locate(set.PrimaryPath, set.MovieBaseName, set.UsesMultipartNaming);
+        return LocalSidecarLocator.Locate(set.PrimaryPath, set.MovieBaseName, set.UsesMultipartNaming, inventory, token);
     }
     private static LocalSidecarPaths ValidateNfoBaseline(Entry entry) =>
         ValidateNfoBaseline(entry.Job.VideoPaths, entry.Job.LocalMetadataBundle?.Sidecars.NfoPath);
-    private static LocalSidecarPaths ValidateNfoBaseline(IReadOnlyList<string> videoPaths, string? baseline)
+    private static LocalSidecarPaths ValidateNfoBaseline(IReadOnlyList<string> videoPaths, string? baseline,
+        LocalSidecarInventoryScope? inventory = null, CancellationToken token = default)
     {
-        var sidecars = LocateSidecars(videoPaths);
+        var sidecars = LocateSidecars(videoPaths, inventory, token);
         if (sidecars.NfoPath is not null)
         {
             try { FileSystemPathSemantics.ValidateCanonicalPath(sidecars.NfoPath); }

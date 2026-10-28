@@ -202,12 +202,15 @@ def verify(args):
         initialize = next(x for x in replies if x.get('id') == 'verify-init')['result']
         require(initialize['protocolVersion'] == 1 and initialize['workerVersion'].split('-')[0] ==
                 app_info['CFBundleShortVersionString'], 'Bundled Worker handshake/version mismatch')
-        for capability in ('writeNfo', 'writeArtwork', 'organizeVideo', 'batchSave', 'manualBrowserImport', 'localArtworkTrash'):
+        for capability in ('writeNfo', 'writeArtwork', 'organizeVideo', 'batchSave', 'manualBrowserImport', 'localArtworkTrash', 'artworkPreviewLeases'):
             require(initialize['capabilities'].get(capability), f'Missing capability: {capability}')
         snapshot = next(x for x in replies if x.get('id') == 'verify-snapshot')['result']
         require(snapshot['jobs'] == [] and snapshot['activeOperations'] == [], 'Isolated Worker snapshot is not empty')
         require(any(x.get('id') == 'verify-shutdown' and 'result' in x for x in replies), 'No shutdown acknowledgement')
         require(all(x.get('jsonrpc') == '2.0' for x in replies), 'Nonprotocol stdout')
+        cache_checks = run([sys.executable, Path(__file__).with_name('test_worker_artwork_cache.py'),
+                            worker, '--production-only'], env=env, timeout=60)
+        print(cache_checks.stderr.strip())
     print(f'PACKAGE PASS: {expected_arch}, {mode}, {native_count} native files, {localized_count} keys × 4 languages, complete signatures/entitlements/dependencies, no-SDK Worker initialize/snapshot/shutdown')
     print('Notarization and Gatekeeper acceptance require separate recorded checks.')
 

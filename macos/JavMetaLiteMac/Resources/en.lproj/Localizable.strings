@@ -445,3 +445,16 @@
 "reviewSaveConsent" = "Confirm Save applies the changes below, including replacement of listed NFO and artwork files. Videos are never overwritten.";
 
 "preferencesSavedAutomatically" = "Your settings are remembered automatically for the next launch.";
+"engineExited" = "The metadata engine has exited";
+"engineExitedEndMessage" = "The engine process has ended. Save results remain unknown. Export the last reviewed metadata and unsent drafts before ending this session. Reopen the app to inspect recovery and reread files.";
+"exportReviewRecovery" = "Export Review…";
+"recoveryExportMessage" = "Exports a JSON reference containing local paths, reviewed metadata and unsent drafts. It does not write movie files or confirm a save result.";
+"recoveryExportUnavailable" = "Wait until the engine process has exited and native file operations have finished before exporting this recovery document.";
+"recoveryExportJSON" = "Choose a JSON file for the recovery document.";
+"exportAndQuit" = "Export Review and Quit…";
+"exportAndClose" = "Export Review and Close…";
+"endWithoutExport" = "End Without Export…";
+"endWithoutExportMessage" = "Unexported review changes and drafts will be lost when the app quits. Save results remain unknown; existing transaction recovery files will be kept.";
+"confirmEndSession" = "End Session";
+"endSession" = "End Session…";
+"error.ARTWORK_CACHE_CAPACITY" = "The preview cache is full. Remove movies you no longer need from the queue, then retry. Images still in use are protected.";

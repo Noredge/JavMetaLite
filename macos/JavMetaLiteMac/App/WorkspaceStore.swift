@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 #if SWIFT_PACKAGE
 import WorkerKit
 import NativeBridgeKit
@@ -59,6 +60,8 @@ import NativeBridgeKit
     @Published private(set) var engineStartupFailed = false
     @Published var working = false
     @Published var statusUnconfirmed = false
+    @Published private(set) var engineProcessExited = false
+    @Published private(set) var engineExitCode: Int?
     @Published var phase = ""
     @Published var currentJobIndex = 0
     @Published var totalOperationJobs = 0
@@ -96,6 +99,19 @@ import NativeBridgeKit
     // Fresh installs open the inspector; later launches remember the user's choice.
     @Published var inspectorVisible = true { didSet { persistWorkspacePreferences() } }
     @Published var artworkPaths: [String: URL] = [:]
+    private var artworkLeaseIDs: [String: String] = [:]
+    // These budgets apply to completed history only. Visible views and decoders
+    // keep their leases until their actual read lifetime ends.
+    private let artworkHistoryMaximumCount: Int
+    private let artworkHistoryMaximumBytes: Int
+    private var artworkReaders: [UUID: String] = [:]
+    private var artworkURLReaders: [UUID: URL] = [:]
+    private var retiredArtworkLeases: [URL: Set<String>] = [:]
+    private var artworkAccess: [String: UInt64] = [:]
+    private var artworkFileBytes: [String: Int] = [:]
+    private var artworkClock: UInt64 = 0
+    private var artworkReleaseTail: Task<Void, Never>?
+    private let viewerReaderID = UUID()
     @Published var artworkErrors: [String: String] = [:]
     @Published var artworkLowResolution: Set<String> = []
     @Published private(set) var artworkLoadGeneration = 0
@@ -119,10 +135,14 @@ import NativeBridgeKit
         let id = UUID()
         let jobID: String
         let key: String
+        let cacheKey: String
         let scope: String
+        let usesLease: Bool
         var operationID: String?
         var task: Task<Void, Never>?
-        init(jobID: String, key: String, scope: String) { self.jobID = jobID; self.key = key; self.scope = scope }
+        init(jobID: String, key: String, cacheKey: String, scope: String, usesLease: Bool) {
+            self.jobID = jobID; self.key = key; self.cacheKey = cacheKey; self.scope = scope; self.usesLease = usesLease
+        }
     }
     private var imageRequests: [UUID: ArtworkRequest] = [:]
     private var artworkRequestOwners: [String: UUID] = [:]
@@ -132,11 +152,13 @@ import NativeBridgeKit
     private var restoringPreferences = true
     static let workspacePreferencesKey = "workspacePreferences.v1"
 
-    init(worker: WorkerClient = WorkerClient(), engineExecutable: @escaping () throws -> URL = { try WorkerClient.bundledExecutable() }, engineArguments: [String]? = nil, defaults: UserDefaults = .standard) {
+    init(worker: WorkerClient = WorkerClient(), engineExecutable: @escaping () throws -> URL = { try WorkerClient.bundledExecutable() }, engineArguments: [String]? = nil, defaults: UserDefaults = .standard, artworkHistoryMaximumCount: Int = 24, artworkHistoryMaximumBytes: Int = 64 * 1024 * 1024) {
         self.worker = worker
         self.engineExecutable = engineExecutable
         self.engineArguments = engineArguments
         self.defaults = defaults
+        self.artworkHistoryMaximumCount = max(0, artworkHistoryMaximumCount)
+        self.artworkHistoryMaximumBytes = max(0, artworkHistoryMaximumBytes)
         appearance = defaults.string(forKey: "interfaceAppearance") ?? "system"
         language = AppLanguage.normalizePreference(defaults.string(forKey: "interfaceLanguage") ?? "system")
         skipSavePreview = defaults.bool(forKey: "skipSavePreview") // Migrate the former standalone preference.
@@ -246,6 +268,11 @@ import NativeBridgeKit
     var canRetryEngineStart: Bool {
         engineStartupFailed && !startupCompleted && !engineStarting && !ready && !working && !statusUnconfirmed && operationID == nil && discoveryReview == nil
     }
+    // A dead engine cannot keep writing, but native Trash may still be finishing.
+    // Unknown save outcomes remain unknown even when ending the UI session.
+    var canEndExitedEngineSession: Bool {
+        engineProcessExited && !hasPendingArtworkSelections && !trashRecycleInFlight && !artworkTrashFlowActive
+    }
 
     func start() async {
         guard !started else { return }; started = true
@@ -263,6 +290,7 @@ import NativeBridgeKit
     }
     private func initializeEngine(importLaunchFixture: Bool) async {
         engineStarting = true; engineStartupFailed = false; ready = false
+        engineProcessExited = false; engineExitCode = nil
         defer { engineStarting = false }
         await worker.setNotificationHandler { [weak self] event in Task { @MainActor in self?.receive(event) } }
         do {
@@ -303,14 +331,93 @@ import NativeBridgeKit
         let normalized = AppLanguage.normalizePreference(value)
         defaults.set(normalized, forKey: "interfaceLanguage"); language = normalized
     }
+    /// A reference document, never an executable plan or a claim that a save failed/succeeded.
+    /// Authoritative disk recovery continues to belong to the Worker's journal.
+    func reviewRecoveryDocument() throws -> JSONValue {
+        guard canEndExitedEngineSession else {
+            throw RPCFailure(code: -32010, message: tr("recoveryExportUnavailable"))
+        }
+        return .object([
+            "formatVersion": .number(1), "kind": .string("JavMetaLite.review-recovery"),
+            "createdAt": .string(ISO8601DateFormatter().string(from: Date())),
+            "engineProcessExited": .bool(true),
+            "engineExitCode": engineExitCode.map { .number(Double($0)) } ?? .null,
+            "operationOutcome": .string("unknown"),
+            "operationID": operationID.map(JSONValue.string) ?? .null,
+            "dataRoot": dataRoot.map(JSONValue.string) ?? .null,
+            "instructions": .string("Last received review snapshots and unsent drafts only. Save outcome is unknown. Reopen the app to inspect transaction recovery and reread the original files before applying any edits. Old revisions, operations and plans must never be replayed."),
+            "jobs": .array(jobs.map { job in .object([
+                "jobID": .string(job.jobID), "reviewRevision": .number(Double(job.reviewRevision)),
+                "metadata": job.metadata, "videoPaths": .array(job.videoPaths.map(JSONValue.string)),
+                "localNfoPath": job.localNfoPath.map(JSONValue.string) ?? .null,
+                "candidates": .array(job.candidates), "artwork": .array(job.artwork),
+                "searchState": .string(job.searchState), "saveState": .string(job.saveState),
+                "hasUnsavedChanges": .bool(job.hasUnsavedChanges)
+            ]) }),
+            "drafts": .object(drafts.mapValues { .object($0.mapValues(JSONValue.string)) }),
+            "checkedJobIDs": .array(checkedJobIDs.sorted().map(JSONValue.string)),
+            "selectedJobID": selectedID.map(JSONValue.string) ?? .null,
+            "recoveryWarnings": .array(recoveryWarnings.map(JSONValue.string))
+        ])
+    }
+    func exportReviewRecovery(to url: URL) throws {
+        guard url.isFileURL, url.pathExtension.lowercased() == "json" else {
+            throw RPCFailure(code: -32602, message: tr("recoveryExportJSON"))
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        let data = try encoder.encode(reviewRecoveryDocument())
+        // Atomic export failure/cancellation never clears drafts, checks or unknown state.
+        try data.write(to: url, options: .atomic)
+    }
+    @discardableResult func presentReviewRecoveryExport() -> Bool {
+        guard canEndExitedEngineSession, commitEditing() else { return false }
+        let panel = NSSavePanel()
+        panel.title = tr("exportReviewRecovery")
+        panel.message = tr("recoveryExportMessage")
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "JavMetaLite-review-recovery.json"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
+        do { try exportReviewRecovery(to: url); return true }
+        catch { display(error); return false }
+    }
+    /// Shared by Quit and close. No authorization is cached: later edits must be reviewed again.
+    func confirmEndExitedEngineSession(closingWindow: Bool = false) -> Bool {
+        guard canEndExitedEngineSession, commitEditing() else { return false }
+        let alert = NSAlert()
+        alert.messageText = tr("engineExited")
+        alert.informativeText = tr("engineExitedEndMessage")
+        alert.addButton(withTitle: tr("keepOpen"))
+        alert.addButton(withTitle: tr(closingWindow ? "exportAndClose" : "exportAndQuit"))
+        alert.addButton(withTitle: tr("endWithoutExport"))
+        alert.configureSafeCancelDefault()
+        switch alert.runSafeModal() {
+        case .alertSecondButtonReturn: return presentReviewRecoveryExport() && canEndExitedEngineSession
+        case .alertThirdButtonReturn:
+            let discard = NSAlert()
+            discard.messageText = tr("endWithoutExport")
+            discard.informativeText = tr("endWithoutExportMessage")
+            discard.addButton(withTitle: tr("keepOpen"))
+            discard.addButton(withTitle: tr("confirmEndSession"))
+            discard.configureSafeCancelDefault()
+            return discard.runSafeModal() == .alertSecondButtonReturn && canEndExitedEngineSession
+        default: return false
+        }
+    }
     func openLogs() { if let logRoot, !logRoot.isEmpty { NSWorkspace.shared.open(URL(fileURLWithPath: logRoot, isDirectory: true)) } }
     func receive(_ event: JSONValue) {
         let method = event["method"].stringValue, params = event["params"]
-        if method == "worker.unavailable" {
+        if method == "worker.exited" || method == "worker.unavailable" {
+            if method == "worker.exited" {
+                engineProcessExited = true
+                engineExitCode = params["exitCode"].intValue
+            }
             operationProgress.removeAll()
             statusUnconfirmed = statusUnconfirmed || startupCompleted || working || operationID != nil
             ready = false; working = false; preview = nil
-            errorMessage = tr("workerUnavailable"); return
+            confirmedSavePlanID = nil
+            errorMessage = tr(engineProcessExited ? "engineExited" : "workerUnavailable"); return
         }
         guard let progress = operationProgress.receive(method: method, params: params, protecting: operationID) else { return }
         if progress["operationId"].stringValue == operationID { applyOperationProgress(progress) }
@@ -326,14 +433,17 @@ import NativeBridgeKit
     }
     private func applySnapshot(_ snapshot: JSONValue, preserveEmptySelection: Bool = false) {
         let refreshed = snapshot["jobs"].arrayValue.map(MovieJobSnapshot.init)
-        let removed = Set(jobs.map(\.jobID)).subtracting(refreshed.map(\.jobID))
-        for id in removed { invalidateArtworkCache(jobID: id) }
-        for raw in snapshot["jobs"].arrayValue { update(raw) }
-        jobs = refreshed
-        retireReviewState(keeping: Set(refreshed.map(\.jobID)))
-        for job in refreshed { reconcileArtworkSource(job) }
-        for job in refreshed { jobLabels[job.jobID] = [job.metadata["id"].stringValue, job.metadata["title"].stringValue].filter { !$0.isEmpty }.joined(separator: " · ") }
-        recoveryWarnings = snapshot["recoveryWarnings"].arrayValue.map(\.stringValue)
+        let previousByID = Dictionary(jobs.map { ($0.jobID, $0) }, uniquingKeysWith: { _, last in last })
+        let available = Set(refreshed.map(\.jobID))
+        for previous in jobs where !available.contains(previous.jobID) {
+            invalidateArtworkCache(jobID: previous.jobID, previous: previous)
+        }
+        for job in refreshed { reconcileReviewState(job, previous: previousByID[job.jobID]) }
+        // Even an unchanged job list must retire orphaned drafts and undo stacks.
+        retireReviewState(keeping: available)
+        if jobs != refreshed { jobs = refreshed }
+        let warnings = snapshot["recoveryWarnings"].arrayValue.map(\.stringValue)
+        if recoveryWarnings != warnings { recoveryWarnings = warnings }
         if !snapshot["activeTrash"]["trashToken"].stringValue.isEmpty {
             pendingTrashToken = snapshot["activeTrash"]["trashToken"].stringValue
             if !working && !trashRecycleInFlight { statusUnconfirmed = true }
@@ -342,12 +452,16 @@ import NativeBridgeKit
             pendingTrashToken = nil
             if releasedLease { resumeArtworkAfterTrash() }
         }
-        let available = Set(jobs.map(\.jobID))
-        navigationSelection.formIntersection(available)
-        checkedJobIDs.formIntersection(available)
-        if navigationSelection.isEmpty { selectedID = preserveEmptySelection ? nil : jobs.first?.jobID }
-        else if navigationSelection.count == 1 { selectedID = navigationSelection.first }
-        else { selectedID = nil }
+        let navigation = navigationSelection.intersection(available)
+        let checked = checkedJobIDs.intersection(available)
+        if navigationSelection != navigation { navigationSelection = navigation }
+        if checkedJobIDs != checked { checkedJobIDs = checked }
+        let selection: String?
+        if navigation.isEmpty { selection = preserveEmptySelection ? nil : refreshed.first?.jobID }
+        else if navigation.count == 1 { selection = navigation.first }
+        else { selection = nil }
+        if selectedID != selection { selectedID = selection }
+        else if let selection, navigationSelection != [selection] { navigationSelection = [selection] }
     }
     private func retireReviewState(keeping available: Set<String>) {
         // A confirmed-parts save can retire jobs without calling remove(). Only
@@ -357,9 +471,11 @@ import NativeBridgeKit
             session?.onChange = nil
             session?.textView.undoManager?.removeAllActions()
         }
-        drafts = drafts.filter { available.contains($0.key) }
+        let retainedDrafts = drafts.filter { available.contains($0.key) }
+        if drafts != retainedDrafts { drafts = retainedDrafts }
         jobLabels = jobLabels.filter { available.contains($0.key) }
-        artworkSourceByJob = artworkSourceByJob.filter { available.contains($0.key) }
+        let retainedSources = artworkSourceByJob.filter { available.contains($0.key) }
+        if artworkSourceByJob != retainedSources { artworkSourceByJob = retainedSources }
     }
     func selectNavigation(_ ids: Set<String>) {
         invalidatePendingQueueUpdates()
@@ -490,30 +606,37 @@ import NativeBridgeKit
     func jobLabel(_ jobID: String) -> String { jobLabels[jobID] ?? tr("unknownID") }
     func update(_ snapshot: JSONValue) {
         let job = MovieJobSnapshot(snapshot)
-        if let previous = jobs.first(where: { $0.jobID == job.jobID }) {
+        let index = jobs.firstIndex(where: { $0.jobID == job.jobID })
+        let previous = index.map { jobs[$0] }
+        reconcileReviewState(job, previous: previous)
+        if let index {
+            if previous != job { jobs[index] = job }
+        } else { jobs.append(job) }
+    }
+    private func reconcileReviewState(_ job: MovieJobSnapshot, previous: MovieJobSnapshot?) {
+        if let previous, previous.reviewRevision != job.reviewRevision || previous.artwork != job.artwork {
             let retained = Set(job.artwork.filter { art in
                 let content = art["contentKey"].stringValue
                 return !content.isEmpty && previous.artwork.contains { $0["artworkId"] == art["artworkId"] && $0["contentKey"].stringValue == content }
             }.map { artworkKey($0, jobID: job.jobID) })
-            if previous.reviewRevision != job.reviewRevision || previous.artwork != job.artwork {
-                invalidateArtworkCache(jobID: job.jobID, retaining: retained)
-            }
+            invalidateArtworkCache(jobID: job.jobID, retaining: retained, previous: previous)
         }
         reconcileArtworkSource(job)
         jobLabels[job.jobID] = [job.metadata["id"].stringValue, job.metadata["title"].stringValue].filter { !$0.isEmpty }.joined(separator: " · ")
-        if let index = jobs.firstIndex(where: { $0.jobID == job.jobID }) { jobs[index] = job }
-        else { jobs.append(job) }
     }
-    private func invalidateArtworkCache(jobID: String, retaining keys: Set<String> = []) {
-        let previous = jobs.first(where: { $0.jobID == jobID })
+    private func invalidateArtworkCache(jobID: String, retaining keys: Set<String> = [], previous indexedPrevious: MovieJobSnapshot? = nil) {
+        let previous = indexedPrevious ?? jobs.first(where: { $0.jobID == jobID })
         let retainedRequests = Set((previous?.artwork ?? []).filter { keys.contains(artworkKey($0, jobID: jobID)) }
             .map { artworkRequestKey($0, job: previous!) })
         for request in imageRequests.values where request.jobID == jobID && !retainedRequests.contains(request.key) { cancelArtworkRequest(request) }
         let prefix = jobID + "/"
+        releaseArtworkLeases(for: Set(artworkLeaseIDs.keys.filter { $0.hasPrefix(prefix) && !keys.contains($0) }))
         artworkPaths = artworkPaths.filter { !$0.key.hasPrefix(prefix) || keys.contains($0.key) }
         artworkErrors = artworkErrors.filter { !$0.key.hasPrefix(prefix) || keys.contains($0.key) }
         artworkDimensions = artworkDimensions.filter { !$0.key.hasPrefix(prefix) || keys.contains($0.key) }
         artworkLowResolution = Set(artworkLowResolution.filter { !$0.hasPrefix(prefix) || keys.contains($0) })
+        artworkAccess = artworkAccess.filter { artworkPaths[$0.key] != nil }
+        artworkFileBytes = artworkFileBytes.filter { artworkPaths[$0.key] != nil }
     }
     private func reconcileArtworkSource(_ job: MovieJobSnapshot) {
         if let selected = artworkSourceByJob[job.jobID], !ArtworkReviewPolicy.sources(job.artwork).contains(selected) { artworkSourceByJob.removeValue(forKey: job.jobID) }
@@ -830,10 +953,13 @@ import NativeBridgeKit
         viewerSource = source
         viewerArtwork = ArtworkReviewPolicy.filtered(job.artwork, source: source)
         viewerIndex = ArtworkReviewPolicy.entryIndex(viewerArtwork, artworkID: currentID)
-        if viewerArtwork.indices.contains(viewerIndex) { loadArtwork(viewerArtwork[viewerIndex], jobID: job.jobID, scope: "viewer") }
+        if viewerArtwork.indices.contains(viewerIndex) {
+            beginArtworkRead(viewerArtwork[viewerIndex], jobID: job.jobID, readerID: viewerReaderID, scope: "viewer")
+        } else { endArtworkRead(viewerReaderID) }
     }
     func closeArtworkViewer() {
-        for request in imageRequests.values where request.scope == "viewer" { cancelArtworkRequest(request) }
+        endArtworkRead(viewerReaderID)
+        for request in imageRequests.values where request.scope == "viewer" && !artworkReaders.values.contains(request.cacheKey) { cancelArtworkRequest(request) }
     }
     func selectCandidate(_ candidate: JSONValue, jobID: String) {
         perform {
@@ -940,7 +1066,7 @@ import NativeBridgeKit
     }
     /// Reconcile only by reads. In particular, never resend save.execute after a timeout.
     @discardableResult func checkStatus() -> Task<Void, Never>? {
-        guard !working else { return nil }
+        guard !working, !engineProcessExited else { return nil }
         working = true
         return Task {
             defer { working = false; if !statusUnconfirmed { operationID = nil; phase = "" } }
@@ -1144,7 +1270,9 @@ import NativeBridgeKit
     }
     private func applyTrashResult(_ result: JSONValue) {
         for snapshot in result["jobs"].arrayValue { update(snapshot) }
+        releaseArtworkLeases(for: Set(artworkLeaseIDs.keys))
         artworkPaths.removeAll(); artworkDimensions.removeAll(); artworkErrors.removeAll(); artworkLowResolution.removeAll()
+        artworkAccess.removeAll(); artworkFileBytes.removeAll()
         pendingTrashToken = nil; previewStale = true
         operationWarnings = result["warnings"].arrayValue.map(\.stringValue)
         operationHadProblems = !operationWarnings.isEmpty
@@ -1181,13 +1309,13 @@ import NativeBridgeKit
         viewerSource = ""
         viewerJobID = job.jobID; viewerArtwork = job.artwork
         viewerIndex = ArtworkReviewPolicy.entryIndex(viewerArtwork, artworkID: artwork["artworkId"].stringValue)
-        loadArtwork(artwork, jobID: job.jobID, scope: "viewer"); showingImage = true
+        showingImage = true
+        beginArtworkRead(artwork, jobID: job.jobID, readerID: viewerReaderID, scope: "viewer")
     }
     func moveViewer(by offset: Int) {
         guard viewerArtwork.indices.contains(viewerIndex + offset) else { return }
         viewerIndex += offset
-        for request in imageRequests.values where request.scope == "viewer" { cancelArtworkRequest(request) }
-        loadArtwork(viewerArtwork[viewerIndex], jobID: viewerJobID, scope: "viewer")
+        beginArtworkRead(viewerArtwork[viewerIndex], jobID: viewerJobID, readerID: viewerReaderID, scope: "viewer")
     }
     func artworkKey(_ artwork: JSONValue, jobID: String) -> String {
         jobID + "/" + artwork["artworkId"].stringValue
@@ -1201,14 +1329,91 @@ import NativeBridgeKit
         return artworkRequestKey(art, job: job) == key
     }
     private func cancelArtworkRequests(except jobIDs: Set<String>) {
-        for request in imageRequests.values where request.scope != "queue" && !jobIDs.contains(request.jobID) { cancelArtworkRequest(request) }
+        for request in imageRequests.values where request.scope != "queue" && !jobIDs.contains(request.jobID) && !artworkReaders.values.contains(request.cacheKey) { cancelArtworkRequest(request) }
     }
     private func cancelArtworkRequests(for jobID: String) {
         for request in imageRequests.values where request.jobID == jobID { cancelArtworkRequest(request) }
     }
     private func cancelArtworkRequest(_ request: ArtworkRequest) {
         request.task?.cancel()
+        // The client knows the lease before the operation reply. Releasing it
+        // revokes in-flight generation as well as a completed preview.
+        if request.usesLease { releaseArtworkLease(request.id.uuidString) }
         if let id = request.operationID { Task { _ = try? await worker.request("operations.cancel", params: .object(["operationId": .string(id)])) } }
+    }
+    private func releaseArtworkLease(_ leaseID: String) {
+        let previous = artworkReleaseTail
+        artworkReleaseTail = Task {
+            await previous?.value
+            _ = try? await worker.request("artwork.releasePreview", params: .object(["leaseId": .string(leaseID)]))
+        }
+    }
+    private func releaseArtworkLeases(for keys: Set<String>) {
+        for key in keys {
+            if let lease = artworkLeaseIDs.removeValue(forKey: key) {
+                if let url = artworkPaths[key], artworkURLReaders.values.contains(url) {
+                    // Retain exact retired IDs: another job/generation can adopt
+                    // a new lease for the same immutable content URL meanwhile.
+                    retiredArtworkLeases[url, default: []].insert(lease)
+                } else { releaseArtworkLease(lease) }
+            }
+            artworkAccess.removeValue(forKey: key)
+            artworkFileBytes.removeValue(forKey: key)
+        }
+    }
+    func beginArtworkRead(_ artwork: JSONValue, jobID: String, readerID: UUID, scope: String = "detail") {
+        let key = artworkKey(artwork, jobID: jobID)
+        let old = artworkReaders.updateValue(key, forKey: readerID)
+        if let old, old != key { cancelUnobservedArtwork(old) }
+        touchArtwork(key)
+        loadArtwork(artwork, jobID: jobID, scope: scope)
+        trimArtworkHistory()
+    }
+    func endArtworkRead(_ readerID: UUID) {
+        if let key = artworkReaders.removeValue(forKey: readerID) { cancelUnobservedArtwork(key) }
+        trimArtworkHistory()
+    }
+    private func cancelUnobservedArtwork(_ key: String) {
+        guard !artworkReaders.values.contains(key) else { return }
+        for request in imageRequests.values where request.cacheKey == key { cancelArtworkRequest(request) }
+    }
+    func beginArtworkURLRead(_ url: URL) -> UUID? {
+        guard artworkPaths.values.contains(url) else { return nil }
+        let token = UUID()
+        artworkURLReaders[token] = url
+        return token
+    }
+    func endArtworkURLRead(_ token: UUID) {
+        if let url = artworkURLReaders.removeValue(forKey: token), !artworkURLReaders.values.contains(url) {
+            for lease in retiredArtworkLeases.removeValue(forKey: url) ?? [] { releaseArtworkLease(lease) }
+        }
+        trimArtworkHistory()
+    }
+    private func touchArtwork(_ key: String) {
+        guard artworkPaths[key] != nil else { return }
+        artworkClock &+= 1
+        artworkAccess[key] = artworkClock
+    }
+    private var historicalArtworkKeys: [String] {
+        let visible = Set(artworkReaders.values), decoding = Set(artworkURLReaders.values)
+        return artworkPaths.keys.filter { !visible.contains($0) && !decoding.contains(artworkPaths[$0]!) }
+    }
+    var artworkPreviewRetention: (files: Int, historical: Int, historyBytes: Int, readers: Int, decoders: Int, retiredLeases: Int) {
+        let history = historicalArtworkKeys
+        return (artworkPaths.count, history.count, history.reduce(0) { $0 + (artworkFileBytes[$1] ?? 0) },
+                artworkReaders.count, artworkURLReaders.count, retiredArtworkLeases.values.reduce(0) { $0 + $1.count })
+    }
+    private func trimArtworkHistory() {
+        let history = historicalArtworkKeys.sorted { (artworkAccess[$0] ?? 0) < (artworkAccess[$1] ?? 0) }
+        var count = history.count, bytes = history.reduce(0) { $0 + (artworkFileBytes[$1] ?? 0) }
+        for key in history {
+            guard count > artworkHistoryMaximumCount || bytes > artworkHistoryMaximumBytes else { break }
+            count -= 1; bytes -= artworkFileBytes[key] ?? 0
+            releaseArtworkLeases(for: [key])
+            artworkPaths.removeValue(forKey: key)
+            // Dimensions and low-resolution warnings describe reviewed content,
+            // not the generated payload; keep them until content invalidation.
+        }
     }
     private func cancelAllArtworkAndWait() async {
         let requests = Array(imageRequests.values)
@@ -1229,18 +1434,43 @@ import NativeBridgeKit
         guard let job = jobs.first(where: { $0.jobID == jobID }),
               let current = job.artwork.first(where: { $0["artworkId"] == artwork["artworkId"] }) else { return }
         let taskKey = artworkRequestKey(current, job: job)
+        if let cached = artworkPaths[id] {
+            // Caches can be cleared outside the app. A stale URL must re-enter
+            // the leased Worker path instead of leaving the viewer loading forever.
+            let attributes = try? FileManager.default.attributesOfItem(atPath: cached.path)
+            if attributes?[.type] as? FileAttributeType == .typeRegular {
+                touchArtwork(id); trimArtworkHistory(); return
+            }
+            releaseArtworkLeases(for: [id])
+            artworkPaths.removeValue(forKey: id)
+            artworkDimensions.removeValue(forKey: id)
+            artworkErrors.removeValue(forKey: id)
+            artworkLowResolution.remove(id)
+        }
         guard artworkPaths[id] == nil, !imageRequests.values.contains(where: { $0.key == taskKey && $0.task?.isCancelled == false }) else { return }
-        let request = ArtworkRequest(jobID: jobID, key: taskKey, scope: scope)
+        let request = ArtworkRequest(jobID: jobID, key: taskKey, cacheKey: id, scope: scope,
+                                     usesLease: capabilities["artworkPreviewLeases"].boolValue)
         imageRequests[request.id] = request
         artworkRequestOwners[taskKey] = request.id
         artworkErrors.removeValue(forKey: id)
         request.task = Task {
+            var adoptedLease = false
             defer {
+                // Also releases after a timeout/lost reply. A canceled operation
+                // must not leave a completed, unowned preview pinned forever.
+                if request.usesLease && !adoptedLease { releaseArtworkLease(request.id.uuidString) }
                 imageRequests.removeValue(forKey: request.id)
                 if artworkRequestOwners[taskKey] == request.id { artworkRequestOwners.removeValue(forKey: taskKey) }
+                trimArtworkHistory()
             }
             do {
-                let accepted = try await worker.request("artwork.getPreview", params: .object(["jobId": .string(jobID), "artworkId": artwork["artworkId"], "async": .bool(true)]))
+                // Reclamation must reach the Worker before a new admission can
+                // overtake it, especially with a small cache budget.
+                await artworkReleaseTail?.value
+                try Task.checkCancellation()
+                var params: [String: JSONValue] = ["jobId": .string(jobID), "artworkId": artwork["artworkId"], "async": .bool(true)]
+                if request.usesLease { params["leaseId"] = .string(request.id.uuidString) }
+                let accepted = try await worker.request("artwork.getPreview", params: .object(params))
                 let operation = accepted["operationId"].stringValue
                 request.operationID = operation.isEmpty ? nil : operation
                 var response = accepted
@@ -1260,7 +1490,17 @@ import NativeBridgeKit
                 try Task.checkCancellation()
                 guard !cachePath.isEmpty, url.path.hasPrefix(cacheRoot.path + "/") else { throw RPCFailure(code: -32603, message: "Rejected an image outside the engine cache.") }
                 guard artworkRequestOwners[taskKey] == request.id, isCurrentArtworkRequest(taskKey, artworkID: artwork["artworkId"], jobID: jobID) else { return }
+                if request.usesLease {
+                    guard response["leaseId"].stringValue == request.id.uuidString else {
+                        throw RPCFailure(code: -32603, message: "The engine did not confirm the preview lease.")
+                    }
+                    releaseArtworkLeases(for: [id])
+                    artworkLeaseIDs[id] = request.id.uuidString
+                    adoptedLease = true
+                }
                 artworkPaths[id] = url
+                artworkFileBytes[id] = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                touchArtwork(id)
                 artworkErrors.removeValue(forKey: id)
                 artworkDimensions[id] = CGSize(width: response["width"].intValue, height: response["height"].intValue)
                 if response["isLowResolution"].boolValue { artworkLowResolution.insert(id) } else { artworkLowResolution.remove(id) }

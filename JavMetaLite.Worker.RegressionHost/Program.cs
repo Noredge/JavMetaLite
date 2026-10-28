@@ -21,6 +21,7 @@ if (string.IsNullOrWhiteSpace(dataRoot) || !Path.IsPathFullyQualified(dataRoot))
 var configPath = ArgumentOrEnvironment("--fixture-config", "JAVMETALITE_REGRESSION_CONFIG");
 using var fixtures = new FixedHttp();
 var timeout = 150;
+ArtworkDiskCacheLimits? artworkCacheLimits = null;
 if (!string.IsNullOrWhiteSpace(configPath))
 {
     if (!Path.IsPathFullyQualified(configPath)) throw new ArgumentException("An absolute fixture configuration path is required.");
@@ -28,10 +29,13 @@ if (!string.IsNullOrWhiteSpace(configPath))
     fixtures.Configure(config.RootElement);
     if (config.RootElement.TryGetProperty("providerTimeoutMilliseconds", out var configuredTimeout)) timeout = configuredTimeout.GetInt32();
     if (timeout is < 1 or > 60000) throw new ArgumentException("Provider fixture timeout must be between 1 and 60000 ms.");
+    if (config.RootElement.TryGetProperty("artworkCacheLimits", out var cacheLimits))
+        artworkCacheLimits = new(cacheLimits.GetProperty("maximumBytes").GetInt64(),
+            cacheLimits.GetProperty("maximumFiles").GetInt32(), cacheLimits.GetProperty("maximumLeases").GetInt32());
 }
 await using var wire = new RpcWriter(Console.OpenStandardOutput());
 await using var workspace = new Workspace(wire, dataRoot, fixtures.CreateProvider, TimeSpan.FromMilliseconds(timeout), fixtures.CreateOrganization,
-    fixtures.Discover, fixtures.UtcNow, fixtures.BeforePreviewRead);
+    fixtures.Discover, fixtures.UtcNow, fixtures.BeforePreviewRead, artworkCacheLimits, fixtures.AfterSidecarInventoryCapture);
 try
 {
     await foreach (var line in Framing.ReadLines(Console.OpenStandardInput()))
@@ -74,6 +78,8 @@ sealed class FixedHttp : HttpMessageHandler
     private int _discoveryDelayMilliseconds;
     private bool _holdPreviewRead, _ignorePreviewReadCancellation, _previewReadFailure;
     private string? _previewReadGateFile;
+    private bool _holdSidecarInventory;
+    private string? _sidecarInventoryPhase;
     public FixedHttp() => _scheduler = NewScheduler();
     private R18RequestScheduler NewScheduler() => new(TimeSpan.Zero, TimeSpan.FromSeconds(30),
         () => { lock (_gate) return _now; }, async (delay, token) =>
@@ -138,6 +144,16 @@ sealed class FixedHttp : HttpMessageHandler
         }
         finally { lock (_gate) _requests.Add(new { kind = "previewReadReturned", canceled = token.IsCancellationRequested }); }
     }
+    public void AfterSidecarInventoryCapture(string phase, string directory, CancellationToken token)
+    {
+        lock (_gate) _requests.Add(new { kind = "sidecarInventoryCaptured", phase });
+        while (true)
+        {
+            token.ThrowIfCancellationRequested();
+            lock (_gate) if (!_holdSidecarInventory || _sidecarInventoryPhase is not null && _sidecarInventoryPhase != phase) return;
+            Thread.Sleep(10);
+        }
+    }
     public object Configure(JsonElement p)
     {
         lock (_gate)
@@ -146,6 +162,12 @@ sealed class FixedHttp : HttpMessageHandler
             if (p.TryGetProperty("holdScheduler", out var hold)) _holdScheduler = hold.GetBoolean();
             if (p.TryGetProperty("cleanupFailure", out var cleanup)) _cleanupFailure = cleanup.GetBoolean();
             if (p.TryGetProperty("discoveryReadFailures", out var failures)) _discoveryReadFailures = failures.EnumerateArray().Select(v => v.GetString()!).ToArray();
+            if (p.TryGetProperty("holdSidecarInventory", out var inventoryHold)) _holdSidecarInventory = inventoryHold.GetBoolean();
+            if (p.TryGetProperty("sidecarInventoryPhase", out var inventoryPhase))
+            {
+                _sidecarInventoryPhase = inventoryPhase.ValueKind == JsonValueKind.Null ? null : inventoryPhase.GetString();
+                if (_sidecarInventoryPhase is not (null or "importDiscovery" or "save.preview")) throw new ArgumentException("Unknown sidecar inventory phase.");
+            }
             if (p.TryGetProperty("holdDiscovery", out var discoveryHold)) _holdDiscovery = discoveryHold.GetBoolean();
             if (p.TryGetProperty("discoveryDelayMilliseconds", out var discoveryDelay)) _discoveryDelayMilliseconds = discoveryDelay.GetInt32();
             if (p.TryGetProperty("holdPreviewRead", out var previewHold)) _holdPreviewRead = previewHold.GetBoolean();

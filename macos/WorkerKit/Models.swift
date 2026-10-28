@@ -58,7 +58,7 @@ public struct InputDiscoveryReview: Sendable {
     }
 }
 
-public struct MovieJobSnapshot: Identifiable, Sendable {
+public struct MovieJobSnapshot: Identifiable, Sendable, Equatable {
     public var id: String { jobID }
     public let jobID: String
     public let reviewRevision: Int

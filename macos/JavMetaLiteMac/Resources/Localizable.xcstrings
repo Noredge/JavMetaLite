@@ -12460,6 +12460,370 @@
           }
         }
       }
+    },
+    "engineExited": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The metadata engine has exited"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "资料引擎已退出"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "資料引擎已結束"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メタデータエンジンが終了しました"
+          }
+        }
+      }
+    },
+    "engineExitedEndMessage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The engine process has ended. Save results remain unknown. Export the last reviewed metadata and unsent drafts before ending this session. Reopen the app to inspect recovery and reread files."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "引擎进程已结束，保存结果仍未确认。请先导出最后收到的审核资料与未提交草稿，再结束会话。重新打开后应检查恢复记录并重新读取文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "引擎程序已結束，儲存結果仍未確認。請先匯出最後收到的審核資料與未送出草稿，再結束工作階段。重新開啟後應檢查復原紀錄並重新讀取檔案。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エンジンのプロセスは終了しました。保存結果は未確認です。最後に受信した確認内容と未送信の下書きを書き出してから終了してください。再起動後に復旧記録と元のファイルを確認してください。"
+          }
+        }
+      }
+    },
+    "exportReviewRecovery": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Review…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出审核草稿…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯出審核草稿…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認内容を書き出す…"
+          }
+        }
+      }
+    },
+    "recoveryExportMessage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exports a JSON reference containing local paths, reviewed metadata and unsent drafts. It does not write movie files or confirm a save result."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出含本机路径、审核资料与未提交草稿的 JSON 参考文件；不会写入影片文件，也不代表保存结果已确认。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯出含本機路徑、審核資料與未送出草稿的 JSON 參考檔；不會寫入影片檔案，也不代表儲存結果已確認。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ローカルパス、確認済みメタデータ、未送信の下書きを JSON に書き出します。動画ファイルの変更や保存結果の確定は行いません。"
+          }
+        }
+      }
+    },
+    "recoveryExportUnavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wait until the engine process has exited and native file operations have finished before exporting this recovery document."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请等待引擎进程确认退出及原生文件操作结束后，再导出恢复参考文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請等待引擎程序確認結束及原生檔案操作完成後，再匯出復原參考檔。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エンジンの終了とネイティブのファイル操作の完了を確認してから書き出してください。"
+          }
+        }
+      }
+    },
+    "recoveryExportJSON": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a JSON file for the recovery document."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择 JSON 文件作为恢复参考文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請選擇 JSON 檔案作為復原參考檔。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "書き出し先に JSON ファイルを選択してください。"
+          }
+        }
+      }
+    },
+    "exportAndQuit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Review and Quit…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出草稿并退出…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯出草稿並結束…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "書き出して終了…"
+          }
+        }
+      }
+    },
+    "exportAndClose": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Review and Close…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出草稿并关闭…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯出草稿並關閉…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "書き出して閉じる…"
+          }
+        }
+      }
+    },
+    "endWithoutExport": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End Without Export…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不导出，结束会话…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不匯出，結束工作階段…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "書き出さずに終了…"
+          }
+        }
+      }
+    },
+    "endWithoutExportMessage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unexported review changes and drafts will be lost when the app quits. Save results remain unknown; existing transaction recovery files will be kept."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出后，未导出的审核修改和草稿将丢失。保存结果仍未确认，已有事务恢复文件会保留。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "結束後，未匯出的審核修改和草稿將遺失。儲存結果仍未確認，既有交易復原檔案會保留。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリを終了すると、書き出していない確認内容と下書きが失われます。保存結果は未確認のままで、既存のトランザクション復旧ファイルは保持されます。"
+          }
+        }
+      }
+    },
+    "confirmEndSession": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End Session"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认结束会话"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認結束工作階段"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セッションを終了"
+          }
+        }
+      }
+    },
+    "endSession": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End Session…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结束会话…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "結束工作階段…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セッションを終了…"
+          }
+        }
+      }
+    },
+    "error.ARTWORK_CACHE_CAPACITY": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The preview cache is full. Remove movies you no longer need from the queue, then retry. Images still in use are protected."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览缓存已满。请从队列移除不再需要的影片后重试；正在使用的图片会保留。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "預覽快取已滿。請從佇列移除不再需要的影片後重試；使用中的圖片會保留。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プレビューキャッシュが満杯です。不要な動画をキューから取り除いて再試行してください。使用中の画像は保持されます。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -101,6 +101,67 @@ struct WorkerKitTests {
         var framer = LineFramer()
         #expect(throws: (any Error).self) { try framer.append(Data(repeating: 65, count: LineFramer.maximumBytes + 1)) }
     }
+    @Test func testFramerEmptyChunksAndAdjacentFramesAcrossEverySplit() throws {
+        let wire = Data("\n{}\r\n\n{\"text\":\"中文\\nsecond line\"}\nlast\n\n".utf8)
+        let expected = [Data("{}\r".utf8), Data("{\"text\":\"中文\\nsecond line\"}".utf8), Data("last".utf8)]
+        for split in 0...wire.count {
+            var framer = LineFramer()
+            #expect(try framer.append(Data()).isEmpty)
+            var output = try framer.append(wire[..<split])
+            #expect(try framer.append(Data()).isEmpty)
+            output += try framer.append(wire[split...])
+            #expect(output == expected)
+            #expect(!framer.hasIncompleteMessage)
+            #expect(try framer.append(Data()).isEmpty)
+        }
+    }
+    @Test func testFramerAcceptsNonzeroDataSliceIndicesAndRetainsPartialTail() throws {
+        var framer = LineFramer()
+        let first = Data("ignore{}\n\n{\"a\":1}\n{".utf8).dropFirst(6)
+        let second = Data("skip\"z\":2}\n\n".utf8).dropFirst(4)
+        #expect(first.startIndex != 0 && second.startIndex != 0)
+        #expect(try framer.append(first) == [Data("{}".utf8), Data("{\"a\":1}".utf8)])
+        #expect(framer.hasIncompleteMessage)
+        #expect(try framer.append(second) == [Data("{\"z\":2}".utf8)])
+        #expect(!framer.hasIncompleteMessage)
+    }
+    @Test(arguments: [false, true])
+    func testFramerAcceptsExactMaximumFrameAndFollowingFrame(separateDelimiter: Bool) throws {
+        var framer = LineFramer()
+        let payload = Data(repeating: 65, count: LineFramer.maximumBytes)
+        let output: [Data]
+        if separateDelimiter {
+            for offset in stride(from: 0, to: payload.count, by: 16384) {
+                #expect(try framer.append(payload[offset..<min(payload.count, offset + 16384)]).isEmpty)
+            }
+            #expect(framer.hasIncompleteMessage)
+            output = try framer.append(Data("\n{}\n\n".utf8))
+        } else {
+            var chunk = payload
+            chunk.append(contentsOf: "\n{}\n\n".utf8)
+            output = try framer.append(chunk)
+        }
+        #expect(output == [payload, Data("{}".utf8)])
+        #expect(!framer.hasIncompleteMessage)
+    }
+    @Test(arguments: [false, true])
+    func testFramerRejectsOversizedTerminatedFrameAfterValidPrefix(fragmented: Bool) throws {
+        var framer = LineFramer()
+        #expect(try framer.append(Data("{}\n\n".utf8)) == [Data("{}".utf8)])
+        do {
+            if fragmented {
+                #expect(try framer.append(Data(repeating: 65, count: LineFramer.maximumBytes)).isEmpty)
+                _ = try framer.append(Data([65, 10]))
+            } else {
+                var oversized = Data(repeating: 65, count: LineFramer.maximumBytes + 1)
+                oversized.append(10)
+                _ = try framer.append(oversized)
+            }
+            Issue.record("An oversized frame must be rejected even when its newline has arrived.")
+        } catch let failure as RPCFailure {
+            #expect(failure.code == -32600 && failure.message == "Protocol message exceeds 8 MiB.")
+        }
+    }
     @Test func testJSONKeepsRawValuesAndActorStructures() throws {
         let json = JSONValue.object(["releaseDate": .string("Unknown / 2026"), "runtimeMinutes": .string("90+"), "rating": .string("N/A"), "actors": .array([.object(["name": .string("合成角色"), "imageUrl": .string("https://example.invalid/actor.png")])]), "plot": .string("line one\nline two"), "unknownFutureField": .bool(true)])
         #expect(try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(json)) == json)

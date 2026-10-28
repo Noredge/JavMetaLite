@@ -33,11 +33,15 @@ public static class MovieJobLoader
         return await LoadAsync(job, fileSet.VideoPaths, imageProcessor, cancellationToken);
     }
 
-    public static async Task<MovieJobLoadResult> LoadAsync(
+    public static Task<MovieJobLoadResult> LoadAsync(
         MovieJob job,
         IEnumerable<string> videoPaths,
         IArtworkImageProcessor imageProcessor,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        LoadAsync(job, videoPaths, imageProcessor, null, cancellationToken);
+
+    internal static async Task<MovieJobLoadResult> LoadAsync(MovieJob job, IEnumerable<string> videoPaths,
+        IArtworkImageProcessor imageProcessor, LocalSidecarInventoryScope? inventory, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(job);
         ArgumentNullException.ThrowIfNull(videoPaths);
@@ -56,7 +60,7 @@ public static class MovieJobLoader
             sidecars = LocalSidecarLocator.Locate(
                 normalizedPath,
                 fileSet.MovieBaseName,
-                fileSet.UsesMultipartNaming);
+                fileSet.UsesMultipartNaming, inventory, cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

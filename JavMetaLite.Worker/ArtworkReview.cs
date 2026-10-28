@@ -110,9 +110,9 @@ internal sealed partial class Workspace
             reason = check?.IsLowResolution == true ? "smallFullCover" : null };
     }
 
-    private async Task<object> LoadReviewedArtworkPreview(Entry entry, ArtworkSource source, long qualityRevision, CancellationToken token)
+    private async Task<object> LoadReviewedArtworkPreview(Entry entry, ArtworkSource source, long qualityRevision, ArtworkDiskCache.Lease lease, CancellationToken token)
     {
-        var preview = await LoadArtworkPreview(source, token);
+        var preview = await LoadArtworkPreview(source, lease, token);
         token.ThrowIfCancellationRequested();
         lock (_gate)
         {

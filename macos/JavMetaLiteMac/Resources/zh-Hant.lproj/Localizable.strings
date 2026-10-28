@@ -445,3 +445,16 @@
 "reviewSaveConsent" = "確認儲存即套用下列變更，包括替換列出的現有 NFO 和圖片；影片不會被覆寫。";
 
 "preferencesSavedAutomatically" = "設定會自動記住，下次開啟時還原。";
+"engineExited" = "資料引擎已結束";
+"engineExitedEndMessage" = "引擎程序已結束，儲存結果仍未確認。請先匯出最後收到的審核資料與未送出草稿，再結束工作階段。重新開啟後應檢查復原紀錄並重新讀取檔案。";
+"exportReviewRecovery" = "匯出審核草稿…";
+"recoveryExportMessage" = "匯出含本機路徑、審核資料與未送出草稿的 JSON 參考檔；不會寫入影片檔案，也不代表儲存結果已確認。";
+"recoveryExportUnavailable" = "請等待引擎程序確認結束及原生檔案操作完成後，再匯出復原參考檔。";
+"recoveryExportJSON" = "請選擇 JSON 檔案作為復原參考檔。";
+"exportAndQuit" = "匯出草稿並結束…";
+"exportAndClose" = "匯出草稿並關閉…";
+"endWithoutExport" = "不匯出，結束工作階段…";
+"endWithoutExportMessage" = "結束後，未匯出的審核修改和草稿將遺失。儲存結果仍未確認，既有交易復原檔案會保留。";
+"confirmEndSession" = "確認結束工作階段";
+"endSession" = "結束工作階段…";
+"error.ARTWORK_CACHE_CAPACITY" = "預覽快取已滿。請從佇列移除不再需要的影片後重試；使用中的圖片會保留。";

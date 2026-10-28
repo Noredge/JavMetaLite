@@ -109,28 +109,49 @@ internal sealed partial class Workspace
     private async Task<object> GetArtworkPreview(JsonElement p)
     {
         foreach (var property in p.EnumerateObject())
-            if (property.Name is not ("jobId" or "artworkId" or "async"))
+            if (property.Name is not ("jobId" or "artworkId" or "async" or "leaseId"))
                 throw new RpcError(-32602, "INVALID_PARAMS", "Artwork previews accept registered artwork IDs, not URLs or replacement candidates.");
         ArtworkSource source;
         Entry entry;
         long qualityRevision;
+        ArtworkDiskCache.Lease lease;
+        var asynchronous = Bool(p, "async", false);
         lock (_gate)
         {
             var e = GetJob(p); EnsureIdle(e);
             entry = e; qualityRevision = e.Job.CoverResolutionRevision;
             source = ArtworkSources(e).FirstOrDefault(x => x.ArtworkId == Text(p, "artworkId"))
                 ?? throw new RpcError(-32602, "ARTWORK_NOT_FOUND", "Choose artwork from the imported job.");
-            if (Bool(p, "async", false))
-                return StartOperation(e.Id, async operation =>
+            var requestedLease = p.TryGetProperty("leaseId", out _) ? Text(p, "leaseId") : null;
+            lease = _artworkCache.Reserve(e.Id, requestedLease);
+            if (asynchronous)
+            {
+                try { return StartOperation(e.Id, async operation =>
                 {
                     Progress(operation, "loadingArtworkPreview");
-                    return await LoadReviewedArtworkPreview(e, source, qualityRevision, operation.Cancellation.Token);
-                }, readOnly: true);
+                    return await RunArtworkPreview(e, source, qualityRevision, lease, operation.Cancellation.Token);
+                }, readOnly: true); }
+                catch { _artworkCache.FinishLoad(lease, false); throw; }
+            }
         }
-        return await LoadReviewedArtworkPreview(entry, source, qualityRevision, CancellationToken.None);
+        return await RunArtworkPreview(entry, source, qualityRevision, lease, CancellationToken.None);
     }
 
-    private async Task<ArtworkPreview> LoadArtworkPreview(ArtworkSource source, CancellationToken operationToken)
+    private async Task<object> RunArtworkPreview(Entry entry, ArtworkSource source, long qualityRevision,
+        ArtworkDiskCache.Lease lease, CancellationToken operationToken)
+    {
+        var succeeded = false;
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(operationToken, lease.Cancellation.Token);
+        try
+        {
+            var result = await LoadReviewedArtworkPreview(entry, source, qualityRevision, lease, linked.Token);
+            succeeded = true;
+            return result;
+        }
+        finally { _artworkCache.FinishLoad(lease, succeeded); }
+    }
+
+    private async Task<ArtworkPreview> LoadArtworkPreview(ArtworkSource source, ArtworkDiskCache.Lease lease, CancellationToken operationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(operationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
@@ -199,23 +220,13 @@ internal sealed partial class Workspace
         var png = bytes.Length >= 8 && bytes[0] == 137 && bytes[1] == 80 && bytes[2] == 78 && bytes[3] == 71;
         var jpeg = bytes.Length >= 3 && bytes[0] == 255 && bytes[1] == 216 && bytes[2] == 255;
         if (!png && !jpeg) { bytes = _images.CreateFanartPng(bytes); png = true; }
+        if (bytes.Length > MaximumPreviewBytes)
+            throw new RpcError(-32010, "ARTWORK_INVALID", "Converted preview exceeds 20 MiB.");
         cancellationToken.ThrowIfCancellationRequested();
-        var cacheId = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-        var path = Path.Combine(_cacheRoot, cacheId + (png ? ".png" : ".jpg"));
-        if (!File.Exists(path))
-        {
-            var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-            try
-            {
-                await File.WriteAllBytesAsync(temporary, bytes, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                File.Move(temporary, path, overwrite: true);
-            }
-            finally { if (File.Exists(temporary)) File.Delete(temporary); }
-        }
-        return new(cacheId, path, png ? "image/png" : "image/jpeg", dimensions.Width, dimensions.Height, bytes.Length,
+        var cached = await _artworkCache.PublishAsync(bytes, png, lease, cancellationToken);
+        return new(cached.CacheId, cached.Path, png ? "image/png" : "image/jpeg", dimensions.Width, dimensions.Height, bytes.Length,
             source.Kind == "fanart" && new CoverResolutionCheck(resolvedLocation, dimensions.Width, dimensions.Height).IsLowResolution,
-            resolvedLocation, usedFallback, attempts);
+            resolvedLocation, usedFallback, attempts, lease.Explicit ? lease.Id : null);
         }
         finally { _artworkSlots.Release(); }
     }
@@ -233,6 +244,6 @@ internal sealed partial class Workspace
     }
     private sealed record ArtworkAttempt(string Location, string Status, int? HttpStatus = null, string? ResolvedLocation = null);
     private sealed record ArtworkPreview(string CacheId, string Path, string MimeType, int Width, int Height, int ByteLength,
-        bool IsLowResolution, string ResolvedLocation, bool UsedFallback, IReadOnlyList<ArtworkAttempt> Attempts);
+        bool IsLowResolution, string ResolvedLocation, bool UsedFallback, IReadOnlyList<ArtworkAttempt> Attempts, string? LeaseId);
     private sealed record ArtworkSource(string ArtworkId, string Kind, string Source, string Location, bool IsLocal, bool Selected, string? CandidateSource, string[]? PreviewLocations = null);
 }

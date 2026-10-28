@@ -1455,7 +1455,8 @@ class WorkerTests(unittest.TestCase):
                     self.assertEqual(current, worker.get_job(job['jobId']), 'Reading quality must not mutate the review revision')
                     for name, digest in before.items():
                         self.assertEqual(digest, hashlib.sha256((video.parent / name).read_bytes()).hexdigest())
-            self.assertEqual([], list(Path(worker.initialized['cacheRoot']).iterdir()))
+            self.assertEqual({'.owner.json', '.owner.lock'}, {p.name for p in Path(worker.initialized['cacheRoot']).iterdir()})
+            self.assertEqual(0, worker.request('workspace.getSnapshot')['result']['artworkCache']['bytes'])
             # Retaining a reviewed remote source while organizing without NFO output
             # must not attach the freshly reloaded local fanart's dimensions to it.
             fns = next(j for j in worker.request('workspace.getSnapshot')['result']['jobs'] if j['metadata']['id'] == 'FNS-121')
@@ -1709,6 +1710,84 @@ class ProviderWorkerTests(unittest.TestCase):
         response = self.worker.request('jobs.retryFailedSources' if retry else 'jobs.search', {'jobId': job['jobId'], 'sourceMode': mode})
         self.assertIn('result', response, response)
         return self.worker.operation(response['result']['operationId'])
+
+    def test_75_reused_preview_inventory_rejects_late_unselected_sidecar_without_publishing(self):
+        media = [self.worker.import_video(f'inventory-preview/TEST-{801+i}.mp4', nfo=None) for i in range(2)]
+        videos, jobs = [m[0] for m in media], [m[1] for m in media]
+        originals = {p: p.read_bytes() for p in videos}
+        selected = jobs[1]
+        self.configure(holdSidecarInventory=True, sidecarInventoryPhase='save.preview', resetRequests=True)
+        started = self.worker.request('save.preview', {'jobId': selected['jobId'], 'expectedReviewRevision': selected['reviewRevision'],
+            'async': True, 'options': {'writeNfo': True}})['result']
+        self.wait_requests(kind='sidecarInventoryCaptured')
+        late = videos[0].with_suffix('.nfo'); late.write_text('<movie><id>TEST-801</id><title>Late unselected source</title></movie>')
+        external = late.read_bytes()
+        self.configure(holdSidecarInventory=False)
+        done = self.worker.operation(started['operationId'])
+        self.assertEqual('failed', done['status']); self.assertEqual('SOURCE_CHANGED', done['error']['data']['reason'])
+        self.assertNotIn('result', done)
+        self.assertEqual(selected, self.worker.get_job(selected['jobId']))
+        self.assertEqual(external, late.read_bytes()); self.assertEqual(originals, {p: p.read_bytes() for p in videos})
+        current = self.worker.get_job(selected['jobId'])
+        fresh = self.worker.preview(current)
+        self.assertTrue(fresh['canExecute'], 'A new operation must rescan rather than reuse the rejected inventory')
+        self.assertFalse(videos[1].with_suffix('.nfo').exists())
+
+    def test_76_reused_import_inventory_changes_admit_nothing_and_preserve_existing_review(self):
+        _, existing = self.worker.import_video('existing/TEST-810.mp4', nfo=None)
+        existing = self.worker.edit(existing, {'title': 'Preserve existing unsaved review'})
+        folder = Path(self.temp.name) / 'inventory-import'; folder.mkdir()
+        videos = [folder / f'TEST-{811+i}.mp4' for i in range(2)]
+        for path in videos: path.write_bytes(b'SYNTHETIC INVENTORY INPUT')
+        original_videos = {path:path.read_bytes() for path in videos}
+        found = self.worker.discover_paths([folder])
+        self.configure(holdSidecarInventory=True, sidecarInventoryPhase='importDiscovery', resetRequests=True)
+        started = self.worker.request('workspace.importDiscovery', {'discoveryId': found['discoveryId'],
+            'selectedItemIds': [item['itemId'] for item in found['items']]})['result']
+        self.wait_requests(kind='sidecarInventoryCaptured')
+        late = videos[0].with_suffix('.nfo'); late.write_text('<movie><id>TEST-811</id><title>Arrived after capture</title></movie>')
+        external = late.read_bytes()
+        self.configure(holdSidecarInventory=False)
+        done = self.worker.operation(started['operationId'])
+        self.assertEqual('failed', done['status']); self.assertEqual('SOURCE_CHANGED', done['error']['data']['reason'])
+        self.assertEqual([existing], self.worker.request('workspace.getSnapshot')['result']['jobs'])
+        self.assertEqual(external, late.read_bytes()); self.assertEqual(original_videos, {path:path.read_bytes() for path in videos})
+        consumed = self.worker.request('workspace.importDiscovery', {'discoveryId': found['discoveryId'],
+            'selectedItemIds': [item['itemId'] for item in found['items']]})
+        self.assertEqual('DISCOVERY_STALE', consumed['error']['data']['reason'])
+        fresh = self.worker.discover_paths([folder])
+        admitted = self.worker.confirm_discovery(fresh, [item['itemId'] for item in fresh['items']])
+        self.assertEqual('completed', admitted['status']); self.assertEqual(2, len(admitted['result']['importedJobIds']))
+        loaded = [self.worker.get_job(job_id) for job_id in admitted['result']['importedJobIds']]
+        self.assertTrue(any(job['metadata']['title'] == 'Arrived after capture' for job in loaded))
+        self.assertEqual(existing, self.worker.get_job(existing['jobId']))
+
+    def test_77_inventory_capture_cancellation_retains_review_and_never_admits_or_publishes(self):
+        for phase in ('save.preview', 'importDiscovery'):
+            with self.subTest(phase=phase):
+                folder = Path(self.temp.name) / phase.replace('.', '-'); folder.mkdir()
+                videos = [folder / f'TEST-{821+i}.mp4' for i in range(2)]
+                for path in videos: path.write_bytes(b'UNCHANGED CANCELED INVENTORY')
+                found = self.worker.discover_paths([folder])
+                jobs = []
+                if phase == 'save.preview':
+                    admitted = self.worker.confirm_discovery(found, [item['itemId'] for item in found['items']])
+                    jobs = [self.worker.get_job(job_id) for job_id in admitted['result']['importedJobIds']]
+                self.configure(holdSidecarInventory=True, sidecarInventoryPhase=phase, resetRequests=True)
+                if phase == 'save.preview':
+                    params = {'jobId':jobs[0]['jobId'], 'expectedReviewRevision':jobs[0]['reviewRevision'], 'async':True, 'options':{'writeNfo':True}}
+                else:
+                    params = {'discoveryId':found['discoveryId'], 'selectedItemIds':[item['itemId'] for item in found['items']]}
+                started = self.worker.request(phase if phase == 'save.preview' else 'workspace.importDiscovery', params)['result']
+                self.wait_requests(kind='sidecarInventoryCaptured')
+                self.worker.request('operations.cancel', started)
+                done = self.worker.operation(started['operationId'], timeout=3)
+                self.assertEqual('canceled',done['status']); self.assertNotIn('result',done)
+                self.configure(holdSidecarInventory=False)
+                self.assertEqual(jobs,self.worker.request('workspace.getSnapshot')['result']['jobs'])
+                for path in videos: self.assertEqual(b'UNCHANGED CANCELED INVENTORY',path.read_bytes())
+                self.assertEqual([],list(folder.glob('*.nfo')))
+                if jobs: self.worker.request('jobs.remove', {'jobIds':[job['jobId'] for job in jobs]})
 
     def test_74_batch_query_cancel_retry_tail_then_revisioned_batch_save(self):
         media = [self.worker.import_video(f'batch/{i}/TEST-{851+i}.mp4', nfo=NFO.replace('DEMO-001', f'TEST-{851+i}')) for i in range(3)]
@@ -2176,7 +2255,8 @@ class ProviderWorkerTests(unittest.TestCase):
         self.assertEqual({'libredmm'}, {a['source'] for a in selected['artwork'] if a['selected'] and a['kind'] != 'sample'})
         self.assertEqual(2, len(selected['metadata']['screenshotUrls']))
         self.assertEqual(2, len(self.requests()), 'Source selection must not download any cover or sample')
-        self.assertEqual([], list(Path(self.worker.initialized['cacheRoot']).iterdir()))
+        self.assertEqual({'.owner.json', '.owner.lock'}, {p.name for p in Path(self.worker.initialized['cacheRoot']).iterdir()})
+        self.assertEqual(0, self.worker.request('workspace.getSnapshot')['result']['artworkCache']['bytes'])
         # A registered source with samples alone does not manufacture a cover candidate.
         video = Path(self.temp.name) / 'sample-only' / 'TEST-921.mp4'
         video.parent.mkdir(); video.write_bytes(b'SYNTHETIC VIDEO')

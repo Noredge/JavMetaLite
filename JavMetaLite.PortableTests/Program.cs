@@ -60,6 +60,8 @@ internal static partial class Program
         ("Manual browser import rejects hostile pages, mismatched IDs and oversized UTF8", ManualBrowserGuards),
         ("Explicit browser import retains manual candidates and NFO round-trip baseline", ManualBrowserReviewRoundTrip),
         ("Fresh directory scans detect late sidecars and reject link aliases", FreshSidecarsAndAliases),
+        ("Operation-local sidecar inventory preserves lookup, folder ownership and sample order", SidecarInventoryLookup),
+        ("Operation-local sidecar inventory rejects changed namespaces and links without trusting mtime", SidecarInventoryFreshness),
         ("T01/T02/P08/R01 filename, basename, discovery and loader agree", RegressionParsingEntrypoints),
         ("P09 explicit CD grouping and manually confirmed a/b keep file identity", RegressionExplicitParts),
         ("X07/P11 legacy sidecars retain names in place and use standard names after move", RegressionLegacyNames),
@@ -70,12 +72,17 @@ internal static partial class Program
         ("T07/R05 canceled copy with cleanup failure reports retained recovery paths", RegressionCancelCleanupFailure)
     ];
 
-    public static async Task<int> Main()
+    public static async Task<int> Main(string[] args)
     {
         var failures = 0;
         using var logs = new Temp();
         AppLog.ConfigureDirectory(logs.Path);
         var tests = Tests.ToList();
+        if (args.Length > 0)
+        {
+            if (!args.SequenceEqual(["--sidecar-inventory"])) throw new ArgumentException("Unknown test filter.");
+            tests = tests.Where(test => test.Run.Method.Name.StartsWith("SidecarInventory", StringComparison.Ordinal)).ToList();
+        }
         if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("JAVMETALITE_PRIVATE_PARSING_CASES")))
             tests.Add(("T01/T02/B/C/H private handoff names verified without logging names", RegressionPrivateNames));
         if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("JAVMETALITE_CASE_SENSITIVE_ROOT")))

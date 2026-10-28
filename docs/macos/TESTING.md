@@ -22,6 +22,7 @@ The Mac gate runs:
 | Xcode sources | Project membership and non-SwiftPM compile layout; separate from full Xcode/hosted testing. |
 | Worker protocol | Import/edit/preview/save, revisions, source isolation, file changes, batch scope, cancellation, recovery and manual import. |
 | Queue/retention | Atomic removal, protected inputs, bounded receipts/plans/notifications and stale-token refusal. |
+| Artwork cache | Byte/file/lease admission limits, reader lifetime, canceled late results, job removal, active-session protection and owned-orphan recovery. |
 
 `test.sh` sets `JAVMETALITE_TEST_WORKER` and builds the separate, nonpublishable `JavMetaLite.Worker.RegressionHost`. It requires fixed-HTTP provider integration; direct ad-hoc Swift/Python runs may skip Worker-dependent cases when their environment is missing. Fixture RPC, HTTP injection and regression configuration are unavailable in the shipping Worker.
 
@@ -48,6 +49,7 @@ Use disposable synthetic videos and record actual actions, screenshots and disk 
 - Review both artwork roles, samples, viewer navigation/zoom, source switching and slow-preview close/cancel/retry. Late results must not replace another review.
 - Import an explicitly captured supported web page; exercise stale navigation, wrong movie ID and user-controlled site verification. Test local image Trash and restore; never substitute permanent deletion.
 - Restart with changed settings; restore preferences without restoring transient jobs, drafts, revisions or plans.
+- Terminate only an isolated QA engine while idle, with drafts and after a deliberately withheld save response. Verify Keep Open, canceled/failed export, JSON readback and explicit end-session/close. A live response timeout must retain status reconciliation. Record actual disk outcomes separately from the frontend's unknown result.
 - Check all window states in four languages, light/dark and minimum layouts, plus physical keyboard, IME, VoiceOver, gestures and display changes.
 
 The [40-case checklist](WINDOWS-CASE-REGRESSION.md) covers product regression requirements. [STATUS](STATUS.md) records current verified and unverified scope; a controlled API test is not a physical-device or live-site pass.

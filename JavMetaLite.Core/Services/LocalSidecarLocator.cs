@@ -1,4 +1,3 @@
-using System.Text;
 using JavMetaLite.Core.Models;
 
 namespace JavMetaLite.Core.Services;
@@ -11,7 +10,12 @@ public static class LocalSidecarLocator
         string videoPath,
         string? preferredBaseName = null,
         bool preferFolderSidecars = false)
+        => Locate(videoPath, preferredBaseName, preferFolderSidecars, null, CancellationToken.None);
+
+    internal static LocalSidecarPaths Locate(string videoPath, string? preferredBaseName,
+        bool preferFolderSidecars, LocalSidecarInventoryScope? scope, CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
         ArgumentException.ThrowIfNullOrWhiteSpace(videoPath);
 
         var fullVideoPath = FileSystemPathSemantics.CanonicalizePath(videoPath);
@@ -31,27 +35,13 @@ public static class LocalSidecarLocator
             throw new InvalidDataException("影片文件名无效。");
         }
 
-        var entries = Directory.EnumerateFiles(directory).ToArray();
-        if (!OperatingSystem.IsWindows())
-        {
-            // The parent was canonicalized above. Ordinary directory entries can reuse that
-            // spelling; only link entries need a full resolution. Recheck ancestry afterward
-            // so a changed parent cannot silently change the meaning of the lexical keys.
-            FileSystemPathSemantics.ValidateCanonicalPath(directory);
-            var conflicts = entries.GroupBy(path => new FileInfo(path).LinkTarget is null
-                ? path.Normalize(NormalizationForm.FormC).ToUpperInvariant()
-                : FileSystemPathSemantics.ConflictKey(path)).Any(group => group.Count() > 1);
-            FileSystemPathSemantics.ValidateCanonicalPath(directory);
-            if (conflicts) throw new IOException("Ambiguous case or Unicode sidecar names require review before importing this folder.");
-        }
-        var files = entries
-            .Select(path => (Name: Path.GetFileName(path), Path: path))
-            .Where(file => !string.IsNullOrWhiteSpace(file.Name))
-            .ToDictionary(file => file.Name!, file => file.Path, StringComparer.OrdinalIgnoreCase);
-        // Directory-level metadata belongs to a movie only when every video is in its group.
+        var inventory = scope?.Get(directory, token) ?? LocalSidecarDirectoryInventory.Capture(directory, token);
+        var files = inventory.Files;
+        // Eligibility is independent of the requested movie and is computed once
+        // per directory instead of rescanning every sibling for every movie.
         var groupKey = MovieFileSet.GetGroupKey(fullVideoPath);
-        var canUseFolderSidecars = files.Values.Where(VideoFileSupport.HasSupportedExtension)
-            .All(path => MovieFileSet.GetGroupKey(path).Equals(groupKey, StringComparison.OrdinalIgnoreCase));
+        var canUseFolderSidecars = inventory.VideoGroupKeys.Count == 0 ||
+            inventory.VideoGroupKeys.Count == 1 && inventory.VideoGroupKeys.Contains(groupKey);
         preferFolderSidecars &= canUseFolderSidecars;
         string? nfoPath = null;
         if (preferFolderSidecars)
@@ -95,7 +85,7 @@ public static class LocalSidecarLocator
             posterPath,
             fanartPath)
         {
-            ExtrafanartPaths = FindExtrafanart(directory)
+            ExtrafanartPaths = inventory.ExtrafanartPaths
         };
     }
 
@@ -133,35 +123,4 @@ public static class LocalSidecarLocator
         return null;
     }
 
-    private static IReadOnlyList<string> FindExtrafanart(string movieDirectory)
-    {
-        var directory = Path.Combine(movieDirectory, "extrafanart");
-        if (!Directory.Exists(directory))
-        {
-            return [];
-        }
-
-        return Directory.EnumerateFiles(directory, "*", SearchOption.TopDirectoryOnly)
-            .Where(path => ArtworkExtensions.Contains(
-                Path.GetExtension(path),
-                StringComparer.OrdinalIgnoreCase))
-            .Select(Path.GetFullPath)
-            .OrderBy(GetTrailingNumber)
-            .ThenBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
-    private static int GetTrailingNumber(string path)
-    {
-        var name = Path.GetFileNameWithoutExtension(path);
-        var firstDigit = name.Length;
-        while (firstDigit > 0 && char.IsDigit(name[firstDigit - 1]))
-        {
-            firstDigit--;
-        }
-
-        return firstDigit < name.Length && int.TryParse(name[firstDigit..], out var number)
-            ? number
-            : int.MaxValue;
-    }
 }

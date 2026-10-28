@@ -189,6 +189,8 @@ for line in sys.stdin:
 """#
         try source.write(to: script, atomically: true, encoding: .utf8)
         let store = WorkspaceStore(defaults: preferences.defaults), job = MovieJobSnapshot(value), localURL = cache.appendingPathComponent("local.png")
+        let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        try FileManager.default.copyItem(at: repository.appendingPathComponent("fixtures/macos/synthetic-poster-2x3.png"), to: localURL)
         store.jobs = [job]; store.ready = true; store.selectNavigation([job.jobID]); store.checkedJobIDs = [job.jobID]
         store.artworkPaths[store.artworkKey(local, jobID: job.jobID)] = localURL
         let navigation = store.navigationSelection, checks = store.checkedJobIDs

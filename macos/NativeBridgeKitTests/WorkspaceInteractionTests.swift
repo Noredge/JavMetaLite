@@ -93,6 +93,121 @@ import WorkerKit
             await store.worker.shutdown()
         } catch { await store.worker.shutdown(); throw error }
     }
+    @Test func snapshotReconciliationPublishesOneCompleteListAndSkipsIdenticalJobs() async throws {
+        _ = NSApplication.shared
+        let fixture = try QueueInteractionFixture(); defer { fixture.remove() }
+        let store = WorkspaceStore(defaults: preferences.defaults)
+        do {
+            _ = try await store.worker.start(executable: URL(fileURLWithPath: "/usr/bin/python3"), arguments: [fixture.script.path, fixture.jobs.path, fixture.cache.path])
+            var rows: [JSONValue] = (0..<1000).map { number in .object([
+                "jobId": .string("bulk-\(number)"), "reviewRevision": .number(1),
+                "metadata": .object(["id": .string("DEMO-\(10000 + number)"), "title": .string("合成标题 \(number)")]),
+                "videoPaths": .array([.string(fixture.video.path)]), "artwork": .array([])
+            ]) }
+            _ = try await store.worker.request("fixture.installJobs", params: .object(["jobs": .array(rows)]))
+            var publishedCounts: [Int] = []
+            let updates = store.$jobs.dropFirst().sink { publishedCounts.append($0.count) }; defer { updates.cancel() }
+            try await store.refresh()
+            #expect(publishedCounts == [1000], "Subscribers must not receive a succession of partial queues.")
+            publishedCounts = []
+            try await store.refresh()
+            #expect(publishedCounts.isEmpty)
+
+            // Native orphan state still needs retirement even when the job array is identical.
+            weak var orphan = store.editorSession(field: "plot", jobID: "local-orphan")
+            store.drafts["local-orphan"] = ["plot": "Retire only this local draft"]
+            store.artworkSourceByJob["local-orphan"] = "local"
+            try await store.refresh()
+            #expect(publishedCounts.isEmpty && orphan == nil)
+            #expect(store.drafts["local-orphan"] == nil && store.artworkSourceByJob["local-orphan"] == nil)
+
+            var changed = rows[500].objectValue
+            changed["reviewRevision"] = .number(2)
+            changed["metadata"] = .object(["id": .string("DEMO-10500"), "title": .string("Only this authoritative title changed")])
+            rows[500] = .object(changed)
+            _ = try await store.worker.request("fixture.installJobs", params: .object(["jobs": .array(rows)]))
+            try await store.refresh()
+            #expect(publishedCounts == [1000])
+            #expect(store.jobs[500].metadata["title"].stringValue == "Only this authoritative title changed")
+            #expect(store.jobs[500].reviewRevision == 2)
+            #expect(try fixture.mediaUnchanged())
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
+    @Test func snapshotReorderAndRetirementKeepRemainingDraftUndoAndSelection() async throws {
+        _ = NSApplication.shared
+        let fixture = try QueueInteractionFixture(); defer { fixture.remove() }
+        let store = WorkspaceStore(defaults: preferences.defaults)
+        do {
+            _ = try await store.worker.start(executable: URL(fileURLWithPath: "/usr/bin/python3"), arguments: [fixture.script.path, fixture.jobs.path, fixture.cache.path])
+            var rows = try JSONDecoder().decode([JSONValue].self, from: Data(contentsOf: fixture.jobs))
+            var c = rows[2].objectValue
+            c["artwork"] = .array([.object(["artworkId": .string("c-cover"), "source": .string("local"), "contentKey": .string("stable-content")])])
+            rows[2] = .object(c)
+            _ = try await store.worker.request("fixture.installJobs", params: .object(["jobs": .array(rows)]))
+            store.ready = true; try await store.refresh(); store.selectNavigation(["c"])
+            store.checkedJobIDs = ["b", "c"]
+            store.artworkSourceByJob["c"] = "local"
+            weak var retired = store.editorSession(field: "plot", jobID: "b")
+            store.drafts["b"] = ["plot": "Authoritatively retired later"]
+            let retained = store.editorSession(field: "title", jobID: "c")
+            retained.configure(value: "Keep this draft", label: "Title", editable: true, multiline: false)
+            retained.textView.undoManager?.beginUndoGrouping()
+            retained.textView.insertText("!", replacementRange: NSRange(location: 15, length: 0))
+            retained.textView.undoManager?.endUndoGrouping()
+            store.drafts["c"] = ["title": "Keep this draft!"]
+            var publications = 0
+            let updates = store.$jobs.dropFirst().sink { _ in publications += 1 }; defer { updates.cancel() }
+
+            let reordered = [rows[2], rows[0], rows[1], rows[3]]
+            _ = try await store.worker.request("fixture.installJobs", params: .object(["jobs": .array(reordered)]))
+            try await store.refresh()
+            #expect(publications == 1 && store.jobs.map(\.jobID) == ["c", "a", "b", "unknown"])
+            #expect(store.selectedID == "c" && store.navigationSelection == ["c"] && store.checkedJobIDs == ["b", "c"])
+            #expect(store.editorSession(field: "title", jobID: "c") === retained && retained.textView.undoManager?.canUndo == true)
+            #expect(store.drafts["c"]?["title"] == "Keep this draft!" && store.artworkSourceByJob["c"] == "local")
+            #expect(store.jobLabel("c") == "DEMO-103 · Synthetic c")
+
+            _ = try await store.worker.request("fixture.installJobs", params: .object(["jobs": .array([rows[2], rows[0]])]))
+            try await store.refresh()
+            #expect(publications == 2 && retired == nil && store.drafts["b"] == nil)
+            #expect(store.selectedID == "c" && store.checkedJobIDs == ["c"])
+            #expect(store.jobLabel("b") == tr("unknownID") && store.artworkSourceByJob["c"] == "local")
+            #expect(store.drafts["c"]?["title"] == "Keep this draft!")
+            retained.textView.undoManager?.undo()
+            #expect(retained.textView.string == "Keep this draft")
+            #expect(try fixture.mediaUnchanged())
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
+    @Test func equalSingleJobUpdatesAreSkippedButAdvisoryChangesStillPublish() async throws {
+        _ = NSApplication.shared
+        let fixture = try QueueInteractionFixture(); defer { fixture.remove() }
+        let store = WorkspaceStore(defaults: preferences.defaults)
+        do {
+            _ = try await store.worker.start(executable: URL(fileURLWithPath: "/usr/bin/python3"), arguments: [fixture.script.path, fixture.jobs.path, fixture.cache.path])
+            try await store.refresh()
+            let raw = try JSONDecoder().decode([JSONValue].self, from: Data(contentsOf: fixture.jobs))[0]
+            var publications = 0
+            let updates = store.$jobs.dropFirst().sink { _ in publications += 1 }; defer { updates.cancel() }
+            store.update(raw)
+            #expect(publications == 0)
+            var changed = raw.objectValue
+            changed["coverQuality"] = .object(["state": .string("lowResolution"), "width": .number(100), "height": .number(50)])
+            changed["warnings"] = .array([.string("Synthetic advisory")])
+            changed["hasFailedSources"] = .bool(true)
+            changed["searchAttempts"] = .array([.object(["source": .string("libredmm"), "success": .bool(false)])])
+            store.update(.object(changed))
+            let job = try #require(store.jobs.first { $0.jobID == "a" })
+            #expect(publications == 1 && job.reviewRevision == raw["reviewRevision"].intValue)
+            #expect(store.hasLowResolutionCover(job) && job.warnings == ["Synthetic advisory"] && job.hasFailedSources)
+            #expect(job.searchAttempts.count == 1)
+            store.update(.object(changed))
+            #expect(publications == 1)
+            #expect(try fixture.mediaUnchanged())
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
     @Test func menuRetryUsesRecordedFailedSourcesAfterChangingQueryMode() async throws {
         _ = NSApplication.shared
         let f = try QueueInteractionFixture(); defer { f.remove() }; let store = WorkspaceStore(defaults: preferences.defaults)
@@ -135,6 +250,303 @@ import WorkerKit
         #expect(store.phase == "copyingmovie" && store.currentJobIndex == 2 && store.totalOperationJobs == 3)
         store.receive(.object(["method": .string("worker.unavailable"), "params": .object([:])]))
         #expect(store.operationProgressRetention.count == 0 && store.operationProgressRetention.bytes == 0)
+    }
+    @Test func artworkPreviewLeaseSurvivesUnchangedRevisionAndReleasesAfterRemoval() async throws {
+        _ = NSApplication.shared
+        let fixture = try ArtworkLeasePipeFixture(mode: "ordinary"); defer { fixture.remove() }
+        let store = fixture.makeStore(defaults: preferences.defaults)
+        do {
+            await store.start()
+            let job = try #require(store.selectedJob), artwork = try #require(job.artwork.first)
+            let key = store.artworkKey(artwork, jobID: job.jobID)
+            store.loadArtwork(artwork, jobID: job.jobID)
+            try await artworkCondition { store.artworkPaths[key] != nil }
+            let adoptedURL = try #require(store.artworkPaths[key])
+            var state = try await fixture.state(store.worker)
+            let lease = try #require(state["previews"].arrayValue.first?["leaseId"].stringValue)
+            #expect(UUID(uuidString: lease) != nil && state["activeLeases"].arrayValue == [.string(lease)])
+            #expect(state["releases"].arrayValue.isEmpty && adoptedURL == fixture.preview.resolvingSymlinksInPath())
+            #expect(FileManager.default.fileExists(atPath: adoptedURL.path))
+
+            _ = try await store.worker.request("fixture.bumpRevision")
+            try await store.refresh()
+            let refreshed = try #require(store.selectedJob)
+            #expect(refreshed.reviewRevision > job.reviewRevision)
+            #expect(store.artworkPaths[key] == adoptedURL)
+            store.loadArtwork(try #require(refreshed.artwork.first), jobID: refreshed.jobID)
+            state = try await fixture.state(store.worker)
+            #expect(state["previews"].arrayValue.count == 1 && state["releases"].arrayValue.isEmpty)
+            #expect(state["activeLeases"].arrayValue == [.string(lease)], "A review revision change with identical artwork content must not revoke the displayed URL.")
+
+            store.remove(refreshed)
+            try await idle(store)
+            state = try await fixture.waitForState(store.worker) { $0["releases"].arrayValue.contains(.string(lease)) }
+            #expect(store.jobs.map(\.jobID) == ["other"] && store.artworkPaths[key] == nil)
+            #expect(state["activeLeases"].arrayValue.isEmpty)
+            #expect(state["previews"].arrayValue.count == 1)
+            #expect(try fixture.mediaUnchanged())
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
+    @Test func historicalArtworkLRUReleasesOldLeasesAndReopensWithoutChangingDrafts() async throws {
+        _ = NSApplication.shared
+        let fixture = try ArtworkLeasePipeFixture(mode: "history"); defer { fixture.remove() }
+        let store = WorkspaceStore(engineExecutable: { URL(fileURLWithPath: "/usr/bin/python3") },
+            engineArguments: [fixture.script.path, fixture.directory.path], defaults: preferences.defaults,
+            artworkHistoryMaximumCount: 2)
+        do {
+            await store.start()
+            let jobs = store.jobs, first = try #require(jobs.first)
+            store.drafts[first.jobID] = ["title": "Keep this unsent draft"]
+            store.checkedJobIDs = [first.jobID]
+            for job in jobs {
+                store.selectNavigation([job.jobID])
+                let artwork = try #require(job.artwork.first), reader = UUID()
+                let key = store.artworkKey(artwork, jobID: job.jobID)
+                store.beginArtworkRead(artwork, jobID: job.jobID, readerID: reader)
+                try await artworkCondition { store.artworkPaths[key] != nil }
+                #expect(store.artworkPreviewRetention.historical <= 2)
+                store.endArtworkRead(reader)
+            }
+            var state = try await fixture.waitForState(store.worker) { $0["activeLeases"].arrayValue.count == 2 }
+            #expect(store.artworkPreviewRetention.files == 2 && store.artworkPreviewRetention.historical == 2)
+            #expect(state["previews"].arrayValue.count == 8 && state["releases"].arrayValue.count == 6)
+            let firstArt = try #require(first.artwork.first), key = store.artworkKey(firstArt, jobID: first.jobID)
+            #expect(store.artworkPaths[key] == nil)
+            #expect(store.artworkDimensions[key] == CGSize(width: 32, height: 24) && store.artworkLowResolution.contains(key), "Eviction must retain reviewed dimensions and quality warnings.")
+            let reader = UUID()
+            store.beginArtworkRead(firstArt, jobID: first.jobID, readerID: reader)
+            try await artworkCondition { store.artworkPaths[key] != nil }
+            state = try await fixture.state(store.worker)
+            #expect(state["previews"].arrayValue.count == 9)
+            #expect(state["previews"].arrayValue.first?["leaseId"] != state["previews"].arrayValue.last?["leaseId"])
+            #expect(store.drafts[first.jobID]?["title"] == "Keep this unsent draft" && store.checkedJobIDs == [first.jobID])
+            store.endArtworkRead(reader)
+            #expect(store.artworkPreviewRetention.historical == 2)
+            #expect(try fixture.mediaUnchanged())
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
+    @Test func visibleReadersAndRetiredDecoderKeepExactLeaseAcrossSameURLReadoption() async throws {
+        _ = NSApplication.shared
+        let fixture = try ArtworkLeasePipeFixture(mode: "history"); defer { fixture.remove() }
+        let store = WorkspaceStore(engineExecutable: { URL(fileURLWithPath: "/usr/bin/python3") },
+            engineArguments: [fixture.script.path, fixture.directory.path], defaults: preferences.defaults,
+            artworkHistoryMaximumCount: 0)
+        do {
+            await store.start()
+            var job = try #require(store.jobs.first), artwork = try #require(job.artwork.first)
+            let key = store.artworkKey(artwork, jobID: job.jobID), first = UUID(), second = UUID()
+            store.beginArtworkRead(artwork, jobID: job.jobID, readerID: first)
+            store.beginArtworkRead(artwork, jobID: job.jobID, readerID: second)
+            try await artworkCondition { store.artworkPaths[key] != nil }
+            let url = try #require(store.artworkPaths[key]), decoder = try #require(store.beginArtworkURLRead(url))
+            let oldLease = try #require((try await fixture.state(store.worker))["activeLeases"].arrayValue.first)
+            store.endArtworkRead(first)
+            #expect(store.artworkPaths[key] == url && store.artworkPreviewRetention.readers == 1)
+            store.endArtworkRead(second)
+            #expect(store.artworkPaths[key] == url && store.artworkPreviewRetention.decoders == 1)
+            _ = try await store.worker.request("fixture.bumpContent")
+            try await store.refresh()
+            #expect(store.artworkPaths[key] == nil && store.artworkPreviewRetention.retiredLeases == 1)
+            #expect((try await fixture.state(store.worker))["activeLeases"].arrayValue.contains(oldLease))
+            job = try #require(store.jobs.first); artwork = try #require(job.artwork.first)
+            let replacementReader = UUID()
+            store.beginArtworkRead(artwork, jobID: job.jobID, readerID: replacementReader)
+            try await artworkCondition { store.artworkPaths[key] != nil }
+            #expect(store.artworkPaths[key] == url, "The fake engine intentionally reuses a URL to exercise exact retired lease IDs.")
+            let newLease = try #require((try await fixture.state(store.worker))["previews"].arrayValue.last?["leaseId"])
+            #expect(newLease != oldLease)
+            store.endArtworkURLRead(decoder)
+            let state = try await fixture.waitForState(store.worker) { !$0["activeLeases"].arrayValue.contains(oldLease) }
+            #expect(state["activeLeases"].arrayValue == [newLease])
+            #expect(store.artworkPreviewRetention.retiredLeases == 0 && store.artworkPaths[key] == url)
+            store.endArtworkRead(replacementReader)
+            _ = try await fixture.waitForState(store.worker) { $0["activeLeases"].arrayValue.isEmpty }
+            #expect(store.artworkPaths.isEmpty && store.artworkPreviewRetention.readers == 0 && store.artworkPreviewRetention.decoders == 0)
+            #expect(try fixture.mediaUnchanged())
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
+    @Test func closingViewerAndNavigatingDoNotCancelAnotherVisibleReadersSharedRequest() async throws {
+        _ = NSApplication.shared
+        let fixture = try ArtworkLeasePipeFixture(mode: "hold-result"); defer { fixture.remove() }
+        let store = fixture.makeStore(defaults: preferences.defaults)
+        do {
+            await store.start()
+            let job = try #require(store.jobs.first), artwork = try #require(job.artwork.first), queueReader = UUID()
+            let key = store.artworkKey(artwork, jobID: job.jobID)
+            store.openArtwork(artwork, job: job)
+            store.beginArtworkRead(artwork, jobID: job.jobID, readerID: queueReader, scope: "queue")
+            _ = try await fixture.waitForState(store.worker) { $0["pendingResult"].boolValue }
+            store.closeArtworkViewer(); store.showingImage = false
+            store.selectNavigation(["other"])
+            var state = try await fixture.state(store.worker)
+            #expect(state["cancellations"].arrayValue.isEmpty && state["releases"].arrayValue.isEmpty)
+            #expect(state["activeLeases"].arrayValue.count == 1 && store.artworkPreviewRetention.readers == 1)
+            _ = try await store.worker.request("fixture.complete")
+            try await artworkCondition { store.artworkPaths[key] != nil }
+            state = try await fixture.state(store.worker)
+            #expect(state["previews"].arrayValue.count == 1 && state["cancellations"].arrayValue.isEmpty)
+            store.endArtworkRead(queueReader)
+            #expect(try fixture.mediaUnchanged())
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
+    @Test func artworkHistoryByteBudgetEvictsPayloadButKeepsQualityMetadata() async throws {
+        _ = NSApplication.shared
+        let fixture = try ArtworkLeasePipeFixture(mode: "history"); defer { fixture.remove() }
+        let store = WorkspaceStore(engineExecutable: { URL(fileURLWithPath: "/usr/bin/python3") },
+            engineArguments: [fixture.script.path, fixture.directory.path], defaults: preferences.defaults,
+            artworkHistoryMaximumCount: 100, artworkHistoryMaximumBytes: 1)
+        do {
+            await store.start()
+            let job = try #require(store.jobs.first), artwork = try #require(job.artwork.first), reader = UUID()
+            let key = store.artworkKey(artwork, jobID: job.jobID)
+            store.beginArtworkRead(artwork, jobID: job.jobID, readerID: reader)
+            try await artworkCondition { store.artworkPaths[key] != nil }
+            #expect(store.artworkPreviewRetention.historical == 0, "Visible files do not count against history budget.")
+            store.endArtworkRead(reader)
+            #expect(store.artworkPaths[key] == nil && store.artworkPreviewRetention.historyBytes == 0)
+            #expect(store.artworkDimensions[key] == CGSize(width: 32, height: 24) && store.artworkLowResolution.contains(key))
+            _ = try await fixture.waitForState(store.worker) { $0["activeLeases"].arrayValue.isEmpty }
+            #expect(try fixture.mediaUnchanged())
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["JAVMETALITE_SEARCH_TEST_HOST"] != nil))
+    func historicalPreviewReclamationPrecedesAdmissionWithRealTwoFileCache() async throws {
+        _ = NSApplication.shared
+        let executable = try #require(ProcessInfo.processInfo.environment["JAVMETALITE_SEARCH_TEST_HOST"])
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("JML bounded history \(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let config = directory.appendingPathComponent("config.json")
+        try Data(#"{"artworkCacheLimits":{"maximumBytes":1048576,"maximumFiles":2,"maximumLeases":16}}"#.utf8).write(to: config)
+        var originals: [URL: Data] = [:], videos: [String] = []
+        for index in 0..<8 {
+            let movie = directory.appendingPathComponent("DEMO-\(700 + index)")
+            try FileManager.default.createDirectory(at: movie, withIntermediateDirectories: true)
+            let video = movie.appendingPathComponent("DEMO-\(700 + index).mp4"), image = movie.appendingPathComponent("poster.png")
+            let bytes = Data("Synthetic protected source \(index)".utf8)
+            let bitmap = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 32 + index, pixelsHigh: 24, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: (32 + index) * 4, bitsPerPixel: 32))
+            memset(bitmap.bitmapData, Int32(60 + index), bitmap.bytesPerRow * bitmap.pixelsHigh)
+            let png = try #require(bitmap.representation(using: .png, properties: [:]))
+            try bytes.write(to: video); try png.write(to: image)
+            originals[video] = bytes; originals[image] = png; videos.append(video.path)
+        }
+        let store = WorkspaceStore(engineExecutable: { URL(fileURLWithPath: executable) },
+            engineArguments: ["--data-root", directory.appendingPathComponent("state").path, "--fixture-config", config.path],
+            defaults: preferences.defaults, artworkHistoryMaximumCount: 1)
+        do {
+            await store.start()
+            let found = try await store.waitOperation(try await store.worker.request("workspace.discoverInputs", params: .object(["paths": .array(videos.map(JSONValue.string)), "recursive": .bool(false)])))
+            _ = try await store.waitOperation(try await store.worker.request("workspace.importDiscovery", params: .object(["discoveryId": found["discoveryId"], "selectedItemIds": .array(found["items"].arrayValue.map { $0["itemId"] })])))
+            try await store.refresh()
+            #expect(store.jobs.count == 8)
+            for job in store.jobs {
+                let art = try #require(job.artwork.first), reader = UUID(), key = store.artworkKey(art, jobID: job.jobID)
+                store.beginArtworkRead(art, jobID: job.jobID, readerID: reader)
+                try await artworkCondition { store.artworkPaths[key] != nil || store.artworkErrors[key] != nil }
+                #expect(store.artworkPaths[key] != nil && store.artworkErrors[key] == nil, "New admission must wait for prior history release, never fail capacity.")
+                store.endArtworkRead(reader)
+            }
+            #expect(store.artworkPreviewRetention.files == 1)
+            var state = try await store.worker.request("workspace.getSnapshot")
+            for _ in 0..<100 where state["artworkCache"]["leases"].intValue > 1 {
+                try await Task.sleep(for: .milliseconds(5)); state = try await store.worker.request("workspace.getSnapshot")
+            }
+            #expect(state["artworkCache"]["leases"].intValue == 1 && state["artworkCache"]["files"].intValue <= 2)
+            for (url, bytes) in originals { #expect(try Data(contentsOf: url) == bytes) }
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
+    @Test func canceledArtworkPreviewReleasesBeforeLateResultAndNeverAdoptsIt() async throws {
+        _ = NSApplication.shared
+        let fixture = try ArtworkLeasePipeFixture(mode: "hold-result"); defer { fixture.remove() }
+        let store = fixture.makeStore(defaults: preferences.defaults)
+        do {
+            await store.start()
+            let job = try #require(store.selectedJob), artwork = try #require(job.artwork.first)
+            let key = store.artworkKey(artwork, jobID: job.jobID)
+            store.loadArtwork(artwork, jobID: job.jobID, scope: "detail")
+            var state = try await fixture.waitForState(store.worker) { $0["pendingResult"].boolValue }
+            let lease = try #require(state["previews"].arrayValue.first?["leaseId"].stringValue)
+            #expect(state["activeLeases"].arrayValue == [.string(lease)] && store.artworkPaths[key] == nil)
+            store.selectNavigation(["other"])
+            state = try await fixture.waitForState(store.worker) { $0["releases"].arrayValue.contains(.string(lease)) }
+            #expect(state["pendingResult"].boolValue && state["activeLeases"].arrayValue.isEmpty, "Cancellation must release the known lease before the held response arrives.")
+            #expect(store.artworkPaths[key] == nil)
+            _ = try await store.worker.request("fixture.complete")
+            state = try await fixture.waitForState(store.worker) { $0["releases"].arrayValue.filter { $0 == .string(lease) }.count >= 2 }
+            #expect(state["completed"].boolValue && !state["pendingResult"].boolValue)
+            #expect(state["activeLeases"].arrayValue.isEmpty && !state["cancellations"].arrayValue.isEmpty)
+            #expect(store.selectedID == "other" && store.artworkPaths[key] == nil && store.artworkErrors[key] == nil)
+            #expect(try fixture.mediaUnchanged())
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
+    @Test func missingArtworkPayloadRequestsNewLeaseAndRebuildsTheSameURL() async throws {
+        _ = NSApplication.shared
+        let fixture = try ArtworkLeasePipeFixture(mode: "ordinary"); defer { fixture.remove() }
+        let store = fixture.makeStore(defaults: preferences.defaults)
+        do {
+            await store.start()
+            let job = try #require(store.selectedJob), artwork = try #require(job.artwork.first)
+            let key = store.artworkKey(artwork, jobID: job.jobID)
+            store.loadArtwork(artwork, jobID: job.jobID)
+            try await artworkCondition { store.artworkPaths[key] != nil }
+            let originalURL = try #require(store.artworkPaths[key])
+            let originalPayload = try Data(contentsOf: originalURL)
+            var state = try await fixture.state(store.worker)
+            let originalLease = try #require(state["previews"].arrayValue.first?["leaseId"].stringValue)
+            #expect(state["activeLeases"].arrayValue == [.string(originalLease)])
+
+            // Simulate system/user cleanup of generated cache only. The registered
+            // source artwork, video and NFO must survive this recovery unchanged.
+            #expect(originalURL == fixture.preview.resolvingSymlinksInPath())
+            try FileManager.default.removeItem(at: originalURL)
+            #expect(!FileManager.default.fileExists(atPath: originalURL.path))
+            store.loadArtwork(artwork, jobID: job.jobID)
+            #expect(store.artworkPaths[key] == nil && store.artworkDimensions[key] == nil)
+            try await artworkCondition { store.artworkPaths[key] != nil }
+            state = try await fixture.waitForState(store.worker) {
+                $0["previews"].arrayValue.count == 2 && $0["releases"].arrayValue.contains(.string(originalLease))
+            }
+            let renewedLease = try #require(state["previews"].arrayValue.last?["leaseId"].stringValue)
+            #expect(UUID(uuidString: renewedLease) != nil && renewedLease != originalLease)
+            #expect(state["activeLeases"].arrayValue == [.string(renewedLease)])
+            #expect(store.artworkPaths[key] == originalURL && store.artworkErrors[key] == nil)
+            #expect(store.artworkDimensions[key] == CGSize(width: 32, height: 24))
+            #expect(try Data(contentsOf: originalURL) == originalPayload)
+            #expect(try fixture.mediaUnchanged())
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
+    @Test func artworkPreviewWithWrongLeaseEchoIsRejectedAndReleased() async throws {
+        _ = NSApplication.shared
+        let fixture = try ArtworkLeasePipeFixture(mode: "wrong-lease"); defer { fixture.remove() }
+        let store = fixture.makeStore(defaults: preferences.defaults)
+        do {
+            await store.start()
+            let job = try #require(store.selectedJob), artwork = try #require(job.artwork.first)
+            let key = store.artworkKey(artwork, jobID: job.jobID)
+            store.loadArtwork(artwork, jobID: job.jobID)
+            let state = try await fixture.waitForState(store.worker) { !$0["releases"].arrayValue.isEmpty }
+            let lease = try #require(state["previews"].arrayValue.first?["leaseId"].stringValue)
+            #expect(UUID(uuidString: lease) != nil)
+            #expect(state["releases"].arrayValue.contains(.string(lease)) && state["activeLeases"].arrayValue.isEmpty)
+            #expect(store.artworkPaths[key] == nil && store.artworkErrors[key] != nil)
+            #expect(try fixture.mediaUnchanged())
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
+    private func artworkCondition(_ predicate: () -> Bool) async throws {
+        for _ in 0..<400 {
+            if predicate() { return }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        throw RPCFailure(code: -1, message: "Synthetic artwork did not reach the expected state.")
     }
     @Test(.enabled(if: ProcessInfo.processInfo.environment["JAVMETALITE_TEST_WORKER"] != nil))
     func previewConfirmsSidecarReplacementAndQuickSaveCannotBypassVideoConflicts() async throws {
@@ -539,6 +951,81 @@ import WorkerKit
     func windowDidEndSheet(_ notification: Notification) { events.append("end") }
 }
 
+private struct ArtworkLeasePipeFixture {
+    let directory: URL, script: URL, preview: URL, video: URL, nfo: URL, sourceImage: URL
+    private let videoBytes = Data("SYNTHETIC LEASE TEST VIDEO".utf8)
+    private let nfoBytes = Data("<movie><title>Unchanged lease fixture</title></movie>".utf8)
+    private let sourceImageBytes = Data("SYNTHETIC ORIGINAL ARTWORK SOURCE".utf8)
+    init(mode: String) throws {
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent("JML artwork lease 合成 \(UUID())")
+        let cache = directory.appendingPathComponent("cache")
+        try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+        script = directory.appendingPathComponent("engine.py")
+        preview = cache.appendingPathComponent("preview.png")
+        video = directory.appendingPathComponent("DEMO-001.mp4")
+        nfo = directory.appendingPathComponent("movie.nfo")
+        sourceImage = directory.appendingPathComponent("source-poster.png")
+        try Data("Synthetic cache bytes; no decoder is invoked by this pipe test".utf8).write(to: preview)
+        try videoBytes.write(to: video); try nfoBytes.write(to: nfo); try sourceImageBytes.write(to: sourceImage)
+        try mode.write(to: directory.appendingPathComponent("mode"), atomically: true, encoding: .utf8)
+        let source = #"""
+import json,sys
+from pathlib import Path
+root=Path(sys.argv[1]);mode=(root/'mode').read_text();previews=[];releases=[];active=set();cancellations=[];pending=[];completed=False
+jobs=[{'jobId':'review','reviewRevision':1,'metadata':{'id':'DEMO-001','title':'Synthetic lease review'},'videoPaths':[str(root/'DEMO-001.mp4')],'localNfoPath':str(root/'movie.nfo'),'artwork':[{'artworkId':'cover','kind':'fanart','source':'local','selected':True,'contentKey':'unchanged-content'}]}, {'jobId':'other','reviewRevision':1,'metadata':{'id':'DEMO-002','title':'Other review'},'videoPaths':[],'artwork':[]}]
+if mode=='history':
+ jobs=[{'jobId':'history-'+str(i),'reviewRevision':1,'metadata':{'id':'DEMO-'+str(i),'title':'Synthetic history '+str(i)},'videoPaths':[str(root/'DEMO-001.mp4')],'artwork':[{'artworkId':'cover','kind':'fanart','source':'local','selected':True,'contentKey':'content-'+str(i)}]} for i in range(8)]
+def emit(id,result):print(json.dumps({'jsonrpc':'2.0','id':id,'result':result}),flush=True)
+def result():
+ lease=previews[-1]['leaseId']
+ path=root/'cache'/((previews[-1]['jobId']+'.png') if mode=='history' else 'preview.png')
+ if not path.exists():path.write_bytes(b'Synthetic cache bytes; no decoder is invoked by this pipe test')
+ return {'leaseId':'wrong-lease-echo' if mode=='wrong-lease' else lease,'path':str(path),'width':32,'height':24,'isLowResolution':mode=='history'}
+for line in sys.stdin:
+ r=json.loads(line);id=r['id'];m=r['method'];p=r['params']
+ if m=='initialize':emit(id,{'protocolVersion':1,'cacheRoot':str(root/'cache'),'capabilities':{'artworkPreviewLeases':True}})
+ elif m=='preferences.get':emit(id,{'logRoot':str(root),'dataRoot':str(root/'state')})
+ elif m=='workspace.getSnapshot':emit(id,{'jobs':jobs,'activeOperations':[],'recoveryWarnings':[]})
+ elif m=='artwork.getPreview':
+  assert p['async'] is True and p['leaseId'];previews.append(p);active.add(p['leaseId']);completed=mode!='hold-result';emit(id,{'operationId':'preview-operation'})
+ elif m=='operations.get':
+  if completed:emit(id,{'status':'completed','result':result()})
+  else:pending.append(id)
+ elif m=='artwork.releasePreview':
+  releases.append(p['leaseId']);active.discard(p['leaseId']);emit(id,{'released':True})
+ elif m=='operations.cancel':cancellations.append(p['operationId']);emit(id,{'accepted':True})
+ elif m=='fixture.complete':
+  completed=True
+  for old in pending:emit(old,{'status':'completed','result':result()})
+  pending.clear();emit(id,{'completed':True})
+ elif m=='fixture.bumpRevision':jobs[0]['reviewRevision']+=1;jobs[0]['metadata']['title']='Updated metadata, identical image';emit(id,{'ok':True})
+ elif m=='fixture.bumpContent':jobs[0]['reviewRevision']+=1;jobs[0]['artwork'][0]['contentKey']+='-changed';emit(id,{'ok':True})
+ elif m=='fixture.state':emit(id,{'previews':previews,'releases':releases,'activeLeases':sorted(active),'cancellations':cancellations,'pendingResult':bool(pending),'completed':completed})
+ elif m=='jobs.remove':
+  ids=p.get('jobIds') or [p['jobId']];jobs=[j for j in jobs if j['jobId']not in ids];emit(id,{'removed':True,'removedIds':ids,'removedCount':len(ids)})
+ elif m=='shutdown':emit(id,{'shutdown':True});break
+ else:raise Exception('Unexpected lease fixture method '+m)
+"""#
+        try source.write(to: script, atomically: true, encoding: .utf8)
+    }
+    @MainActor func makeStore(defaults: UserDefaults) -> WorkspaceStore {
+        WorkspaceStore(engineExecutable: { URL(fileURLWithPath: "/usr/bin/python3") }, engineArguments: [script.path, directory.path], defaults: defaults)
+    }
+    func state(_ worker: WorkerClient) async throws -> JSONValue { try await worker.request("fixture.state") }
+    @MainActor func waitForState(_ worker: WorkerClient, matching predicate: (JSONValue) -> Bool) async throws -> JSONValue {
+        for _ in 0..<400 {
+            let current = try await state(worker)
+            if predicate(current) { return current }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        throw RPCFailure(code: -1, message: "The synthetic artwork lease fixture did not reach the expected state.")
+    }
+    func mediaUnchanged() throws -> Bool {
+        try Data(contentsOf: video) == videoBytes && Data(contentsOf: nfo) == nfoBytes && Data(contentsOf: sourceImage) == sourceImageBytes
+    }
+    func remove() { try? FileManager.default.removeItem(at: directory) }
+}
+
 private struct QueueInteractionFixture {
     let directory: URL, script: URL, jobs: URL, cache: URL, video: URL, nfo: URL
     private let videoBytes = Data("Synthetic unchanged video".utf8), nfoBytes = Data("<movie><unknown>Keep</unknown></movie>".utf8)
@@ -565,6 +1052,7 @@ for line in sys.stdin:
  r=json.loads(line);id=r['id'];m=r['method'];p=r['params'];methods.append(m)
  if m=='initialize':emit(id,{'protocolVersion':1,'cacheRoot':cache})
  elif m=='workspace.getSnapshot':emit(id,{'jobs':jobs})
+ elif m=='fixture.installJobs':jobs=p['jobs'];emit(id,{'ok':True})
  elif m=='jobs.applyEdits':
   edits.append(p);j=next(j for j in jobs if j['jobId']==p['jobId']);assert j['reviewRevision']==p['expectedReviewRevision'];j['metadata'].update(p['edits']);j['reviewRevision']+=1;j['hasUnsavedChanges']=True;emit(id,j)
  elif m in ('jobs.search','jobs.retryFailedSources'):searches.append(p);emit(id,{'operationId':'query-'+str(len(searches))})
