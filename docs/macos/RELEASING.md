@@ -1,6 +1,6 @@
 # macOS releases
 
-Current preview: [macOS 0.4.0 Preview 1](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.1), Apple Silicon, macOS 15+. Verified scope and limitations are maintained in [STATUS](STATUS.md).
+Current preview: [macOS 0.4.0 Preview 2 (build47)](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2), Apple Silicon, macOS 15+. Verified scope and limitations are maintained in [STATUS](STATUS.md).
 
 ## Build and verify
 

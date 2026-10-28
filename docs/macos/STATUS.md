@@ -2,21 +2,21 @@
 
 仅维护当前版本与验证边界；开发过程查看 Git 提交历史。
 
-- 预览版：[macOS 0.4.0 Preview 1](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.1)，build45，Apple Silicon，macOS 15+。
-- 发布包源码：`b0e9220`；ZIP、SHA-256 与构建/载荷清单随 Release 提供。
+- 预览版：[macOS 0.4.0 Preview 2](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2)，build47，Apple Silicon，macOS 15+。
+- 发布包源码：[7959562](https://github.com/Noredge/JavMetaLite/commit/795956200e1b662e0180e2ad75018473ac316602)；使用原始 CI ZIP，SHA-256 为 `c87ba320b7ad6c559df7cc6e2d69e107544178d31783609b599f11c1f57b1b0d`，匹配校验文件与载荷清单随 Release 提供。
 - ad-hoc 完整性签名，未 Developer ID 签名、未公证；不代表 Gatekeeper 放行。
 - 原生 SwiftUI/AppKit 编辑器与自包含 C# Worker；原 Windows WPF 客户端保留。
 
-## 未发布修订（build47）
+## 本轮修订与本机验证（build47）
 
-- 修订基于 `5034bd2`，实现与验证文档纳入本次提交；上述已发布 build45 保持不变。8 份本地旧 STATUS 档案仍保留在工作区，不加入本次提交。
-- 保留 build46 的 Worker 退出确认、JSON 参考导出与显式结束会话；导出取消/失败保留会话，保存结果仍标记未知，不携带可执行计划、不重放保存。仍存活的超时、原生 Trash 和在途选图继续要求安全核实。
+- build47 实现提交为 `7959562`，发布附件来自该提交的干净 CI 构建；294 项构建输入与本机验收版本一致。8 份本地旧 STATUS 档案仍保留在工作区，不加入版本控制。
+- Worker 退出确认、JSON 参考导出与显式结束会话保留；导出取消/失败保留会话，保存结果仍标记未知，不携带可执行计划、不重放保存。仍存活的超时、原生 Trash 和在途选图继续要求安全核实。
 - 大快照分帧仅扫描新增字节，保留任意分片、连续帧与 8 MiB 限额。
 - 原生发现确认和预览在单次操作内共享不可变目录清单；复用目录在发布前重扫名称/链接/extrafanart 变化。全队列输入保护、revision、NFO baseline、源/目标指纹与事务执行检查保留。
 - 全快照按 ID 协调旧状态，一次发布有变化的 jobs；相同快照不发布，现存草稿、Undo、勾选及内容失效语义保留。
 - 前端历史完成预览最多 24 项 / 64 MiB；可见读者与实际异步解码另行持有租约，旧代 lease 精确延后释放，新预览等待已排队释放确认。尺寸/低清审核信息保留。Worker 的 256 MiB / 1024 文件 / 4096 租约预算、ownership lock 和保守会话回收策略不变。
 - 完整 Mac 门禁 12 套件通过：Portable 54/585 断言、Swift 87、协议 77、队列 4、保留状态 5、缓存 8，以及四语、发布工具和原生适配器等；13 个环境条件 Swift 测试实际执行，包含真实两文件缓存场景。CLT 链接路径与 weak-var 警告如实保留。
-- Windows 四项目交叉构建零错误、零警告；本地未执行 Windows runtime，远程双平台门禁以本次提交的运行结果为准。ad-hoc 候选包的 17 个原生文件签名、458 键四语资源、载荷与无 SDK 启动检查通过；3 个预算注入用例仅在独立回归宿主执行。
+- Windows 四项目本机交叉构建零错误、零警告；远程 Windows 自动化已完成，同提交的双平台门禁见下方。ad-hoc 候选包的 17 个原生文件签名、458 键四语资源、载荷与无 SDK 启动检查通过；3 个预算注入用例仅在独立回归宿主执行。
 - 独立原生 QA 验证 Undo/Redo、查看与勾选分离、取消保存、NFO 保存回读和外部 NFO 改动阻止过期计划。仅目标 NFO 保存改变，未知 XML/属性/注释/actor 扩展/resume、其他 NFO、视频及图片保留；未勾选影片草稿不丢失。
 - 原生遍历 64 张图片后为 24 项历史加当前可见读者，实测 39 个保护租约；重开 7 个淘汰项取得新 lease、相同 cacheId。清 QA 队列后文件/字节/租约最终归零。1000 中文项完成导入、滚动、草稿与原文件名筛选、导航和勾选验证。
 - 本轮 idle Worker 强制退出后，原生导出取消、两层退出取消均保留审核；JSON 实际包含 1000 项快照及未提交标题、结果未知，退出后没有重放 RPC。QA 应用已正常结束，用户原应用未被操作。
@@ -37,18 +37,19 @@
 
 ## 已发布版本的验证
 
-发布包对应同一提交的 [Mac CI](https://github.com/Noredge/JavMetaLite/actions/runs/40254998779) 与 [Windows CI](https://github.com/Noredge/JavMetaLite/actions/runs/40254998618) 均通过：
+发布包对应同一提交的 [Mac CI](https://github.com/Noredge/JavMetaLite/actions/runs/40642914373) 与 [Windows CI](https://github.com/Noredge/JavMetaLite/actions/runs/40642914299) 均通过：
 
-- Mac：Portable 52/526 断言、Swift 69、协议 74、队列 4、缓存保留 5，以及四语、发布工具、签名和 ZIP 解包门禁。
+- Mac：Portable 54/585 断言、Swift 87、协议 77、队列 4、状态保留 5、图片缓存 8，以及四语、发布工具、签名和 ZIP 解包门禁。
 - Windows：46 项 smoke、66 项事务回归、WPF 自动检查与便携包校验。
-- 发布附件的哈希、载荷、17 个原生文件签名及无 SDK Worker 启动检查通过。
+- 原始 CI ZIP 下载到本机后，哈希、载荷、17 个原生文件签名、458 键四语资源、无 SDK Worker 启动及 5 个发布缓存用例再次通过；3 个预算注入用例仅在独立 CI 回归宿主执行。
+- 上方性能与原生观察来自构建输入一致的本机/独立 QA 二进制，不等于对 CI 二进制完成全部手工验收。Windows Latest 仍为 v1.2.3。
 - revision、NFO round-trip、全队列冲突预检、指纹和文件事务保护保留。
 
 [main 的 Mac CI](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml?query=branch%3Amain) · [main 的 Windows CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml?query=branch%3Amain)
 
 ## 尚未完整验证
 
-- build47 对应提交的远程 Mac/Windows CI 结果仍需确认；本地 Windows 验证仅为交叉构建，完整原生回归矩阵仍未完成。
+- 完整原生回归矩阵、该 CI 二进制的全量手工验收与 Windows 真实硬件验收；远程自动化通过不等于上述结果。
 - 原生导出写失败、Trash 执行中进程退出、慢/大图片取消与保存事务中途真实崩溃等组合未完整手工覆盖；build46 的响应丢失采用受控代理，本轮未重测，不等同于物理断电验收。
 - Intel、干净 Mac、完整 Xcode 构建/宿主测试及完整平台矩阵。
 - 全部次级窗口的四语、最小布局、明暗模式和焦点组合；物理中日输入法、完整 VoiceOver、手势与多显示器。

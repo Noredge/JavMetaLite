@@ -7,7 +7,7 @@
 [![Windows CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 [![macOS CI](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml)
 
-> Windows **1.2.3** · macOS **0.4.0 プレビュー版**。
+> Windows **1.2.3** · macOS **0.4.0 プレビュー2（build47）**。
 
 ローカル動画の情報を確認・整理する Windows／macOS アプリです。単体編集と一括処理に対応し、Jellyfin 用のメタデータや画像を出力できます。
 
@@ -64,7 +64,7 @@ EXE を含むフォルダー、ZIP、SHA-256 ファイルは `release/` に出�
 
 **Apple Silicon · macOS 15 以降。** ネイティブエディターでポスターとジャケット全体を同時に表示し、情報・画像の編集、チェックした動画の一括検索・保存ができます。標準で保存前に変更を確認し、未編集の NFO 内容を保持してファイルの競合を確認します。設定は自動保存されます。
 
-[macOS 0.4.0 Preview 1](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.1) から App ZIP を取得し、展開して `JavMetaLite.app` を開きます。.NET のインストールは不要です。
+[macOS 0.4.0 Preview 2 (build47)](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2) から [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v0.4.0-preview.2/JavMetaLite-macOS-arm64-Release-adhoc.zip) を取得し、展開して `JavMetaLite.app` を開きます。.NET のインストールは不要です。
 
 ビルドには [global.json](global.json) 指定の SDK と、macOS 15 以降の SDK を含む Xcode または Command Line Tools が必要です。リポジトリのルートで実行します。
 
@@ -77,7 +77,7 @@ EXE を含むフォルダー、ZIP、SHA-256 ファイルは `release/` に出�
 
 ## 詳細
 
-[リリースノート](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [変更履歴](CHANGELOG.md) · [開発とテスト](TESTING.md)
+[macOS リリースノート](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2) · [Windows リリースノート](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [変更履歴](CHANGELOG.md) · [開発とテスト](TESTING.md)
 
 Windows のログと設定は `%LOCALAPPDATA%\JavMetaLite` に保存されます。
 

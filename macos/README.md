@@ -4,7 +4,7 @@ A SwiftUI/AppKit editor backed by a bundled, self-contained C# Worker over stdio
 
 ## Run
 
-Download [macOS 0.4.0 Preview 1](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.1), extract the App ZIP and open `JavMetaLite.app`. Apple Silicon and macOS 15+ are required; no .NET installation is needed. The preview is ad-hoc signed, without Developer ID or notarization; Gatekeeper acceptance is not established. Intel is unverified.
+Download [macOS 0.4.0 Preview 2 (build47)](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2), extract the [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v0.4.0-preview.2/JavMetaLite-macOS-arm64-Release-adhoc.zip) and open `JavMetaLite.app`. Apple Silicon and macOS 15+ are required; no .NET installation is needed. The preview is ad-hoc signed, without Developer ID or notarization; Gatekeeper acceptance is not established. Intel is unverified.
 
 The main editor shows the cropped poster and full cover together. Click a queue row to inspect/edit; checkboxes alone control batch query/save scope. Settings are remembered. Save previews disk changes by default; Confirm Save authorizes the listed sidecar replacements. More Options may explicitly skip the sheet, while all Worker revision/conflict/transaction checks remain required.
 

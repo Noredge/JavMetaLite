@@ -7,7 +7,7 @@
 [![Windows CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 [![macOS CI](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml)
 
-> Windows **1.2.3** · macOS **0.4.0 预览版**。
+> Windows **1.2.3** · macOS **0.4.0 预览版 2（build47）**。
 
 用于本地影片资料审核与整理的 Windows／macOS 工具，支持单片编辑、批量处理和 Jellyfin 兼容输出。
 
@@ -64,7 +64,7 @@ EXE 所在文件夹、ZIP 和 SHA-256 文件均输出到 `release/`。完整测�
 
 **Apple Silicon · macOS 15+。** 原生编辑器同屏展示海报与完整封套，支持资料、图片编辑和勾选批量查询、保存。默认预览保存变更，保留未编辑的 NFO 内容，写入前检查文件冲突；常用设置自动记忆。
 
-从 [macOS 0.4.0 Preview 1](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.1) 下载 App ZIP，解压后打开 `JavMetaLite.app`，无需安装 .NET。
+从 [macOS 0.4.0 Preview 2 (build47)](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2) 下载 [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v0.4.0-preview.2/JavMetaLite-macOS-arm64-Release-adhoc.zip)，解压后打开 `JavMetaLite.app`，无需安装 .NET。
 
 自行构建需安装 [global.json](global.json) 指定的 SDK，以及带 macOS 15+ SDK 的 Xcode 或 Command Line Tools。在仓库根目录执行：
 
@@ -77,7 +77,7 @@ EXE 所在文件夹、ZIP 和 SHA-256 文件均输出到 `release/`。完整测�
 
 ## 更多
 
-[版本说明](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [更新历史](CHANGELOG.md) · [开发与测试](TESTING.md)
+[macOS 版本说明](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2) · [Windows 版本说明](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [更新历史](CHANGELOG.md) · [开发与测试](TESTING.md)
 
 Windows 日志和偏好设置位于 `%LOCALAPPDATA%\JavMetaLite`。
 
