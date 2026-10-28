@@ -40,8 +40,10 @@
 - 修复解包回归中回退 HTTP 夹具的超限响应与连接关闭；保留并加强候选顺序、双 404 与服务端请求断言，失败附完整 attempts。Worker 测试驱动记录用例及 RPC/操作/关闭耗时，非预期超时强杀明确失败。
 - 独立 Worker 套件以短系统临时根、最多两路并行运行，保留逐套件日志、返回码和用例耗时；一个套件失败不会跳过其余安全套件。App/ZIP 静态完整性都验证，动态缓存检查集中在最终解包产物，发布 Worker 协议、队列和保留回归仍在无 SDK 环境执行。
 - 双平台工作流按严格编辑文件白名单区分文档与完整门禁，缺失基线及载荷/许可/源码/依赖/脚本/workflow 改动均跑完整门禁；具名最终检查始终报告结果。更新后的工作流保留 main push、PR 与手动触发，避免来源分支 push 重复运行。
-- 本机 Portable 54/585、Swift 87、协议 77、队列 4、保留状态 5、缓存 8 均通过；最终 ZIP 解包的无 SDK 协议 50、队列 4、保留状态 5 与缓存发布用例通过。回退单项连续 30 次通过，CI 工具 7 项、121 个文档相对链接及 actionlint 检查通过；短临时根复测替代了初版深目录导致超时的中间结果。
-- 实现提交 `44f324e` 的 [Windows 完整门禁](https://github.com/Noredge/JavMetaLite/actions/runs/40726759334) 通过；[Mac 完整门禁](https://github.com/Noredge/JavMetaLite/actions/runs/40726759244) 首次因 GitHub ARM 托管运行器容量不足，分配约 15 分钟后放弃，尚未执行测试；最终检查正确拒绝未验证结果。Mac 远程执行耗时和文档快速路径实测仍待确认。
+- 本机 Portable 54/585、Swift 87、协议 77、队列 4、保留状态 5、缓存 8 均通过；最终 ZIP 解包的无 SDK 协议 50、队列 4、保留状态 5 与缓存发布用例通过。回退单项连续 30 次通过，CI 工具 7 项、121 个文档相对链接、actionlint 及最终门禁 16 种结果组合检查通过。
+- 实现提交 `44f324e` 的 [Windows 完整门禁](https://github.com/Noredge/JavMetaLite/actions/runs/40726759334) 通过；[Mac 完整门禁](https://github.com/Noredge/JavMetaLite/actions/runs/40726759244) 两次均因 GitHub ARM 托管运行器容量不足，各等待约 15 分钟后分配失败，未执行任何测试步骤；最终检查正确拒绝未验证结果。该修订的云端 Mac 完整复验及前后耗时仍需平台资源恢复后确认。
+- 纯文档提交 `efb7eaa` 的 [Mac 快速门禁](https://github.com/Noredge/JavMetaLite/actions/runs/40729881153) 15 秒、[Windows 快速门禁](https://github.com/Noredge/JavMetaLite/actions/runs/40729881406) 18 秒通过；完整构建按规则跳过，不代表完成该提交的原生/Windows 产品回归。
+- 本机同一发布 Worker、同组 59 项无 SDK 测试各运行一次：串行 111.181 秒、两路并行 79.813 秒，耗时减少 28.21%；两轮全部通过。这是本机配对样本，不是完整云端 Mac CI 的前后测量。
 - 发布附件继续固定在下方 `7959562`，本轮没有更新产品实现或手工原生验收范围。8 份本地旧 STATUS 保留。
 
 ## 已发布版本的验证
