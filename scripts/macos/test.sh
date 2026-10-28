@@ -1,10 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
-parse_options "$@"
+TEST_PROFILE=full
+BUILD_OPTIONS=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --profile) [ "$#" -ge 2 ] || fail '--profile requires core or full'; TEST_PROFILE="$2"; shift 2 ;;
+    *) BUILD_OPTIONS+=("$1"); shift ;;
+  esac
+done
+case "$TEST_PROFILE" in core|full) ;; *) fail 'Test profile must be core or full.' ;; esac
+parse_options "${BUILD_OPTIONS[@]}"
 check_environment
 cd "$REPO_ROOT"
 LOG_DIR="$REPO_ROOT/artifacts/test-results/macos-$ARCH"
+if [ "$TEST_PROFILE" = core ]; then LOG_DIR="$LOG_DIR-core"; fi
 mkdir -p "$LOG_DIR"
 printf 'suite\texit_code\tseconds\n' > "$LOG_DIR/results.tsv"
 run_logged() {
@@ -18,8 +28,10 @@ run_logged() {
   [ "$result" -eq 0 ] || exit "$result"
 }
 run_logged localization python3 "$SCRIPT_DIR/test-localization.py"
-run_logged release-tools python3 "$SCRIPT_DIR/test_release_tools.py"
-run_logged release-manifest python3 "$SCRIPT_DIR/test_release_manifest.py"
+if [ "$TEST_PROFILE" = full ]; then
+  run_logged release-tools python3 "$SCRIPT_DIR/test_release_tools.py"
+  run_logged release-manifest python3 "$SCRIPT_DIR/test_release_manifest.py"
+fi
 run_logged ci-tools python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
 run_logged portable "$DOTNET" run --project JavMetaLite.PortableTests/JavMetaLite.PortableTests.csproj -c "$CONFIGURATION"
 run_logged worker-build "$DOTNET" build JavMetaLite.Worker/JavMetaLite.Worker.csproj -c "$CONFIGURATION"
@@ -38,9 +50,11 @@ if [ -f "$TESTING_PLUGIN" ]; then
   SWIFT_TEST_COMMAND+=(-Xswiftc -load-plugin-library -Xswiftc "$TESTING_PLUGIN")
 fi
 run_logged swift "${SWIFT_TEST_COMMAND[@]}"
-run_logged xcode-sources python3 "$SCRIPT_DIR/test_xcode_sources.py" --arch "$SWIFT_ARCH"
+XCODE_ARGUMENTS=(--arch "$SWIFT_ARCH")
+if [ "$TEST_PROFILE" = core ]; then XCODE_ARGUMENTS+=(--check-only); fi
+run_logged xcode-sources python3 "$SCRIPT_DIR/test_xcode_sources.py" "${XCODE_ARGUMENTS[@]}"
 if [ -f "$SCRIPT_DIR/test_worker.py" ]; then
-  python3 "$SCRIPT_DIR/run_worker_suites.py" --mode development --worker "$WORKER" --log-dir "$LOG_DIR" --jobs 2
+  python3 "$SCRIPT_DIR/run_worker_suites.py" --mode development --profile "$TEST_PROFILE" --worker "$WORKER" --log-dir "$LOG_DIR" --jobs 2
 fi
 printf 'Automated test logs: %s\n' "$LOG_DIR"
 echo 'Interactive native UI, IME/VoiceOver, real removable volumes, SMB, live providers and notarization require separate recorded checks.'

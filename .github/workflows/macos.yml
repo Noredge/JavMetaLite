@@ -3,9 +3,16 @@ name: macOS native gate
 on:
   push:
     branches: [main]
+    tags: ['macos-v*']
   pull_request:
     branches: [main, mac]
   workflow_dispatch:
+    inputs:
+      validation:
+        description: Core tests or complete tests and signed-package verification
+        type: choice
+        options: [full, core]
+        default: full
 
 permissions:
   contents: read
@@ -19,14 +26,15 @@ jobs:
     uses: ./.github/workflows/ci-scope.yml
 
   native:
-    name: Apple Silicon build, tests and package
+    name: Apple Silicon tests (${{ needs.scope.outputs.level }})
     needs: scope
-    if: needs.scope.outputs.full == 'true'
+    if: needs.scope.outputs.level != 'docs'
     runs-on: macos-15
     timeout-minutes: 30
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
       DOTNET_NOLOGO: true
+      TEST_PROFILE: ${{ needs.scope.outputs.level }}
     steps:
       # Official action tag resolutions verified for this source snapshot; update deliberately.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -37,12 +45,21 @@ jobs:
           global-json-file: global.json
       - name: Check runner architecture
         run: test "$(uname -m)" = arm64
-      - name: Run release tooling, localization, portable, protocol and Swift tests
-        run: ./scripts/macos/test.sh --arch arm64 --configuration Release
+      - name: Run required localization, portable, protocol and Swift tests
+        run: ./scripts/macos/test.sh --profile "$TEST_PROFILE" --arch arm64 --configuration Release
       - name: Build and verify self-contained ad-hoc app
+        if: needs.scope.outputs.level == 'full'
         run: ./scripts/macos/package.sh --arch arm64 --configuration Release --sign-mode adhoc
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        if: always()
+        if: always() && needs.scope.outputs.level == 'core'
+        with:
+          name: macos-arm64-core-test-evidence
+          path: artifacts/test-results/
+          retention-days: 7
+          if-no-files-found: error
+          compression-level: 0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always() && needs.scope.outputs.level == 'full'
         with:
           name: macos-arm64-local-build-and-evidence
           path: |
@@ -62,19 +79,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Require documentation or complete native validation
+      - name: Require the selected native validation profile
         env:
           SCOPE_RESULT: ${{ needs.scope.result }}
-          FULL: ${{ needs.scope.outputs.full }}
+          LEVEL: ${{ needs.scope.outputs.level }}
           NATIVE_RESULT: ${{ needs.native.result }}
         run: |
           python3 - <<'PY'
           import os
           if os.environ['SCOPE_RESULT'] != 'success':
               raise SystemExit('Scope/documentation gate failed')
-          if os.environ['FULL'] not in ('true', 'false'):
+          if os.environ['LEVEL'] not in ('docs', 'core', 'full'):
               raise SystemExit('No valid scope result')
-          if os.environ['FULL'] == 'true' and os.environ['NATIVE_RESULT'] != 'success':
+          if os.environ['LEVEL'] != 'docs' and os.environ['NATIVE_RESULT'] != 'success':
               raise SystemExit('Native gate did not pass')
-          print('PASS: documentation only' if os.environ['FULL'] == 'false' else 'PASS: full native gate')
+          print('PASS: macOS validation profile=' + os.environ['LEVEL'])
           PY

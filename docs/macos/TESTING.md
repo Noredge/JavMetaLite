@@ -2,18 +2,28 @@
 
 Run from the repository root with the SDK pinned by [global.json](../../global.json) and Xcode or Command Line Tools with a macOS 15+ SDK. Tests use synthetic media and disposable directories. Live network tests require explicit opt-in.
 
-## Complete gate
+## Core and full gates
 
 ```sh
-./scripts/macos/test.sh --arch arm64 --configuration Release
+./scripts/macos/test.sh --profile core --arch arm64 --configuration Release
+./scripts/macos/test.sh --profile full --arch arm64 --configuration Release
 ./scripts/macos/crossbuild-windows.sh --configuration Release
 ```
 
-Set `DOTNET=/absolute/path/to/dotnet` if the pinned SDK is outside PATH. Logs and per-suite exit codes are written to `artifacts/test-results/macos-arm64/`. A Windows cross-build is not a Windows runtime test.
+Set `DOTNET=/absolute/path/to/dotnet` if the pinned SDK is outside PATH. Omitting `--profile` keeps full validation. Core logs use `artifacts/test-results/macos-arm64-core/`; full logs use `artifacts/test-results/macos-arm64/`. A Windows cross-build is not a Windows runtime test.
+
+| Profile | Required coverage |
+| --- | --- |
+| Core | Portable Core, all Swift/Worker protocol tests, four-language lookup, Xcode source membership, CI tooling, atomic queue removal, stale plans/idempotent receipts, active-operation retention and all artwork-cache lifecycle/budget tests. |
+| Full | All core coverage plus the 1000-review queue case, large completed-result/pending-preview byte-budget cases, release tools/manifests, flat Xcode module typecheck and signed App/ZIP/no-SDK extracted-package regression. |
+
+Only three named Python stress cases are marked full-only. The profile contract test inventories all 94 Worker cases and requires the remaining 91 to stay in core. Core still tests real production retention count limits, stale-token refusal, cancellation and active-operation protection; full tests the large byte budgets. Reports list profile and skipped case IDs explicitly. Package mode rejects core even if a parent environment requests it. Core evidence has its own artifact name and contains no release ZIP.
 
 Worker protocol, retention, queue and artwork-cache suites run with at most two concurrent drivers and independent temporary roots. `worker-suites.json` records suite durations and exit codes; `*.timings.json` records individual cases. Slow RPC/operation/close phases appear as `WORKER_PHASE` in logs. Unexpected shutdown failure requiring a forced kill fails the test; deliberate crash cases still explicitly kill and reap their own Worker.
 
-GitHub runs full gates on main pushes, pull requests targeting main/mac, and manual dispatch. Branch pushes do not duplicate a pull request's gates; use manual dispatch for a branch without a PR. A shared conservative classifier allows only edits to an explicit README/status/testing-document list to use link/tool checks. Added/deleted files, payload documentation/licenses, code, resources, dependencies, scripts and workflow edits require full gates. Missing/unavailable comparison commits also require full gates. Both named final checks always report a result; failed classification, documentation or required platform work fails the gate.
+GitHub selects docs/core/full on main pushes and pull requests targeting main/mac. Edited allowlisted documents use docs checks; edits to known existing C#/Swift source use core. Changes to retention/cache/import/preview pressure-sensitive implementations, packaged resources/licenses, project/SDK/dependency inputs, scripts/workflows, unknown files, additions/deletions and missing comparison bases require full. Windows keeps its existing full automated gate for every product profile. Branch pushes do not duplicate PR gates.
+
+`macos-v*` tags force full validation in both workflows. Manual Mac dispatch defaults to full and also offers core for explicitly checking the daily profile; a core result is never release acceptance. Both named final checks always report the selected level and reject failed classification or required platform work. No scheduled job is required to retain coverage: sensitive changes and release/manual full runs execute the deferred stress tests.
 
 The Mac gate runs:
 

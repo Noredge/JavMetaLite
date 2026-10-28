@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['macos-v*']
   pull_request:
     branches: [main, mac]
   workflow_dispatch:
@@ -21,7 +22,7 @@ jobs:
   windows:
     name: Windows build, tests and package
     needs: scope
-    if: needs.scope.outputs.full == 'true'
+    if: needs.scope.outputs.level != 'docs'
     runs-on: windows-latest
     timeout-minutes: 20
     env:
@@ -89,16 +90,16 @@ jobs:
       - name: Require documentation or complete Windows validation
         env:
           SCOPE_RESULT: ${{ needs.scope.result }}
-          FULL: ${{ needs.scope.outputs.full }}
+          LEVEL: ${{ needs.scope.outputs.level }}
           WINDOWS_RESULT: ${{ needs.windows.result }}
         run: |
           python3 - <<'PY'
           import os
           if os.environ['SCOPE_RESULT'] != 'success':
               raise SystemExit('Scope/documentation gate failed')
-          if os.environ['FULL'] not in ('true', 'false'):
+          if os.environ['LEVEL'] not in ('docs', 'core', 'full'):
               raise SystemExit('No valid scope result')
-          if os.environ['FULL'] == 'true' and os.environ['WINDOWS_RESULT'] != 'success':
+          if os.environ['LEVEL'] != 'docs' and os.environ['WINDOWS_RESULT'] != 'success':
               raise SystemExit('Windows gate did not pass')
-          print('PASS: documentation only' if os.environ['FULL'] == 'false' else 'PASS: full Windows gate')
+          print('PASS: documentation only' if os.environ['LEVEL'] == 'docs' else 'PASS: full Windows gate')
           PY

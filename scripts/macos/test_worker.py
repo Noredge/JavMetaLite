@@ -15,7 +15,7 @@ import time
 import unittest
 import xml.etree.ElementTree as ET
 import zlib
-from test_diagnostics import TimedRunner, phase, stop_http_server
+from test_diagnostics import TimedRunner, phase, stop_http_server, full_only
 
 EXECUTABLE = str(Path(sys.argv.pop(1)).resolve()) if len(sys.argv) > 1 else os.environ['JAVMETALITE_TEST_WORKER']
 ROOT = Path(__file__).resolve().parents[2]

@@ -7,6 +7,13 @@ import time
 import unittest
 
 
+def full_only(test):
+    profile = os.environ.get('JAVMETALITE_TEST_PROFILE', 'full')
+    if profile not in ('core', 'full'):
+        raise ValueError('Unknown Worker test profile: ' + profile)
+    return unittest.skipIf(profile == 'core', 'Full-profile stress scenario')(test)
+
+
 def phase(name, started, **details):
     elapsed = time.monotonic() - started
     if elapsed >= 1 or details.get('error') or details.get('forcedKill'):
@@ -48,7 +55,9 @@ class TimedRunner(unittest.TextTestRunner):
         result = super().run(test)
         destination = os.environ.get('JAVMETALITE_TEST_TIMINGS')
         if destination:
-            Path(destination).write_text(json.dumps({'passed': result.wasSuccessful(),
+            Path(destination).write_text(json.dumps({'profile': os.environ.get('JAVMETALITE_TEST_PROFILE', 'full'),
+                'passed': result.wasSuccessful(),
                 'testsRun': result.testsRun, 'skipped': len(result.skipped),
+                'skippedTests': [{'test': test.id(), 'reason': reason} for test, reason in result.skipped],
                 'tests': result.timings}, indent=2) + '\n')
         return result

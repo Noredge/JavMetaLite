@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed to full CI unless every changed file is an edited, non-payload document."""
+"""Select docs, core or full validation; unknown/packaging/pressure-sensitive changes stay full."""
 import argparse
 import json
 import os
@@ -11,9 +11,43 @@ DOCS = frozenset(['README.md', 'README.zh-Hans.md', 'README.zh-Hant.md', 'README
                  'macos/README.md', 'docs/macos/STATUS.md', 'docs/macos/RELEASING.md',
                  'docs/macos/TESTING.md'])
 
+PRESSURE_SENSITIVE = frozenset([
+    'JavMetaLite.Worker/Retention.cs', 'JavMetaLite.Worker/ArtworkDiskCache.cs',
+    'JavMetaLite.Worker/Workspace.cs', 'JavMetaLite.Worker/Operations.cs',
+    'JavMetaLite.Worker/Discovery.cs', 'JavMetaLite.Worker/SavePlanning.cs',
+    *['JavMetaLite.Core/Services/' + name + '.cs' for name in
+      ['LocalSidecarInventory', 'LocalSidecarLocator', 'MovieJobLoader',
+       'MovieFileDiscovery', 'MovieInputDiscovery', 'FileSystemPathSemantics']]])
+CORE_SOURCE_ROOTS = (
+    'JavMetaLite.Core/', 'JavMetaLite.Worker/', 'JavMetaLite.Worker.RegressionHost/',
+    'JavMetaLite.PortableTests/', 'JavMetaLite.App/', 'JavMetaLite.SmokeTests/',
+    'JavMetaLite.RegressionTests/', 'JavMetaLite.UiSmokeTests/',
+    'macos/JavMetaLiteMac/', 'macos/WorkerKit/', 'macos/NativeBridgeKit/',
+    'macos/WorkerKitTests/', 'macos/NativeBridgeKitTests/')
+
 
 def classify(changes):
     return bool(changes) and all(status == 'M' and path in DOCS for status, path in changes)
+
+
+def validation_level(changes, event_name, event):
+    if event_name == 'workflow_dispatch':
+        requested = event.get('inputs', {}).get('validation', 'full')
+        return requested if requested in ('core', 'full') else 'full'
+    if event_name == 'push' and event.get('ref', '').startswith('refs/tags/'):
+        return 'full'
+    if event_name not in ('push', 'pull_request') or not changes:
+        return 'full'
+    if classify(changes):
+        return 'docs'
+    for status, path in changes:
+        if status == 'M' and path in DOCS:
+            continue
+        if status != 'M' or path in PRESSURE_SENSITIVE:
+            return 'full'
+        if not path.startswith(CORE_SOURCE_ROOTS) or Path(path).suffix not in ('.cs', '.swift'):
+            return 'full'
+    return 'core'
 
 
 def changes_for_event(event_name, event, root):
@@ -44,13 +78,22 @@ def main():
     args = parser.parse_args()
     event = json.loads(args.event_file.read_text()) if args.event_file else {}
     changes, reason = changes_for_event(args.event, event, args.root)
-    docs = classify(changes)
-    report = {'full': not docs, 'reason': 'Edited documentation allowlist only' if docs else reason,
-              'changes': changes}
+    level = validation_level(changes, args.event, event)
+    if args.event == 'workflow_dispatch':
+        reason = 'Explicit manual validation profile=' + level
+    elif event.get('ref', '').startswith('refs/tags/'):
+        reason = 'Release tag requires full validation'
+    elif level == 'docs':
+        reason = 'Edited documentation allowlist only'
+    elif level == 'core':
+        reason = 'Known source edits; pressure-sensitive and packaging inputs unchanged'
+    elif changes:
+        reason = 'Sensitive, unknown, added or deleted files require full validation'
+    report = {'level': level, 'reason': reason, 'changes': changes}
     print(json.dumps(report, indent=2))
     if os.environ.get('GITHUB_OUTPUT'):
         with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
-            stream.write('full=' + str(not docs).lower() + '\n')
+            stream.write('level=' + level + '\n')
 
 
 if __name__ == '__main__':

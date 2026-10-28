@@ -127,6 +127,7 @@ class RetentionTests(unittest.TestCase):
         finally:
             release.set(); harness.stop_http_server(server, thread)
 
+    @harness.full_only
     def test_04_large_completed_results_hit_byte_budget_before_count_limit(self):
         with harness.Worker(self.temp.name, executable=executable) as worker:
             video, job = worker.import_video(nfo=None)
@@ -154,6 +155,7 @@ class RetentionTests(unittest.TestCase):
             self.assertEqual(original, video.read_bytes())
             self.assertFalse(video.with_suffix('.nfo').exists())
 
+    @harness.full_only
     def test_05_large_pending_previews_hit_byte_budget_before_count_limit(self):
         with harness.Worker(self.temp.name, executable=executable) as worker:
             directory = Path(self.temp.name)

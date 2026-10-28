@@ -41,8 +41,8 @@ Exit 0 without `--require-distribution` means local package verification passed.
 
 ## Publish a preview
 
-1. Use a source commit with both platform CI gates passing. Prefer the original verified CI ZIP; check its commit, clean source state, SHA and manifest.
-   Documentation-only checks do not build or validate a new release candidate. If the chosen commit has no complete platform runs and CI package, manually dispatch both full workflows for that commit before publishing.
+1. Use a source commit with the full macOS profile (including signed ZIP and extracted-package tests) and Windows automated gate passing. Prefer the original verified CI ZIP; check its commit, clean source state, SHA and manifest.
+   Docs/core results do not validate a release candidate. If the chosen commit has no full platform runs and CI package, manually dispatch the Mac workflow with `validation=full` and the Windows workflow for that commit before publishing. New `macos-v*` tags also request full validation; wait for those gates before publishing.
 2. Create a `macos-v<version>-preview.<n>` draft at that exact commit, marked Pre-release and not Latest. Upload only the ZIP, matching `.sha256` and manifest.
 3. Compare uploaded asset sizes/digests with local files, then publish. Keep Windows Latest and its assets unchanged.
 4. Verify the published tag resolves to the tested commit, public download works and the release remains a Pre-release. Keep existing release assets immutable; publish a new preview for a different binary.

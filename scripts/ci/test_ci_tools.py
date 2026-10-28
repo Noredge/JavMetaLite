@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from scope import DOCS, changes_for_event, classify
+from scope import DOCS, PRESSURE_SENSITIVE, changes_for_event, classify, validation_level
 from check_docs import check
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -18,6 +18,32 @@ spec.loader.exec_module(runner)
 
 
 class ScopeTests(unittest.TestCase):
+    def test_core_source_changes_and_risk_boundaries(self):
+        for path in ['macos/JavMetaLiteMac/Features/EditorView.swift',
+                     'macos/WorkerKit/WorkerClient.swift', 'JavMetaLite.Core/Models/MovieJob.cs',
+                     'JavMetaLite.Worker/Saving.cs', 'JavMetaLite.UiSmokeTests/Program.cs']:
+            with self.subTest(path=path):
+                self.assertEqual('core', validation_level([('M', path), ('M', 'README.md')], 'push', {}))
+                self.assertEqual('full', validation_level([('A', path)], 'push', {}))
+                self.assertEqual('full', validation_level([('D', path)], 'push', {}))
+        for path in [*PRESSURE_SENSITIVE, 'global.json', 'NuGet.Config',
+                     'JavMetaLite.Worker/JavMetaLite.Worker.csproj', 'macos/Package.swift',
+                     'macos/JavMetaLiteMac/Resources/Info.plist', 'docs/macos/PACKAGE.md',
+                     'scripts/macos/package.sh', 'scripts/macos/test.sh',
+                     '.github/workflows/macos.yml', 'contracts/protocol-v1.json', 'unknown.file']:
+            with self.subTest(path=path):
+                self.assertEqual('full', validation_level([('M', path)], 'push', {}))
+
+    def test_tags_manual_and_unknown_events_cannot_silently_use_core(self):
+        docs = [('M', 'README.md')]
+        self.assertEqual('docs', validation_level(docs, 'push', {}))
+        self.assertEqual('full', validation_level(docs, 'push', {'ref': 'refs/tags/macos-v0.4.0-preview.3'}))
+        for requested, expected in [('core', 'core'), ('full', 'full'), ('docs', 'full'), ('bad', 'full')]:
+            self.assertEqual(expected, validation_level([], 'workflow_dispatch', {'inputs': {'validation': requested}}))
+        self.assertEqual('full', validation_level([], 'workflow_dispatch', {}))
+        self.assertEqual('full', validation_level([], 'push', {}))
+        self.assertEqual('full', validation_level(docs, 'unrecognized', {}))
+
     def test_only_edited_allowlisted_documents_are_fast(self):
         self.assertTrue(classify([('M', name) for name in DOCS]))
         for change in [('M', 'docs/macos/PACKAGE.md'), ('M', 'THIRD_PARTY_NOTICES.md'),
@@ -61,6 +87,57 @@ class ScopeTests(unittest.TestCase):
 
 
 class RunnerTests(unittest.TestCase):
+    def test_explicit_full_overrides_parent_core_environment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            report = runner.run_suites([('profile', [sys.executable, '-c',
+                "import os; print(os.environ['JAVMETALITE_TEST_PROFILE'])"])], tmp,
+                environment={**os.environ, 'JAVMETALITE_TEST_PROFILE': 'core'}, profile='full')
+            self.assertEqual('full', Path(tmp, 'profile.log').read_text().strip())
+            self.assertEqual('full', report['profile'])
+            with self.assertRaises(ValueError): runner.run_suites([], tmp, profile='unknown')
+
+    def test_final_package_refuses_core_profile_before_launch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts/macos/run_worker_suites.py'),
+                '--worker', '/unused-worker', '--mode', 'package', '--profile', 'core', '--log-dir', tmp],
+                capture_output=True, text=True)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn('requires the full profile', result.stderr)
+            self.assertEqual([], list(Path(tmp).iterdir()))
+
+    def test_core_excludes_only_three_named_pressure_cases_and_full_keeps_them(self):
+        worker_dir = str(ROOT / 'scripts/macos')
+        expected = {
+            'QueueInteractionTests.test_04_one_thousand_reviews_clear_with_one_rpc_and_keep_all_inputs',
+            'RetentionTests.test_04_large_completed_results_hit_byte_budget_before_count_limit',
+            'RetentionTests.test_05_large_pending_previews_hit_byte_budget_before_count_limit'}
+        sys.path.insert(0, worker_dir)
+        try:
+            for profile in ('core', 'full'):
+                skipped = set(); names = set()
+                for filename, cls in [('test_queue_interactions.py', 'QueueInteractionTests'),
+                                      ('test_worker_retention.py', 'RetentionTests'),
+                                      ('test_worker.py', 'WorkerTests'),
+                                      ('test_worker.py', 'ProviderWorkerTests'),
+                                      ('test_worker_artwork_cache.py', 'ArtworkCacheTests'),
+                                      ('test_worker_artwork_cache.py', 'ArtworkBudgetTests')]:
+                    with mock.patch.dict(os.environ, {'JAVMETALITE_TEST_PROFILE': profile,
+                                                      'JAVMETALITE_SEARCH_TEST_HOST': sys.executable}), \
+                         mock.patch.object(sys, 'argv', [filename, '/unused-worker']):
+                        module_spec = importlib.util.spec_from_file_location('profile_' + profile + cls,
+                                                  ROOT / 'scripts/macos' / filename)
+                        module = importlib.util.module_from_spec(module_spec)
+                        module_spec.loader.exec_module(module)
+                    case = getattr(module, cls)
+                    self.assertFalse(getattr(case, '__unittest_skip__', False))
+                    for name in unittest.defaultTestLoader.getTestCaseNames(case):
+                        qualified = cls + '.' + name; names.add(qualified)
+                        if getattr(getattr(case, name), '__unittest_skip__', False): skipped.add(qualified)
+                self.assertEqual(94, len(names))
+                self.assertEqual(expected if profile == 'core' else set(), skipped)
+        finally:
+            sys.path.remove(worker_dir)
+
     def test_worker_shutdown_failure_is_not_a_successful_cleanup(self):
         worker_dir = str(ROOT / 'scripts/macos')
         sys.path.insert(0, worker_dir)

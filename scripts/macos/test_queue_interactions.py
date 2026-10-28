@@ -108,6 +108,7 @@ class QueueInteractionTests(unittest.TestCase):
         finally:
             release.set(); rpc.stop_http_server(server, thread)
 
+    @rpc.full_only
     def test_04_one_thousand_reviews_clear_with_one_rpc_and_keep_all_inputs(self):
         paths = []
         for number in range(60000, 61000):

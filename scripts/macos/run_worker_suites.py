@@ -14,7 +14,9 @@ import time
 HERE = Path(__file__).resolve().parent
 
 
-def run_suites(suites, log_dir, jobs=2, environment=None, timeout=600):
+def run_suites(suites, log_dir, jobs=2, environment=None, timeout=600, profile='full'):
+    if profile not in ('core', 'full'):
+        raise ValueError('Unknown suite profile: ' + profile)
     log_dir = Path(log_dir).resolve()
     log_dir.mkdir(parents=True, exist_ok=True)
     base_env = dict(os.environ if environment is None else environment)
@@ -29,7 +31,7 @@ def run_suites(suites, log_dir, jobs=2, environment=None, timeout=600):
         # paths. A checkout nested inside the log path can exceed macOS PATH_MAX.
         short_root = '/tmp' if os.name == 'posix' else None
         with tempfile.TemporaryDirectory(prefix='jml-' + name + '-', dir=short_root) as temp:
-            env = {**base_env, 'TMPDIR': temp,
+            env = {**base_env, 'TMPDIR': temp, 'JAVMETALITE_TEST_PROFILE': profile,
                    'JAVMETALITE_TEST_TIMINGS': str(log_dir / (name + '.timings.json'))}
             with log.open('w') as stream:
                 try:
@@ -59,7 +61,7 @@ def run_suites(suites, log_dir, jobs=2, environment=None, timeout=600):
         futures = [pool.submit(execute, suite) for suite in suites]
         rows = [future.result() for future in as_completed(futures)]
     rows.sort(key=lambda row: next(i for i, s in enumerate(suites) if s[0] == row['suite']))
-    report = {'jobs': jobs, 'seconds': round(time.monotonic() - started, 3), 'suites': rows}
+    report = {'profile': profile, 'jobs': jobs, 'seconds': round(time.monotonic() - started, 3), 'suites': rows}
     (log_dir / 'worker-suites.json').write_text(json.dumps(report, indent=2) + '\n')
     with (log_dir / 'results.tsv').open('a') as stream:
         for row in rows:
@@ -71,9 +73,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--worker', type=Path, required=True)
     parser.add_argument('--mode', choices=['development', 'package'], required=True)
+    parser.add_argument('--profile', choices=['core', 'full'], default='full')
     parser.add_argument('--log-dir', type=Path, required=True)
     parser.add_argument('--jobs', type=int, choices=[1, 2, 3, 4], default=2)
     args = parser.parse_args()
+    if args.mode == 'package' and args.profile != 'full':
+        parser.error('Final package verification requires the full profile')
     worker = str(args.worker.resolve())
     protocol_flags = ['--require-search-host'] if args.mode == 'development' else ['--production-only']
     suites = [(name, [sys.executable, str(HERE / script), worker, *flags]) for name, script, flags in [
@@ -83,7 +88,7 @@ def main():
         # Package verification runs shipping cache cases once, after extraction.
         *([('artwork-cache', 'test_worker_artwork_cache.py', ['--require-search-host'])]
           if args.mode == 'development' else [])]]
-    report = run_suites(suites, args.log_dir, args.jobs)
+    report = run_suites(suites, args.log_dir, args.jobs, profile=args.profile)
     raise SystemExit(1 if any(row['exitCode'] for row in report['suites']) else 0)
 
 
