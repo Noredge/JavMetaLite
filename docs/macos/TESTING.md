@@ -15,7 +15,7 @@ Set `DOTNET=/absolute/path/to/dotnet` if the pinned SDK is outside PATH. Omittin
 | Profile | Required coverage |
 | --- | --- |
 | Core | Portable Core, all Swift/Worker protocol tests, four-language lookup, Xcode source membership, CI tooling, atomic queue removal, stale plans/idempotent receipts, active-operation retention and all artwork-cache lifecycle/budget tests. |
-| Full | All core coverage plus the 1000-review queue case, large completed-result/pending-preview byte-budget cases, release tools/manifests, flat Xcode module typecheck and signed App/ZIP/no-SDK extracted-package regression. |
+| Full | All core coverage plus the 1000-review queue case, large completed-result/pending-preview byte-budget cases, release tools/manifests and flat Xcode module typecheck. Full CI also runs signed App/ZIP/no-SDK extracted-package regression. |
 
 Only three named Python stress cases are marked full-only. The profile contract test inventories all 94 Worker cases and requires the remaining 91 to stay in core. Core still tests real production retention count limits, stale-token refusal, cancellation and active-operation protection; full tests the large byte budgets. Reports list profile and skipped case IDs explicitly. Package mode rejects core even if a parent environment requests it. Core evidence has its own artifact name and contains no release ZIP.
 
