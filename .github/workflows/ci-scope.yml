@@ -1,0 +1,30 @@
+name: CI scope and documentation
+
+on:
+  workflow_call:
+    outputs:
+      full:
+        description: Whether product and packaging gates are required
+        value: ${{ jobs.scope.outputs.full }}
+
+permissions:
+  contents: read
+
+jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      full: ${{ steps.changes.outputs.full }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test CI classification and suite failure handling
+        run: python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
+      - name: Check repository document links
+        run: python3 scripts/ci/check_docs.py
+      - name: Classify changes conservatively
+        id: changes
+        run: python3 scripts/ci/scope.py

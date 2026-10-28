@@ -106,7 +106,7 @@ class QueueInteractionTests(unittest.TestCase):
             self.assertEqual([], terminal['result']['savedJobIds'])
             self.assertEqual(before_media, self.inventory(), 'Canceled output and refused queue removal preserve video, original NFO, and local artwork bytes/mtime.')
         finally:
-            release.set(); server.shutdown(); server.server_close(); thread.join(timeout=2)
+            release.set(); rpc.stop_http_server(server, thread)
 
     def test_04_one_thousand_reviews_clear_with_one_rpc_and_keep_all_inputs(self):
         paths = []
@@ -121,4 +121,4 @@ class QueueInteractionTests(unittest.TestCase):
         self.assertEqual(before, self.inventory())
 
 
-if __name__ == '__main__': unittest.main(verbosity=2)
+if __name__ == '__main__': unittest.main(verbosity=2, testRunner=rpc.TimedRunner)

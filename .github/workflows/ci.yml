@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, mac]
+    branches: [main]
   pull_request:
     branches: [main, mac]
   workflow_dispatch:
@@ -15,8 +15,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Windows automated gate
+  scope:
+    uses: ./.github/workflows/ci-scope.yml
+
+  windows:
+    name: Windows build, tests and package
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     runs-on: windows-latest
     timeout-minutes: 20
     env:
@@ -73,3 +78,27 @@ jobs:
           path: artifacts/test-results/windows/
           if-no-files-found: warn
           retention-days: 7
+
+  test:
+    name: Windows automated gate
+    needs: [scope, windows]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require documentation or complete Windows validation
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          FULL: ${{ needs.scope.outputs.full }}
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+        run: |
+          python3 - <<'PY'
+          import os
+          if os.environ['SCOPE_RESULT'] != 'success':
+              raise SystemExit('Scope/documentation gate failed')
+          if os.environ['FULL'] not in ('true', 'false'):
+              raise SystemExit('No valid scope result')
+          if os.environ['FULL'] == 'true' and os.environ['WINDOWS_RESULT'] != 'success':
+              raise SystemExit('Windows gate did not pass')
+          print('PASS: documentation only' if os.environ['FULL'] == 'false' else 'PASS: full Windows gate')
+          PY

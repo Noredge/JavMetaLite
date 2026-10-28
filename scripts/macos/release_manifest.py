@@ -106,6 +106,7 @@ def source_selected(relative):
     exact = {'global.json', 'NuGet.Config', 'LICENSE', 'THIRD_PARTY_NOTICES.md', '.gitignore',
              '.github/workflows/macos.yml', 'docs/macos/THIRD_PARTY_NOTICES.md', 'docs/macos/PACKAGE.md'}
     return relative in exact or relative.startswith(('JavMetaLite.', 'macos/', 'scripts/macos/',
+                                                      'scripts/ci/', '.github/workflows/',
                                                       'contracts/', 'fixtures/', 'docs/macos/licenses/'))
 
 

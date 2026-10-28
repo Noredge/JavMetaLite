@@ -49,4 +49,4 @@ macos/.swiftpm/
 *.xcresult/
 
 # Python verification cache
-scripts/macos/__pycache__/
+scripts/**/__pycache__/

@@ -125,7 +125,7 @@ class RetentionTests(unittest.TestCase):
                 self.assertEqual('canceled', worker.operation(active['operationId'], timeout=3)['status'])
                 self.assertEqual(job['reviewRevision'], worker.get_job(job['jobId'])['reviewRevision'])
         finally:
-            release.set(); server.shutdown(); server.server_close(); thread.join(timeout=2)
+            release.set(); harness.stop_http_server(server, thread)
 
     def test_04_large_completed_results_hit_byte_budget_before_count_limit(self):
         with harness.Worker(self.temp.name, executable=executable) as worker:
@@ -183,4 +183,4 @@ class RetentionTests(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main(verbosity=2)
+    unittest.main(verbosity=2, testRunner=harness.TimedRunner)

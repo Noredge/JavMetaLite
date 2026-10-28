@@ -6,19 +6,21 @@ check_environment
 cd "$REPO_ROOT"
 LOG_DIR="$REPO_ROOT/artifacts/test-results/macos-$ARCH"
 mkdir -p "$LOG_DIR"
-printf 'suite\texit_code\n' > "$LOG_DIR/results.tsv"
+printf 'suite\texit_code\tseconds\n' > "$LOG_DIR/results.tsv"
 run_logged() {
   local suite="$1"; shift
+  local started=$SECONDS
   set +e
   "$@" 2>&1 | tee "$LOG_DIR/$suite.log"
   local result=${PIPESTATUS[0]}
   set -e
-  printf '%s\t%s\n' "$suite" "$result" >> "$LOG_DIR/results.tsv"
+  printf '%s\t%s\t%s\n' "$suite" "$result" "$((SECONDS - started))" >> "$LOG_DIR/results.tsv"
   [ "$result" -eq 0 ] || exit "$result"
 }
 run_logged localization python3 "$SCRIPT_DIR/test-localization.py"
 run_logged release-tools python3 "$SCRIPT_DIR/test_release_tools.py"
 run_logged release-manifest python3 "$SCRIPT_DIR/test_release_manifest.py"
+run_logged ci-tools python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
 run_logged portable "$DOTNET" run --project JavMetaLite.PortableTests/JavMetaLite.PortableTests.csproj -c "$CONFIGURATION"
 run_logged worker-build "$DOTNET" build JavMetaLite.Worker/JavMetaLite.Worker.csproj -c "$CONFIGURATION"
 run_logged search-host-build "$DOTNET" build JavMetaLite.Worker.RegressionHost/JavMetaLite.Worker.RegressionHost.csproj -c "$CONFIGURATION"
@@ -38,10 +40,7 @@ fi
 run_logged swift "${SWIFT_TEST_COMMAND[@]}"
 run_logged xcode-sources python3 "$SCRIPT_DIR/test_xcode_sources.py" --arch "$SWIFT_ARCH"
 if [ -f "$SCRIPT_DIR/test_worker.py" ]; then
-  run_logged protocol python3 "$SCRIPT_DIR/test_worker.py" "$WORKER" --require-search-host
-  run_logged queue-interactions python3 "$SCRIPT_DIR/test_queue_interactions.py" "$WORKER"
-  run_logged retention python3 "$SCRIPT_DIR/test_worker_retention.py" "$WORKER"
-  run_logged artwork-cache python3 "$SCRIPT_DIR/test_worker_artwork_cache.py" "$WORKER" --require-search-host
+  python3 "$SCRIPT_DIR/run_worker_suites.py" --mode development --worker "$WORKER" --log-dir "$LOG_DIR" --jobs 2
 fi
 printf 'Automated test logs: %s\n' "$LOG_DIR"
 echo 'Interactive native UI, IME/VoiceOver, real removable volumes, SMB, live providers and notarization require separate recorded checks.'

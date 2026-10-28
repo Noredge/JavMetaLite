@@ -127,7 +127,7 @@ class ArtworkCacheTests(unittest.TestCase):
                 finish.set()
                 self.assertEqual(job['reviewRevision'],worker.get_job(job['jobId'])['reviewRevision'])
         finally:
-            finish.set(); server.shutdown(); server.server_close(); thread.join(timeout=2)
+            finish.set(); harness.stop_http_server(server, thread)
 
     def test_04_only_inactive_owned_sessions_are_reclaimed_recovery_untouched(self):
         data=self.base/'engine data 数据'; recovery=data/'recovery'; recovery.mkdir(parents=True)
@@ -248,4 +248,4 @@ class ArtworkBudgetTests(ArtworkCacheTests):
             self.assert_missing_payload_rebuilt(worker)
 
 
-if __name__=='__main__': unittest.main(verbosity=2)
+if __name__=='__main__': unittest.main(verbosity=2, testRunner=harness.TimedRunner)

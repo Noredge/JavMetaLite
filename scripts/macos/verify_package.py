@@ -192,6 +192,10 @@ def verify(args):
             symbols = run(['/usr/bin/nm', frontend]).stdout
             for symbol in ('NativeTextSession', 'BrowserPageCapture', 'FileTrashCoordinator', 'ArtworkThumbnailCache'):
                 require(symbol in symbols, f'Native bridge missing: {symbol}')
+    if args.structure_only:
+        print(f'PACKAGE STRUCTURE PASS: {expected_arch}, {mode}, {native_count} native files, '
+              f'{localized_count} keys × 4 languages; Worker execution deferred to final ZIP extraction')
+        return
     with tempfile.TemporaryDirectory(prefix='JavMetaLite package 检查 ') as temp:
         env = {'HOME': temp, 'TMPDIR': temp, 'PATH': '/usr/bin:/bin', 'DOTNET_CLI_TELEMETRY_OPTOUT': '1'}
         requests = [{'jsonrpc': '2.0', 'id': 'verify-init', 'method': 'initialize', 'params': {'protocolVersion': 1}},
@@ -222,6 +226,8 @@ def main():
     parser.add_argument('--archive', type=Path)
     parser.add_argument('--expected-sign-mode', choices=['adhoc', 'developer-id'])
     parser.add_argument('--expected-team-id')
+    parser.add_argument('--structure-only', action='store_true',
+                        help='Check all payload/signature/resource rules; defer dynamic Worker tests')
     args = parser.parse_args()
     try:
         verify(args)

@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
+DEFER_WORKER_TESTS=false
+if [ "${1:-}" = '--defer-worker-tests' ]; then DEFER_WORKER_TESTS=true; shift; fi
 parse_options "$@"
 check_environment
 check_signing_identity
@@ -46,5 +48,8 @@ python3 "$SCRIPT_DIR/release_manifest.py" build --app "$APP_PATH" --dotnet "$DOT
   "${PROVENANCE_ARGUMENTS[@]}"
 "$SCRIPT_DIR/sign.sh" "$APP_PATH" "${SIGN_ARGUMENTS[@]}" --report "$BUILD_ROOT/signing-report.json"
 python3 "$SCRIPT_DIR/release_manifest.py" payload --app "$APP_PATH" --output "$BUILD_ROOT/manifest.json"
+if [ "$DEFER_WORKER_TESTS" = true ]; then
+  VERIFY_ARGUMENTS+=(--structure-only)
+fi
 "$SCRIPT_DIR/verify-package.sh" "$APP_PATH" --manifest "$BUILD_ROOT/manifest.json" "${VERIFY_ARGUMENTS[@]}"
 printf 'Verified %s app (not notarized): %s\n' "$SIGN_MODE" "$APP_PATH"

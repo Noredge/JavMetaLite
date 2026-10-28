@@ -2,7 +2,7 @@ name: macOS native gate
 
 on:
   push:
-    branches: [main, mac, feature/macos-native]
+    branches: [main]
   pull_request:
     branches: [main, mac]
   workflow_dispatch:
@@ -15,8 +15,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  apple-silicon:
-    name: Apple Silicon portable and native gate
+  scope:
+    uses: ./.github/workflows/ci-scope.yml
+
+  native:
+    name: Apple Silicon build, tests and package
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     runs-on: macos-15
     timeout-minutes: 30
     env:
@@ -49,3 +54,27 @@ jobs:
           retention-days: 7
           if-no-files-found: error
           compression-level: 0
+
+  apple-silicon:
+    name: Apple Silicon portable and native gate
+    needs: [scope, native]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require documentation or complete native validation
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          FULL: ${{ needs.scope.outputs.full }}
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: |
+          python3 - <<'PY'
+          import os
+          if os.environ['SCOPE_RESULT'] != 'success':
+              raise SystemExit('Scope/documentation gate failed')
+          if os.environ['FULL'] not in ('true', 'false'):
+              raise SystemExit('No valid scope result')
+          if os.environ['FULL'] == 'true' and os.environ['NATIVE_RESULT'] != 'success':
+              raise SystemExit('Native gate did not pass')
+          print('PASS: documentation only' if os.environ['FULL'] == 'false' else 'PASS: full native gate')
+          PY

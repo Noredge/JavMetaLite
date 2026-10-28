@@ -15,6 +15,7 @@ import time
 import unittest
 import xml.etree.ElementTree as ET
 import zlib
+from test_diagnostics import TimedRunner, phase, stop_http_server
 
 EXECUTABLE = str(Path(sys.argv.pop(1)).resolve()) if len(sys.argv) > 1 else os.environ['JAVMETALITE_TEST_WORKER']
 ROOT = Path(__file__).resolve().parents[2]
@@ -88,15 +89,25 @@ class Worker:
         return self.responses.pop(request_id)
 
     def request(self, method, params=None, fragment=False):
-        return self.receive(self.send(method, params, fragment))
+        started = time.monotonic()
+        try:
+            return self.receive(self.send(method, params, fragment))
+        except Exception as error:
+            phase('rpc.' + method, started, error=type(error).__name__)
+            raise
+        finally:
+            phase('rpc.' + method, started)
 
     def operation(self, operation_id, timeout=20):
+        started = time.monotonic()
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             status = self.request('operations.get', {'operationId': operation_id})['result']
             if status['status'] != 'running':
+                phase('operation', started, status=status['status'])
                 return status
             time.sleep(.01)
+        phase('operation', started, status='timeout')
         raise TimeoutError(f'Operation still running: {operation_id}')
 
     def import_video(self, name='DEMO-001.mp4', nfo=NFO):
@@ -145,16 +156,23 @@ class Worker:
         return response['result']
 
     def close(self):
+        started = time.monotonic()
+        failure = None
         if self.proc.poll() is None:
             try:
                 self.request('shutdown')
                 self.proc.stdin.close()
                 self.proc.wait(timeout=20)
-            except Exception:
+            except Exception as error:
+                failure = error
                 self.proc.kill(); self.proc.wait(timeout=5)
         self.reader.join(timeout=2); self.errors.join(timeout=2)
         for pipe in (self.proc.stdin, self.proc.stdout, self.proc.stderr):
             pipe.close()
+        phase('close', started, forcedKill=failure is not None, returnCode=self.proc.returncode)
+        if failure is not None:
+            raise AssertionError('Worker shutdown failed; forced termination was required: ' +
+                                 type(failure).__name__) from failure
 
     def __enter__(self): return self
     def __exit__(self, *args): self.close()
@@ -1151,7 +1169,7 @@ class WorkerTests(unittest.TestCase):
                 self.reason({'error': oversized['error']}, 'ARTWORK_INVALID')
                 self.assertEqual(job['reviewRevision'], worker.get_job(job['jobId'])['reviewRevision'])
         finally:
-            release.set(); server.shutdown(); server.server_close(); server_thread.join(timeout=2)
+            release.set(); stop_http_server(server, server_thread)
 
     def test_36_native_default_empty_custom_root_before_and_after_trash(self):
         with Worker(self.temp.name) as worker:
@@ -1319,6 +1337,7 @@ class WorkerTests(unittest.TestCase):
         state_lock = threading.Lock()
 
         class Handler(http.server.BaseHTTPRequestHandler):
+            protocol_version = 'HTTP/1.1'
             def log_message(self, *args): pass
 
             def do_GET(self):
@@ -1329,8 +1348,18 @@ class WorkerTests(unittest.TestCase):
                 self.send_response(404 if missing else 200)
                 self.send_header('Content-Type', 'image/png')
                 self.send_header('Content-Length', str(21 * 1024 * 1024 if mode == 'oversize' else 0 if missing else len(body)))
+                # Rejecting one phase must not leave a truncated body or a
+                # reusable connection for the next phase.
+                self.send_header('Connection', 'close')
+                self.close_connection = True
                 self.end_headers()
-                if not missing and mode != 'oversize': self.wfile.write(body)
+                try:
+                    if mode == 'oversize':
+                        for _ in range(21 * 16): self.wfile.write(b'x' * 65536)
+                    elif not missing:
+                        self.wfile.write(body)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass  # A client may reject the declared oversize before reading.
 
         server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         server.daemon_threads = True
@@ -1397,8 +1426,13 @@ class WorkerTests(unittest.TestCase):
                 failed = preview(params)
                 self.assertEqual('failed', failed['status'], failed)
                 self.reason({'error': failed['error']}, 'OPERATION_FAILED')
-                self.assertEqual(2, len(failed['error']['data']['detail']['attempts']))
-                self.assertEqual(['/syntheticpl.jpg', '/syntheticps.jpg'], state['requests'])
+                attempts = failed['error']['data']['detail']['attempts']
+                self.assertEqual([base + '/syntheticpl.jpg', base + '/syntheticps.jpg'],
+                                 [a['location'] for a in attempts], failed)
+                self.assertEqual(['httpError', 'httpError'], [a['status'] for a in attempts], failed)
+                self.assertEqual([404, 404], [a.get('httpStatus') for a in attempts], failed)
+                with state_lock: requests = list(state['requests'])
+                self.assertEqual(['/syntheticpl.jpg', '/syntheticps.jpg'], requests, failed)
                 with state_lock: state.update(mode='valid', requests=[])
                 direct = preview(params)
                 self.assertEqual('completed', direct['status'], direct)
@@ -1412,7 +1446,7 @@ class WorkerTests(unittest.TestCase):
                 self.assertEqual(files, {path: path.read_bytes() for path in files})
                 self.assertEqual([], list(Path(worker.initialized['cacheRoot']).glob('*.tmp')))
         finally:
-            server.shutdown(); server.server_close(); thread.join(timeout=2)
+            stop_http_server(server, thread)
 
 
     def test_47_T06_R09_unopened_local_cover_quality_is_advisory_and_not_poster_derived(self):
@@ -1537,7 +1571,7 @@ class WorkerTests(unittest.TestCase):
                 self.assertEqual(remote_job, worker.get_job(job['jobId']))
                 self.assertEqual([], list(Path(worker.initialized['cacheRoot']).glob('*.tmp')))
         finally:
-            release.set(); server.shutdown(); server.server_close(); thread.join(timeout=2)
+            release.set(); stop_http_server(server, thread)
 
 
     def test_54_T01_T02_P04_discovery_is_read_only_and_imports_only_checked_items(self):
@@ -2326,7 +2360,7 @@ class ProviderWorkerTests(unittest.TestCase):
             self.assertEqual(['recoveryRequired'], [journal['status'] for journal in journals])
             self.assertTrue(journals[0]['cleanupIssues'][0]['error'])
         finally:
-            release.set(); server.shutdown(); server.server_close(); thread.join(timeout=2)
+            release.set(); stop_http_server(server, thread)
 
     def test_53_R07_retry_without_failure_history_never_expands_provider_requests(self):
         _, job = self.worker.import_video('TEST-940.mp4', nfo=None)
@@ -2487,4 +2521,4 @@ class ProviderWorkerTests(unittest.TestCase):
 
 if __name__ == '__main__':
     print('Protocol scope: production only' if PRODUCTION_ONLY else 'Protocol scope: production + fixed-HTTP Workspace/provider integration', file=sys.stderr)
-    unittest.main(verbosity=2, defaultTest='WorkerTests' if PRODUCTION_ONLY else None)
+    unittest.main(verbosity=2, testRunner=TimedRunner, defaultTest='WorkerTests' if PRODUCTION_ONLY else None)

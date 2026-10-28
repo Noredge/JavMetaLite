@@ -11,6 +11,10 @@ Run from the repository root with the SDK pinned by [global.json](../../global.j
 
 Set `DOTNET=/absolute/path/to/dotnet` if the pinned SDK is outside PATH. Logs and per-suite exit codes are written to `artifacts/test-results/macos-arm64/`. A Windows cross-build is not a Windows runtime test.
 
+Worker protocol, retention, queue and artwork-cache suites run with at most two concurrent drivers and independent temporary roots. `worker-suites.json` records suite durations and exit codes; `*.timings.json` records individual cases. Slow RPC/operation/close phases appear as `WORKER_PHASE` in logs. Unexpected shutdown failure requiring a forced kill fails the test; deliberate crash cases still explicitly kill and reap their own Worker.
+
+GitHub runs full gates on main pushes, pull requests targeting main/mac, and manual dispatch. Branch pushes do not duplicate a pull request's gates; use manual dispatch for a branch without a PR. A shared conservative classifier allows only edits to an explicit README/status/testing-document list to use link/tool checks. Added/deleted files, payload documentation/licenses, code, resources, dependencies, scripts and workflow edits require full gates. Missing/unavailable comparison commits also require full gates. Both named final checks always report a result; failed classification, documentation or required platform work fails the gate.
+
 The Mac gate runs:
 
 | Suite | Coverage |
@@ -36,6 +40,8 @@ The Mac gate runs:
 ```
 
 Packaging extracts its ZIP with `ditto`, verifies payload bytes/signatures/architectures/dependencies/four languages, and runs the production Worker protocol, queue and retention suites from the extracted bundle with no SDK environment. It does not package RegressionHost. The embedded build manifest records source/toolchain/dependency inputs; the external manifest binds the signed payload and ZIP.
+
+Packaging checks the pre-ZIP App's complete static structure, then runs dynamic startup/cache checks once on the final extracted payload and its protocol/queue/retention suites with two drivers. Package suite logs are retained under `artifacts/test-results/package-arm64/`. Standalone `build.sh` and `verify-package.sh` keep dynamic checks enabled by default; `--structure-only` on verification explicitly reports that Worker execution was deferred. Packaging never accepts structure-only verification as its final gate.
 
 ## Native manual regression
 
