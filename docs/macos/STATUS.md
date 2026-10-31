@@ -1,6 +1,6 @@
 # macOS 1.0 状态与验证范围
 
-macOS **1.0.0（build50）**，Apple Silicon，最低部署目标 macOS 15。下载、精确源码提交、最终 ZIP 的 SHA-256、清单与门禁链接以 [macOS 1.0 Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) 为准。Windows 保持 **v1.2.3**，独立保留 Latest。
+macOS **1.0.0（build51）**，Apple Silicon，最低部署目标 macOS 15。下载、精确源码提交、最终 ZIP 的 SHA-256、清单与门禁链接以 [macOS 1.0 Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) 为准。Windows 保持 **v1.2.3**，独立保留 Latest。
 
 GitHub 包采用 **ad-hoc 签名**，不提供 Developer ID 或公证。项目的 `github-adhoc` 政策允许正式发布，但不代表 Apple 身份验证、恶意软件扫描或 Gatekeeper 自动放行。首次打开方式见 [安装说明](../../macos/README.md#first-launch)。
 

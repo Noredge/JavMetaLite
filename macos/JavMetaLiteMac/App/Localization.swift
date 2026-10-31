@@ -38,6 +38,19 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 enum AppLocalization {
     static var resources: Bundle {
         #if SWIFT_PACKAGE
+        // SwiftPM accessors differ across toolchains: some try the app root,
+        // then an absolute build-machine path, and trap if neither exists.
+        // Packaged apps must resolve their own Contents/Resources first and
+        // must never fall back to resources left in a developer's checkout.
+        if Bundle.main.bundleURL.pathExtension.lowercased() == "app" {
+            if let url = Bundle.main.resourceURL?.appendingPathComponent("JavMetaLiteMac_JavMetaLiteMac.bundle", isDirectory: true),
+               let bundle = Bundle(url: url) {
+                return bundle
+            }
+            // Retain the normal missing-translation fallback if an installed
+            // bundle is damaged instead of invoking SwiftPM's fatal accessor.
+            return Bundle.main
+        }
         return Bundle.module
         #else
         return Bundle.main

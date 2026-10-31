@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate the String Catalog and actual Swift localization resolver with synthetic bundles."""
 import json
+import os
 from pathlib import Path
 import plistlib
 import re
@@ -90,3 +91,67 @@ with tempfile.TemporaryDirectory(prefix='JavMetaLite localization 测试 ') as t
     executable = directory / 'LocalizationChecks'
     subprocess.run(['/usr/bin/xcrun', 'swiftc', str(ROOT / 'macos/JavMetaLiteMac/App/Localization.swift'), str(ROOT / 'scripts/macos/LocalizationChecks.swift'), '-o', str(executable)], check=True)
     subprocess.run([str(executable), str(RESOURCES), str(CATALOG), str(fallback), str(lowercase)], check=True)
+
+    # Exercise the actual SWIFT_PACKAGE branch inside a relocated .app. A
+    # generated Bundle.module accessor can trap before trying Contents/Resources
+    # and its absolute build-machine fallback can hide this on a developer Mac.
+    app = directory / 'Relocated Localization.app'
+    app_resources = app / 'Contents/Resources'
+    (app / 'Contents/MacOS').mkdir(parents=True)
+    app_resources.mkdir()
+    (app / 'Contents/Info.plist').write_bytes(plistlib.dumps({
+        'CFBundleIdentifier': 'com.noredge.JavMetaLite.PackagedLocalizationChecks',
+        'CFBundleExecutable': 'PackagedLocalizationChecks', 'CFBundlePackageType': 'APPL',
+        'CFBundleDevelopmentRegion': 'en',
+    }))
+    package_main = directory / 'PackagedLocalizationChecks.swift'
+    package_main.write_text('''import Foundation
+extension Bundle {
+    static var module: Bundle { fatalError("Build-machine resource fallback must never be evaluated in a packaged app") }
+}
+@main enum PackagedLocalizationChecks {
+    static func main() throws {
+        let resources = AppLocalization.resources
+        if CommandLine.arguments[1] == "missing" {
+            precondition(resources.bundleURL == Bundle.main.bundleURL)
+            precondition(AppLocalization.string("missingFixtureKey", preference: "en", resources: resources) == "missingFixtureKey")
+            print("PACKAGED LOCALIZATION MISSING-RESOURCE FALLBACK PASS: no build-machine accessor evaluated")
+            return
+        }
+        let expected = Bundle.main.resourceURL!.appendingPathComponent("JavMetaLiteMac_JavMetaLiteMac.bundle").standardizedFileURL
+        precondition(resources.bundleURL.standardizedFileURL == expected, "Resources must come from this relocated app")
+        let data = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))
+        let catalog = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let entries = catalog["strings"] as! [String: [String: Any]]
+        var checks = 0
+        for language in ["en", "zh-Hans", "zh-Hant", "ja"] {
+            for (key, entry) in entries {
+                let localizations = entry["localizations"] as! [String: [String: Any]]
+                let unit = localizations[language]!["stringUnit"] as! [String: Any]
+                precondition(AppLocalization.string(key, preference: language, resources: resources) == unit["value"] as! String)
+                checks += 1
+            }
+        }
+        print("PACKAGED LOCALIZATION PASS: \\(checks) checks from current .app; SWIFT_PACKAGE build-machine fallback forbidden")
+    }
+}
+''')
+    package_executable = app / 'Contents/MacOS/PackagedLocalizationChecks'
+    subprocess.run(['/usr/bin/xcrun', 'swiftc', '-D', 'SWIFT_PACKAGE',
+                    str(ROOT / 'macos/JavMetaLiteMac/App/Localization.swift'), str(package_main),
+                    '-o', str(package_executable)], check=True)
+    unrelated = directory / 'unrelated-working-directory'
+    unrelated.mkdir()
+    environment = {key: value for key, value in os.environ.items()
+                   if key not in ('PACKAGE_RESOURCE_BUNDLE_PATH', 'PACKAGE_RESOURCE_BUNDLE_URL')}
+    module = app_resources / 'JavMetaLiteMac_JavMetaLiteMac.bundle'
+    for contents_layout in (False, True):
+        resources_root = module / 'Contents/Resources' if contents_layout else module
+        resources_root.mkdir(parents=True)
+        plist_root = module / 'Contents' if contents_layout else module
+        (plist_root / 'Info.plist').write_bytes((fallback / 'Info.plist').read_bytes())
+        for language in LANGUAGES:
+            shutil.copytree(RESOURCES / (language + '.lproj'), resources_root / (language.lower() + '.lproj'))
+        subprocess.run([str(package_executable), str(CATALOG)], cwd=unrelated, env=environment, check=True)
+        shutil.rmtree(module)
+    subprocess.run([str(package_executable), 'missing'], cwd=unrelated, env=environment, check=True)

@@ -1,6 +1,6 @@
 # JavMetaLite for macOS
 
-A native editor for reviewing movie metadata and artwork, editing local NFO files and organizing media. macOS **1.0.0 (build50)** supports Apple Silicon and macOS 15 or later. Windows has its own release and download.
+A native editor for reviewing movie metadata and artwork, editing local NFO files and organizing media. macOS **1.0.0 (build51)** supports Apple Silicon and macOS 15 or later. Windows has its own release and download.
 
 ## Run
 
