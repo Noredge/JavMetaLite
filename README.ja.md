@@ -66,6 +66,8 @@ EXE を含むフォルダー、ZIP、SHA-256 ファイルは `release/` に出�
 
 [macOS 0.4.0 Preview 2 (build47)](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2) から [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v0.4.0-preview.2/JavMetaLite-macOS-arm64-Release-adhoc.zip) を取得し、展開して `JavMetaLite.app` を開きます。.NET のインストールは不要です。
 
+GitHub 版はアドホック署名で、Developer ID 署名と公証はありません。この方式での正式版公開もプロジェクト方針として認めていますが、Apple による発行者の確認やアプリの検査を意味しません。Release に記載された ZIP の SHA-256 を照合し、展開した `JavMetaLite.app` を「アプリケーション」に移動します。信頼できるアプリが開発元の未確認や Apple による確認不可を理由にブロックされた場合は、一度起動を試みてから **システム設定 → プライバシーとセキュリティ → このまま開く** で、このアプリの起動を確認します。破損やマルウェアの警告にはこの手順を使わないでください。[Apple の手順](https://support.apple.com/ja-jp/102445) · [初回起動](macos/README.md#first-launch)。
+
 ビルドには [global.json](global.json) 指定の SDK と、macOS 15 以降の SDK を含む Xcode または Command Line Tools が必要です。リポジトリのルートで実行します。
 
 ```sh

@@ -30,7 +30,8 @@ The Mac gate runs:
 | Suite | Coverage |
 | --- | --- |
 | Localization | Four-language keys, placeholders, catalog parity, Foundation lookup and canonical/lowercase lproj layouts. |
-| Release tools/manifest | Signing policies, refusal paths, payload/source hashes, permissions, symlinks and source export. Tests never submit to Apple. |
+| Release tools/manifest | `github-adhoc`, explicit `signed-only`/`notarized`, refusal paths, payload/source hashes, permissions, symlinks and source export. Tests never submit to Apple. |
+| Lifecycle measurement helper | Six deterministic tests for the canceled-preview read-only retry window, non-busy failures and normal operation timeouts. |
 | Portable Core | NFO round-trip, raw XML, parsing, image processing, file identity, conflicts, cancellation and transactions. |
 | Swift/native adapters | JSON framing, Worker transport, broken pipes, timeout/retry, review state, AppKit editing/Undo, WebKit, image cache and Trash. |
 | Xcode sources | Project membership and non-SwiftPM compile layout; separate from full Xcode/hosted testing. |
@@ -49,7 +50,7 @@ The Mac gate runs:
   --expected-sign-mode adhoc
 ```
 
-Packaging extracts its ZIP with `ditto`, verifies payload bytes/signatures/architectures/dependencies/four languages, and runs the production Worker protocol, queue and retention suites from the extracted bundle with no SDK environment. It does not package RegressionHost. The embedded build manifest records source/toolchain/dependency inputs; the external manifest binds the signed payload and ZIP.
+Packaging extracts its ZIP with `ditto`, verifies payload bytes/signatures/architectures/dependencies/four languages, and runs the production Worker protocol, queue and retention suites from the extracted bundle with no SDK environment. It does not package RegressionHost. The embedded build manifest records source/toolchain/dependency inputs; the external manifest binds the signed payload and ZIP. The default `github-adhoc` readiness policy accepts verified local integrity for GitHub distribution; Developer ID, notarization and Gatekeeper fields remain independent. `manualAcceptanceVerified` is always false in the automated report. Installation and native acceptance need separate evidence; see [the release policy](RELEASING.md).
 
 Packaging checks the pre-ZIP App's complete static structure, then runs dynamic startup/cache checks once on the final extracted payload and its protocol/queue/retention suites with two drivers. Package suite logs are retained under `artifacts/test-results/package-arm64/`. Standalone `build.sh` and `verify-package.sh` keep dynamic checks enabled by default; `--structure-only` on verification explicitly reports that Worker execution was deferred. Packaging never accepts structure-only verification as its final gate.
 
@@ -73,6 +74,22 @@ Use disposable synthetic videos and record actual actions, screenshots and disk 
 
 The [40-case checklist](WINDOWS-CASE-REGRESSION.md) covers product regression requirements. [STATUS](STATUS.md) records current verified and unverified scope; a controlled API test is not a physical-device or live-site pass.
 
+## Recorded local acceptance for build49
+
+On the current Apple Silicon Mac / macOS 27.0.1, `full-build49.log` passed Portable 60/60 with 770 assertions, Swift 97, all 103 Worker cases, 512 localization keys with 4126 runtime checks, release tools 37, manifest tests 15, lifecycle-helper tests 6 and CI-tool tests 12. Xcode membership and module typecheck passed; full Xcode/hosted UI tests were not run.
+
+Keep the distinct binaries and evidence scopes explicit:
+
+| Evidence | Observed result and boundary |
+| --- | --- |
+| APFS disk images with the newly compiled cleanup fix | 8/8: verified cross-device copy, full disk, read-only mount, detach after preview, detach during copy, direct mountpoint detach, permission denial and 300 saves across 3 sessions. Detach during copying retains `recoveryRequired`, warnings and staged files after remount. This uses a development Worker DLL, not the final build49 signed ZIP; it is not physical-disk or SMB acceptance. |
+| clean `4d3cbd6` build48 shipping Worker | 2169 lifecycle cycles over 1200.37 seconds with 16 synthetic jobs per cycle, media unchanged, queue emptied and cache removed after normal shutdown. RSS observations are bounded measurement, not leak freedom or native UI soak. |
+| Same build48 shipping Worker, explicit live opt-in | Three IDs × LibreDMM/R18.dev returned usable metadata; NFO-only saves and refusal/readback safeguards passed. No remote artwork download, live browser or long-term provider claim. |
+| Isolated build48 native wrapper | Export cancellation/write failure preserves review; repeated export failure after controlled idle engine exit retains drafts and requires another end-session confirmation. Only the designated synthetic image was trashed and restored using Finder Put Back. Controlled preview failure followed by Retry displayed the restored 600 × 300 image. |
+| Same native wrapper, main workspace | English/Japanese/Simplified/Traditional Chinese × light/dark, 8 smallest-window screenshots and AX checks. Other windows, physical IME, complete VoiceOver and display/gesture combinations remain separate. |
+
+The wrappers preserve the actual product executable and 200 Worker files but use their own bundle identity, launcher and temporary data root; they are not Gatekeeper or clean-device evidence. The final clean build49 package, frozen-revision cloud results and native offline acceptance were pending when this record was frozen. Subsequent evidence belongs in the candidate delivery report and PR validation, without reinterpreting an older binary's results. The published release remains Preview 2 until a separate release is made.
+
 ## Legacy transaction records
 
 Old Preview journals do not contain the before/after evidence required for automatic verification. An unreadable record, unavailable volume, unknown result or unverified temporary file must remain blocked. A programmatic "mark resolved" button cannot establish that the files are safe.
@@ -83,7 +100,7 @@ Only after the complete result is independently established, quit every JavMetaL
 
 ## Optional measurements and live tests
 
-[Discovery](../../scripts/macos/measure-discovery.py), [Worker lifecycle](../../scripts/macos/measure-worker-lifecycle.py) and [Worker measurement](../../scripts/macos/measure-worker.py) scripts take a shipping Worker and new output paths; use their `--help`. They have no latency/RSS acceptance thresholds and do not establish long-term leak freedom.
+[Discovery](../../scripts/macos/measure-discovery.py), [Worker lifecycle](../../scripts/macos/measure-worker-lifecycle.py) and [Worker measurement](../../scripts/macos/measure-worker.py) scripts take a shipping Worker and new output paths; use their `--help`. They have no latency/RSS acceptance thresholds and do not establish long-term leak freedom. The lifecycle driver retries only a read-only preview that reports `JOB_BUSY` after cancellation, with a 10-second admission window and normal timeouts for already-started operations; it never retries a save. Its six boundary tests run in the full gate. Record the shipping Worker hashes, duration, cycles and OS-cache assumptions when reporting a measurement.
 
 [Provider](../../scripts/macos/live-provider-check.py) and [artwork/batch](../../scripts/macos/live-artwork-batch-check.py) checks require `--run-live`, a synthetic video and a fresh workspace/report. They access real sources; default CI does not. Do not upload private paths, original handoff documents or media. A partial result is not an all-source pass.
 

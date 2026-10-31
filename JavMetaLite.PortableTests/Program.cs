@@ -74,7 +74,8 @@ internal static partial class Program
         ("X08/P11 nonempty sample directories and unrelated empty directories survive migration", RegressionExtrafanartCleanup),
         ("R02 filesystem case and Unicode aliases deduplicate without merging different files", RegressionFilesystemIdentity),
         ("R04 second CD target collision during commit rolls back first part", RegressionSecondPartCommitFailure),
-        ("T07/R05 canceled copy with cleanup failure reports retained recovery paths", RegressionCancelCleanupFailure)
+        ("T07/R05 canceled copy with cleanup failure reports retained recovery paths", RegressionCancelCleanupFailure),
+        ("Rollback cleanup does not treat an unavailable or replaced transaction root as empty", RollbackCleanupRootLost)
     ];
 
     public static async Task<int> Main(string[] args)

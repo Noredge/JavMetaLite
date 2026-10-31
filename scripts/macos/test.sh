@@ -31,6 +31,7 @@ run_logged localization python3 "$SCRIPT_DIR/test-localization.py"
 if [ "$TEST_PROFILE" = full ]; then
   run_logged release-tools python3 "$SCRIPT_DIR/test_release_tools.py"
   run_logged release-manifest python3 "$SCRIPT_DIR/test_release_manifest.py"
+  run_logged lifecycle-measurement python3 "$SCRIPT_DIR/test_lifecycle_measurement.py"
 fi
 run_logged ci-tools python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
 run_logged portable "$DOTNET" run --project JavMetaLite.PortableTests/JavMetaLite.PortableTests.csproj -c "$CONFIGURATION"

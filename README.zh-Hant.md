@@ -66,6 +66,8 @@ EXE 所在資料夾、ZIP 和 SHA-256 檔案均輸出至 `release/`。完整測�
 
 從 [macOS 0.4.0 Preview 2 (build47)](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2) 下載 [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v0.4.0-preview.2/JavMetaLite-macOS-arm64-Release-adhoc.zip)，解壓縮後開啟 `JavMetaLite.app`，無需安裝 .NET。
 
+GitHub 套件採用 ad-hoc 簽章，沒有 Developer ID 或公證；專案也允許以此方式發布正式版，但這不表示 Apple 已驗證發布者或掃描 App。核對 Release 提供的 ZIP SHA-256，解壓縮後將 `JavMetaLite.app` 移至「應用程式」。如果可信的 App 因「無法驗證開發者」或「Apple 無法檢查」而遭阻擋，先嘗試開啟，再到 **系統設定 → 隱私權與安全性 → 強制打開**，確認開啟此 App。請勿用此流程略過損毀或惡意軟體警告。[Apple 說明](https://support.apple.com/zh-tw/102445) · [首次啟動](macos/README.md#first-launch)。
+
 自行建置需安裝 [global.json](global.json) 指定的 SDK，以及含 macOS 15+ SDK 的 Xcode 或 Command Line Tools。在儲存庫根目錄執行：
 
 ```sh

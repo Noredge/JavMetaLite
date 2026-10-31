@@ -476,6 +476,10 @@ public sealed class FileOrganizationService
         }
 
         var sourceDirectory = Path.GetDirectoryName(plan.SourceVideoPath)!;
+        var sourceCleanupRoot = TemporaryDirectoryCleanup.ExistingRoot.Capture(sourceDirectory);
+        var targetCleanupRoot = TemporaryDirectoryCleanup.ExistingRoot.Capture(Directory.Exists(plan.TargetDirectory)
+            ? plan.TargetDirectory : plan.OrganizationOptions.UsesCustomRoot
+                ? CustomRootHistory.NormalizePath(plan.OrganizationOptions.CustomRootDirectory) : sourceDirectory);
         var operationId = Guid.NewGuid().ToString("N");
         var sourceStagingRoot = Path.Combine(sourceDirectory, $".JavMetaLite-{operationId}.tmp");
         var stagingVideoPath = Path.Combine(
@@ -807,7 +811,9 @@ public sealed class FileOrganizationService
             {
                 var cleanupIssues = new List<TemporaryCleanupIssue>();
                 foreach (var path in new[] { sourceStagingRoot, targetStagingRoot }.Distinct(FileSystemPathSemantics.PathComparer))
-                    if (await _cleanupDirectory(path) is { } issue) cleanupIssues.Add(issue);
+                    if (await TemporaryDirectoryCleanup.TryDeleteUnderRootAsync(path,
+                            FileSystemPathSemantics.PathComparer.Equals(path, sourceStagingRoot) ? sourceCleanupRoot : targetCleanupRoot,
+                            _cleanupDirectory) is { } issue) cleanupIssues.Add(issue);
                 if (completedResult is not null) completedResult.CleanupIssues = cleanupIssues;
                 if (cleanupIssues.Count > 0 && !operationSucceeded)
                     throw new TemporaryCleanupException(cleanupIssues, operationError);
@@ -858,6 +864,10 @@ public sealed class FileOrganizationService
         }
 
         var sourceDirectory = Path.GetDirectoryName(plan.SourceVideoPath)!;
+        var sourceCleanupRoot = TemporaryDirectoryCleanup.ExistingRoot.Capture(sourceDirectory);
+        var targetCleanupRoot = TemporaryDirectoryCleanup.ExistingRoot.Capture(Directory.Exists(plan.TargetDirectory)
+            ? plan.TargetDirectory : plan.OrganizationOptions.UsesCustomRoot
+                ? CustomRootHistory.NormalizePath(plan.OrganizationOptions.CustomRootDirectory) : sourceDirectory);
         var operationId = Guid.NewGuid().ToString("N");
         var sourceStagingRoot = Path.Combine(sourceDirectory, $".JavMetaLite-{operationId}.tmp");
         var stagingOutputAnchorPath = Path.Combine(
@@ -1211,7 +1221,9 @@ public sealed class FileOrganizationService
             {
                 var cleanupIssues = new List<TemporaryCleanupIssue>();
                 foreach (var path in new[] { sourceStagingRoot, targetStagingRoot }.Distinct(FileSystemPathSemantics.PathComparer))
-                    if (await _cleanupDirectory(path) is { } issue) cleanupIssues.Add(issue);
+                    if (await TemporaryDirectoryCleanup.TryDeleteUnderRootAsync(path,
+                            FileSystemPathSemantics.PathComparer.Equals(path, sourceStagingRoot) ? sourceCleanupRoot : targetCleanupRoot,
+                            _cleanupDirectory) is { } issue) cleanupIssues.Add(issue);
                 if (completedResult is not null) completedResult.CleanupIssues = cleanupIssues;
                 if (cleanupIssues.Count > 0 && !operationSucceeded)
                     throw new TemporaryCleanupException(cleanupIssues, operationError);

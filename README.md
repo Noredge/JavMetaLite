@@ -66,6 +66,8 @@ The EXE folder, ZIP and SHA-256 files are written to `release/`. See [Developmen
 
 Download the [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v0.4.0-preview.2/JavMetaLite-macOS-arm64-Release-adhoc.zip) from [macOS 0.4.0 Preview 2 (build47)](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2), extract it and open `JavMetaLite.app`. The runtime is bundled.
 
+The GitHub package uses ad-hoc signing, without Developer ID or notarization. This project permits that signing mode for stable releases too; it does not mean Apple has verified the publisher or scanned the app. Verify the ZIP against the release's SHA-256, extract it and move `JavMetaLite.app` to Applications. If macOS blocks the trusted app because its developer cannot be verified or Apple cannot check it, try opening it first, then use **System Settings → Privacy & Security → Open Anyway** and confirm Open for this app. Do not bypass a damaged-app or malware alert. [Apple's instructions](https://support.apple.com/en-us/102445) · [First launch](macos/README.md#first-launch).
+
 To build from the repository root, install the SDK pinned in [global.json](global.json) and Xcode or Command Line Tools with a macOS 15+ SDK:
 
 ```sh

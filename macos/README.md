@@ -4,7 +4,17 @@ A SwiftUI/AppKit editor backed by a bundled, self-contained C# Worker over stdio
 
 ## Run
 
-Download [macOS 0.4.0 Preview 2 (build47)](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2), extract the [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v0.4.0-preview.2/JavMetaLite-macOS-arm64-Release-adhoc.zip) and open `JavMetaLite.app`. Apple Silicon and macOS 15+ are required; no .NET installation is needed. The preview is ad-hoc signed, without Developer ID or notarization; Gatekeeper acceptance is not established. Intel is unverified.
+Download [macOS 0.4.0 Preview 2 (build47)](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2), extract the [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v0.4.0-preview.2/JavMetaLite-macOS-arm64-Release-adhoc.zip) and open `JavMetaLite.app`. Apple Silicon and macOS 15+ are required; no .NET installation is needed. The package is ad-hoc signed, without Developer ID or notarization; Gatekeeper acceptance is not established. Intel is unverified. The project also permits stable ad-hoc releases on GitHub after the required validation; this policy is not Apple publisher verification or a malware scan.
+
+## First launch
+
+1. Download the ZIP and matching SHA-256 from the project's GitHub Release, compare the checksum, extract the complete app and move `JavMetaLite.app` to Applications. Keep its internal Contents folder intact.
+2. Try opening the app. If macOS blocks this trusted download because the developer cannot be verified or Apple cannot check it, use **System Settings → Privacy & Security → Open Anyway**, then confirm Open for JavMetaLite. This is an exception for this app. Follow [Apple's instructions](https://support.apple.com/en-us/102445); do not use the procedure for damaged-app or malware alerts.
+3. When macOS asks for access to a folder you selected, allow access if you intend to work there. Folder privacy permission is separate from Gatekeeper approval. Start with disposable media and review the save preview before confirming changes.
+
+No global Gatekeeper change or quarantine-removal command is needed in these instructions. Package integrity, Developer ID, notarization, system assessment and successful manual launch are recorded separately. Installation instructions are also bundled in `JavMetaLite.app/Contents/Resources/READ-ME.md` ([source](../docs/macos/PACKAGE.md)).
+
+## Use the editor
 
 The main editor shows the cropped poster and full cover together. Click a queue row to inspect/edit; checkboxes alone control batch query/save scope. Settings are remembered. Save previews disk changes by default; Confirm Save authorizes the listed sidecar replacements. More Options may explicitly skip the sheet, while all Worker revision/conflict/transaction checks remain required.
 
@@ -12,7 +22,7 @@ Manual web import captures only the explicitly requested supported page and clos
 
 If the engine process exits, the recovery screen retains the last review and unsent drafts. Export Review writes a JSON reference; quitting or closing offers export first, or a separately confirmed end without export. Canceling or failing export keeps the session open. A response timeout while the process remains alive still requires status reconciliation. Exports do not confirm disk outcomes or replay saves; reopen the app, inspect transaction recovery and reread files before reapplying edits.
 
-The current unreleased build48 source adds Transaction Recovery in the save Inspector lists transaction records and inspects the current source, output and temporary files. A compatible record can be archived only after its recorded before/after state matches the files and you confirm the result. Archival preserves the journal and never changes media. Export current review references before removing or reimporting affected movies; unsent drafts are not automatically restored from JSON. Legacy Preview records lack the necessary verification evidence and remain read-only. Follow the [manual recovery procedure](../docs/macos/TESTING.md#legacy-transaction-records) instead of deleting a warning record.
+The current unreleased build48 source adds Transaction Recovery in the save Inspector. It lists transaction records and inspects the current source, output and temporary files. A compatible record can be archived only after its recorded before/after state matches the files and you confirm the result. Archival preserves the journal and never changes media. Export current review references before removing or reimporting affected movies; unsent drafts are not automatically restored from JSON. Legacy Preview records lack the necessary verification evidence and remain read-only. Follow the [manual recovery procedure](../docs/macos/TESTING.md#legacy-transaction-records) instead of deleting a warning record.
 
 Generated artwork previews have a 256 MiB / 1024-file session budget. Preview leases protect images still held by the editor; unused files can be evicted, and removing movies releases their references. Startup reclaims only recognized inactive sessions with an acquired ownership lock. Unmarked older caches are retained conservatively.
 
