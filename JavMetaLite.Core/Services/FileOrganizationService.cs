@@ -678,8 +678,9 @@ public sealed class FileOrganizationService
                     backups.Add((backupPath, mapping.FinalPath));
                     ValidateBackedUpTarget(plan.PreviewTargetExpectations, mapping.FinalPath, backupPath);
                 }
-                var ownership = TransactionFileOwnership.Capture(mapping.StagedPath, mapping.FinalPath,
-                    targetStagingRoot, ComputeSha256(mapping.StagedPath));
+                var ownership = await FileSharingRetry.RunAsync(() => TransactionFileOwnership.Capture(
+                    mapping.StagedPath, mapping.FinalPath, targetStagingRoot, ComputeSha256(mapping.StagedPath)),
+                    "capture-ownership", mapping.StagedPath, cancellationToken);
                 await FileSharingRetry.MoveAsync(mapping.StagedPath, mapping.FinalPath, cancellationToken);
                 committedOutputs.Add(ownership);
             }
@@ -687,8 +688,9 @@ public sealed class FileOrganizationService
             if (crossVolumeCopy)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var ownership = TransactionFileOwnership.Capture(targetStagedVideoPath!, plan.TargetVideoPath,
-                    targetStagingRoot, copiedSourceSha256);
+                var ownership = await FileSharingRetry.RunAsync(() => TransactionFileOwnership.Capture(
+                    targetStagedVideoPath!, plan.TargetVideoPath, targetStagingRoot, copiedSourceSha256),
+                    "capture-ownership", targetStagedVideoPath!, cancellationToken);
                 await FileSharingRetry.MoveAsync(targetStagedVideoPath!, plan.TargetVideoPath, cancellationToken);
                 committedVideo = ownership;
                 targetVideoCommitted = true;
@@ -732,7 +734,9 @@ public sealed class FileOrganizationService
                 }
                 else
                 {
-                    var ownership = TransactionFileOwnership.Capture(plan.SourceVideoPath, plan.TargetVideoPath, targetStagingRoot);
+                    var ownership = await FileSharingRetry.RunAsync(() => TransactionFileOwnership.Capture(
+                        plan.SourceVideoPath, plan.TargetVideoPath, targetStagingRoot),
+                        "capture-ownership", plan.SourceVideoPath, cancellationToken);
                     await FileSharingRetry.MoveAsync(plan.SourceVideoPath, plan.TargetVideoPath, cancellationToken);
                     committedVideo = ownership;
                 }
@@ -1054,8 +1058,9 @@ public sealed class FileOrganizationService
                     backups.Add((backupPath, mapping.FinalPath));
                     ValidateBackedUpTarget(plan.PreviewTargetExpectations, mapping.FinalPath, backupPath);
                 }
-                var ownership = TransactionFileOwnership.Capture(mapping.StagedPath, mapping.FinalPath,
-                    targetStagingRoot, ComputeSha256(mapping.StagedPath));
+                var ownership = await FileSharingRetry.RunAsync(() => TransactionFileOwnership.Capture(
+                    mapping.StagedPath, mapping.FinalPath, targetStagingRoot, ComputeSha256(mapping.StagedPath)),
+                    "capture-ownership", mapping.StagedPath, cancellationToken);
                 await FileSharingRetry.MoveAsync(mapping.StagedPath, mapping.FinalPath, cancellationToken);
                 committedOutputs.Add(ownership);
             }
@@ -1063,8 +1068,10 @@ public sealed class FileOrganizationService
             foreach (var stagedVideo in stagedVideos)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var ownership = TransactionFileOwnership.Capture(stagedVideo.StagedPath, stagedVideo.Transfer.TargetPath,
-                    targetStagingRoot, copiedSourceHashes.GetValueOrDefault(stagedVideo.Transfer.SourcePath));
+                var ownership = await FileSharingRetry.RunAsync(() => TransactionFileOwnership.Capture(
+                    stagedVideo.StagedPath, stagedVideo.Transfer.TargetPath, targetStagingRoot,
+                    copiedSourceHashes.GetValueOrDefault(stagedVideo.Transfer.SourcePath)),
+                    "capture-ownership", stagedVideo.StagedPath, cancellationToken);
                 await FileSharingRetry.MoveAsync(stagedVideo.StagedPath, stagedVideo.Transfer.TargetPath, cancellationToken);
                 committedVideoTargets.Add(ownership);
             }
@@ -1112,7 +1119,9 @@ public sealed class FileOrganizationService
                 foreach (var transfer in movingVideoTransfers)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var ownership = TransactionFileOwnership.Capture(transfer.SourcePath, transfer.TargetPath, targetStagingRoot);
+                    var ownership = await FileSharingRetry.RunAsync(() => TransactionFileOwnership.Capture(
+                        transfer.SourcePath, transfer.TargetPath, targetStagingRoot),
+                        "capture-ownership", transfer.SourcePath, cancellationToken);
                     await FileSharingRetry.MoveAsync(transfer.SourcePath, transfer.TargetPath, cancellationToken);
                     sameVolumeMoves.Add((transfer, ownership));
                 }
