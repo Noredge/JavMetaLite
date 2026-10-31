@@ -483,24 +483,36 @@ private struct StalledPipeFixture {
     let release: URL
     let received: URL
     let partial: URL
-    init() throws {
+    let ready: URL
+    let initializationRelease: URL
+    private let holdInitializationUntilTimeout: Bool
+    init(holdInitializationUntilTimeout: Bool = false) throws {
         directory = FileManager.default.temporaryDirectory.appendingPathComponent("JavMetaLite stalled pipe \(UUID())", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         script = directory.appendingPathComponent("worker.py")
         release = directory.appendingPathComponent("release")
         received = directory.appendingPathComponent("received.jsonl")
         partial = directory.appendingPathComponent("partial-bytes.txt")
+        ready = directory.appendingPathComponent("ready")
+        initializationRelease = directory.appendingPathComponent("initialization-release")
+        self.holdInitializationUntilTimeout = holdInitializationUntilTimeout
         try #"""
-import json,sys,time
+import json,os,sys,time
 from pathlib import Path
-release,received,partial=map(Path,sys.argv[1:])
+release,received,partial,ready,initialization_release=map(Path,sys.argv[1:6])
+if sys.argv[6]=="1":
+    deadline=time.monotonic()+15
+    while not initialization_release.exists() and time.monotonic()<deadline: time.sleep(.005)
+instance=os.urandom(16).hex()
+ready.with_suffix(".tmp").write_text(instance)
+ready.with_suffix(".tmp").replace(ready)
 for line in sys.stdin:
     if not line.endswith('\n'):
         partial.write_text(str(len(line)));break
     request=json.loads(line)
     method=request['method'];params=request['params']
     with received.open('a') as output: output.write(json.dumps({'method':method,'id':request['id']})+'\n')
-    if method=='initialize': result={'protocolVersion':1}
+    if method=='initialize': result={'protocolVersion':1,'fixtureInstance':instance}
     elif method=='fixture.holdReply': continue
     elif method=='fixture.echo':
         payload=params['payload'];result={'index':params['index'],'length':len(payload),'first':payload[:1],'last':payload[-1:]}
@@ -513,11 +525,34 @@ for line in sys.stdin:
         while not release.exists() and time.monotonic()<deadline: time.sleep(.005)
 """#.write(to: script, atomically: true, encoding: .utf8)
     }
-    func start(_ client: WorkerClient, paused: Bool = true) async throws {
-        _ = try await client.start(executable: URL(fileURLWithPath: "/usr/bin/python3"), arguments: [script.path, release.path, received.path, partial.path])
+    // Python cold start is fixture setup, not part of the deliberately short pipe
+    // deadline. Only initialize may be retried, explicitly, on the same process.
+    // The pause and every measured/mutating request are still submitted once.
+    func start(_ client: WorkerClient, paused: Bool = true) async throws -> [String] {
+        let arguments = [script.path, release.path, received.path, partial.path, ready.path, initializationRelease.path, holdInitializationUntilTimeout ? "1" : "0"]
+        do {
+            _ = try await client.start(executable: URL(fileURLWithPath: "/usr/bin/python3"), arguments: arguments)
+        } catch let error as RPCFailure where error.reason == "WORKER_UNAVAILABLE" && error.message.contains("timed out") {
+            try Data().write(to: initializationRelease)
+            let setupDeadline = ContinuousClock.now.advanced(by: .seconds(15))
+            while !FileManager.default.fileExists(atPath: ready.path) {
+                guard ContinuousClock.now < setupDeadline, await client.isRunning() else { throw error }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            let instance = try String(contentsOf: ready, encoding: .utf8)
+            guard await client.isRunning() else { throw error }
+            let handshake = try await client.start(executable: URL(fileURLWithPath: "/usr/bin/python3"), arguments: arguments)
+            try #require(handshake["fixtureInstance"].stringValue == instance, "Fixture setup retry must use the same Python process.")
+        }
         if paused { _ = try await client.request("fixture.pause") }
+        let prefix = try records().map { $0["method"].stringValue }
+        let initialization = paused ? Array(prefix.dropLast()) : prefix
+        #expect((1...2).contains(initialization.count) && initialization.allSatisfy { $0 == "initialize" })
+        if paused { #expect(prefix.last == "fixture.pause") }
+        return prefix
     }
     func finish(_ client: WorkerClient) async {
+        try? Data().write(to: initializationRelease)
         try? Data().write(to: release)
         await client.shutdown()
         for _ in 0..<200 {
@@ -537,7 +572,7 @@ extension WorkerKitTests {
         defer { fixture.remove() }
         let client = WorkerClient(requestTimeout: .seconds(5))
         do {
-            try await fixture.start(client)
+            let startup = try await fixture.start(client)
             let large = Task { try await client.request("browser.importPage", params: .object(["html": .string(String(repeating: "q", count: 1024 * 1024))])) }
             try await Task.sleep(for: .milliseconds(100))
             let canceledSave = Task { try await client.request("save.execute", params: .object(["planId": .string("queued-canceled")])) }
@@ -554,7 +589,7 @@ extension WorkerKitTests {
             #expect(try await large.value["accepted"].boolValue)
             #expect(try await client.request("workspace.getSnapshot")["accepted"].boolValue)
             await fixture.finish(client)
-            #expect(try fixture.records().map { $0["method"].stringValue } == ["initialize", "fixture.pause", "browser.importPage", "workspace.getSnapshot", "shutdown"])
+            #expect(try fixture.records().map { $0["method"].stringValue } == startup + ["browser.importPage", "workspace.getSnapshot", "shutdown"])
         } catch { await fixture.finish(client); throw error }
     }
 
@@ -563,7 +598,7 @@ extension WorkerKitTests {
         defer { fixture.remove() }
         let client = WorkerClient(requestTimeout: .seconds(5))
         do {
-            try await fixture.start(client, paused: false)
+            let startup = try await fixture.start(client, paused: false)
             let tasks = (0..<128).map { _ in Task { try await client.request("fixture.holdReply") } }
             for _ in 0..<200 {
                 if (await client.requestRetention).pending == 128 { break }
@@ -577,16 +612,18 @@ extension WorkerKitTests {
             let state = await client.requestRetention
             #expect(state.pending == 0 && state.queued == 0 && state.bytes == 0 && state.timers == 0)
             await fixture.finish(client)
+            #expect(startup == ["initialize"] || startup == ["initialize", "initialize"])
             #expect(try !fixture.records().contains { $0["method"].stringValue == "save.execute" })
         } catch { await fixture.finish(client); throw error }
     }
 
     @Test func stalledPipeDeadlineIncludesWritingAndDropsQueuedSaveWithoutLateTransmission() async throws {
-        let fixture = try StalledPipeFixture()
+        let fixture = try StalledPipeFixture(holdInitializationUntilTimeout: true)
         defer { fixture.remove() }
         let client = WorkerClient(requestTimeout: .seconds(2))
         do {
-            try await fixture.start(client)
+            let startup = try await fixture.start(client)
+            #expect(FileManager.default.fileExists(atPath: fixture.initializationRelease.path), "The setup gate opens only after initialize times out, before measurement.")
             let started = ContinuousClock.now
             let large = Task { try await client.request("browser.importPage", params: .object(["html": .string(String(repeating: "x", count: 1024 * 1024))])) }
             try await Task.sleep(for: .milliseconds(100))
@@ -603,7 +640,7 @@ extension WorkerKitTests {
             #expect(state.pending == 0 && state.queued == 0 && state.bytes == 0 && state.timers == 0)
             #expect(await client.isRunning(), "Closing a partial frame must not pretend the Worker process has already exited.")
             await fixture.finish(client)
-            #expect(try fixture.records().map { $0["method"].stringValue } == ["initialize", "fixture.pause"])
+            #expect(try fixture.records().map { $0["method"].stringValue } == startup)
             #expect((Int(try String(contentsOf: fixture.partial, encoding: .utf8)) ?? 0) > 0, "The fixture must observe an incomplete frame, never a late completed request.")
         } catch { await fixture.finish(client); throw error }
     }
@@ -613,7 +650,7 @@ extension WorkerKitTests {
         defer { fixture.remove() }
         let client = WorkerClient(requestTimeout: .seconds(2))
         do {
-            try await fixture.start(client)
+            let startup = try await fixture.start(client)
             let large = Task { try await client.request("browser.importPage", params: .object(["html": .string(String(repeating: "c", count: 1024 * 1024))])) }
             try await Task.sleep(for: .milliseconds(100))
             #expect((await client.requestRetention).bytes > 0)
@@ -626,7 +663,7 @@ extension WorkerKitTests {
             let state = await client.requestRetention
             #expect(state.pending == 0 && state.queued == 0 && state.bytes == 0 && state.timers == 0)
             await fixture.finish(client)
-            #expect(try fixture.records().map { $0["method"].stringValue } == ["initialize", "fixture.pause"])
+            #expect(try fixture.records().map { $0["method"].stringValue } == startup)
             #expect((Int(try String(contentsOf: fixture.partial, encoding: .utf8)) ?? 0) > 0)
         } catch { await fixture.finish(client); throw error }
     }
@@ -636,7 +673,7 @@ extension WorkerKitTests {
         defer { fixture.remove() }
         let client = WorkerClient(requestTimeout: .seconds(5))
         do {
-            try await fixture.start(client, paused: false)
+            let startup = try await fixture.start(client, paused: false)
             try await withThrowingTaskGroup(of: Void.self) { group in
                 for index in 0..<20 {
                     group.addTask {
@@ -651,7 +688,8 @@ extension WorkerKitTests {
             let state = await client.requestRetention
             #expect(state.pending == 0 && state.queued == 0 && state.bytes == 0 && state.timers == 0)
             let ids = try fixture.records().map { Int($0["id"].stringValue.dropFirst("swift-".count))! }
-            #expect(ids == Array(1...21), "Concurrent requests must remain complete frames in their actor admission order.")
+            let firstID = try #require(ids.first)
+            #expect(ids == Array(firstID..<(firstID + startup.count + 20)), "Concurrent requests must remain complete frames in their actor admission order.")
             await fixture.finish(client)
         } catch { await fixture.finish(client); throw error }
     }
@@ -661,7 +699,7 @@ extension WorkerKitTests {
         defer { fixture.remove() }
         let client = WorkerClient(requestTimeout: .seconds(2))
         do {
-            try await fixture.start(client)
+            let startup = try await fixture.start(client)
             let payload = JSONValue.object(["html": .string(String(repeating: "b", count: 7 * 1024 * 1024))])
             let first = Task { try await client.request("browser.importPage", params: payload) }
             for _ in 0..<100 {
@@ -690,7 +728,7 @@ extension WorkerKitTests {
             let state = await client.requestRetention
             #expect(state.pending == 0 && state.queued == 0 && state.bytes == 0 && state.timers == 0)
             await fixture.finish(client)
-            #expect(try fixture.records().map { $0["method"].stringValue } == ["initialize", "fixture.pause"])
+            #expect(try fixture.records().map { $0["method"].stringValue } == startup)
         } catch { await fixture.finish(client); throw error }
     }
 }
