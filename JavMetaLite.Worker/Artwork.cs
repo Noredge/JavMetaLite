@@ -184,7 +184,7 @@ internal sealed partial class Workspace
                 try
                 {
                     using var request = new HttpRequestMessage(HttpMethod.Get, location);
-                    request.Headers.UserAgent.ParseAdd("JavMetaLite/0.4");
+                    request.Headers.UserAgent.ParseAdd("JavMetaLite/1.0.0");
                     if (ArtworkLocationHelper.TryGetRemoteUri(location, out var uri) &&
                         (uri.Host.EndsWith(".dmm.co.jp", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".dmm.com", StringComparison.OrdinalIgnoreCase)))
                         request.Headers.Referrer = new Uri("https://www.dmm.co.jp/");

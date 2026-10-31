@@ -69,6 +69,12 @@ import NativeBridgeKit
     @Published var errorMessage: String?
     @Published var errorDetails = ""
     @Published var recoveryWarnings: [String] = []
+    @Published var showingTransactionRecovery = false
+    @Published private(set) var transactionRecoveryRecords: [JSONValue] = []
+    @Published private(set) var transactionRecoveryInspection: JSONValue = .null
+    @Published private(set) var transactionRecoveryNextOffset: Int?
+    @Published private(set) var transactionRecoveryRoot = ""
+    @Published private(set) var transactionRecoveryMessage = ""
     @Published var preview: SavePreview?
     @Published var previewStale = false
     @Published var includeIDInTitle = false { didSet { saveConfigurationChanged(includeIDInTitle != oldValue) } }
@@ -206,7 +212,7 @@ import NativeBridgeKit
     var actionTargetJobs: [MovieJobSnapshot] { checkedJobs }
     var actionTargetCount: Int { actionTargetJobs.count }
     private var workspaceHasModalReview: Bool {
-        preview != nil || browser != nil || showingImage || showingParts || showingResults || showingSourceProfile || workspaceSheetPresented
+        preview != nil || browser != nil || showingImage || showingParts || showingResults || showingSourceProfile || showingTransactionRecovery || workspaceSheetPresented
     }
     func setWorkspaceSheetPresented(_ presented: Bool) {
         // AppKit completes sheet dismissal after SwiftUI clears its binding.
@@ -332,6 +338,126 @@ import NativeBridgeKit
         defaults.set(normalized, forKey: "interfaceLanguage"); language = normalized
     }
     /// A reference document, never an executable plan or a claim that a save failed/succeeded.
+    var canInspectTransactionRecovery: Bool {
+        ready && capabilities["transactionRecovery"].boolValue && !working && !statusUnconfirmed && !hasPendingArtworkSelections
+    }
+    var canArchiveTransactionRecovery: Bool {
+        canInspectTransactionRecovery && transactionRecoveryInspection["canArchive"].boolValue &&
+        !transactionRecoveryInspection["verificationToken"].stringValue.isEmpty
+    }
+    func presentTransactionRecovery() {
+        guard canInspectTransactionRecovery, commitEditing() else { return }
+        showingTransactionRecovery = true
+        reloadTransactionRecovery()
+    }
+    func reloadTransactionRecovery(offset: Int = 0) {
+        guard canInspectTransactionRecovery else { return }
+        perform { try await self.loadTransactionRecovery(offset: offset) }
+    }
+    func loadTransactionRecovery(offset: Int = 0) async throws {
+        transactionRecoveryInspection = .null; transactionRecoveryMessage = ""
+        errorMessage = nil; errorDetails = ""
+        let result = try await worker.request("recovery.list", params: .object(["offset": .number(Double(offset))]))
+        transactionRecoveryRecords = result["records"].arrayValue
+        transactionRecoveryRoot = result["recoveryRoot"].stringValue
+        transactionRecoveryNextOffset = result["nextOffset"] == .null ? nil : result["nextOffset"].intValue
+        try await refresh()
+    }
+    func inspectTransactionRecovery(_ recordID: String) {
+        guard canInspectTransactionRecovery else { return }
+        perform { try await self.verifyTransactionRecovery(recordID) }
+    }
+    func verifyTransactionRecovery(_ recordID: String) async throws {
+        transactionRecoveryInspection = .null; transactionRecoveryMessage = ""
+        errorMessage = nil; errorDetails = ""
+        guard transactionRecoveryRecords.contains(where: { $0["recordId"].stringValue == recordID }) else {
+            throw RPCFailure(code: -32602, message: tr("recoveryRefreshFirst"))
+        }
+        let started = try await worker.request("recovery.verify", params: .object(["recordId": .string(recordID)]))
+        transactionRecoveryInspection = try await waitOperation(started)
+        try await refresh()
+    }
+    func archiveVerifiedTransactionRecovery() {
+        guard canArchiveTransactionRecovery else { return }
+        perform { try await self.archiveTransactionRecovery(confirmed: true) }
+    }
+    func archiveTransactionRecovery(confirmed: Bool) async throws {
+        let inspection = transactionRecoveryInspection
+        guard confirmed, inspection["canArchive"].boolValue, !inspection["verificationToken"].stringValue.isEmpty else {
+            throw RPCFailure(code: -32602, message: tr("recoveryConfirmRequired"))
+        }
+        // Consume the displayed authorization locally before sending. A lost response
+        // can only be reconciled by refreshing the list, never by replaying this call.
+        transactionRecoveryInspection = .null
+        errorMessage = nil; errorDetails = ""
+        let started = try await worker.request("recovery.archive", params: .object([
+            "verificationToken": inspection["verificationToken"], "confirmed": .bool(true)
+        ]))
+        let result = try await waitOperation(started)
+        guard result["archived"].boolValue else { throw RPCFailure(code: -32603, message: tr("recoveryArchiveUnconfirmed")) }
+        try await loadTransactionRecovery()
+        transactionRecoveryMessage = tr("recoveryArchivedReimport")
+    }
+    func exportTransactionRecoveryReport() {
+        guard transactionRecoveryInspection != .null else { return }
+        let panel = NSSavePanel(); panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "JavMetaLite-transaction-inspection.json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let report: JSONValue = .object([
+            "kind": .string("JavMetaLite.transaction-inspection-reference"), "formatVersion": .number(1),
+            "instructions": .string(tr("recoveryManualInstructions")),
+            // No archive authorization or executable plan is exported.
+            "recordPath": transactionRecoveryInspection["recordPath"], "outcome": transactionRecoveryInspection["outcome"],
+            "files": transactionRecoveryInspection["files"], "issues": transactionRecoveryInspection["issues"]
+        ])
+        do {
+            let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(report).write(to: url, options: .atomic)
+        } catch { display(error) }
+    }
+
+    /// A live-session reference is data only. It cannot authorize ending an
+    /// unknown or active session, restore old revisions, or replay an operation.
+    var canExportReviewReference: Bool {
+        ready && !engineProcessExited && !working && !statusUnconfirmed && operationID == nil &&
+        !hasPendingArtworkSelections && !trashRecycleInFlight && !artworkTrashFlowActive &&
+        pendingTrashToken == nil && discoveryReview == nil && !jobs.isEmpty && jobs.allSatisfy { !$0.busy }
+    }
+    func reviewReferenceDocument() throws -> JSONValue {
+        guard canExportReviewReference else { throw RPCFailure(code: -32010, message: tr("reviewReferenceUnavailable")) }
+        return .object([
+            "formatVersion": .number(1), "kind": .string("JavMetaLite.review-reference"),
+            "createdAt": .string(ISO8601DateFormatter().string(from: Date())),
+            "engineProcessExited": .bool(false), "instructions": .string(tr("reviewReferenceInstructions")),
+            "jobs": .array(jobs.map { job in .object([
+                "jobID": .string(job.jobID), "metadata": job.metadata,
+                "videoPaths": .array(job.videoPaths.map(JSONValue.string)),
+                "localNfoPath": job.localNfoPath.map(JSONValue.string) ?? .null,
+                "candidates": .array(job.candidates), "artwork": .array(job.artwork),
+                "hasUnsavedChanges": .bool(job.hasUnsavedChanges)
+            ]) }),
+            "drafts": .object(drafts.mapValues { .object($0.mapValues(JSONValue.string)) }),
+            "checkedJobIDs": .array(checkedJobIDs.sorted().map(JSONValue.string)),
+            "selectedJobID": selectedID.map(JSONValue.string) ?? .null
+        ])
+    }
+    func exportReviewReference(to url: URL) throws {
+        guard url.isFileURL, url.pathExtension.lowercased() == "json" else {
+            throw RPCFailure(code: -32602, message: tr("recoveryExportJSON"))
+        }
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        try encoder.encode(reviewReferenceDocument()).write(to: url, options: .atomic)
+    }
+    @discardableResult func presentReviewReferenceExport() -> Bool {
+        guard canExportReviewReference, commitEditing() else { return false }
+        let panel = NSSavePanel(); panel.allowedContentTypes = [.json]
+        panel.title = tr("exportReviewReference"); panel.message = tr("reviewReferenceInstructions")
+        panel.nameFieldStringValue = "JavMetaLite-review-reference.json"
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
+        do { try exportReviewReference(to: url); return true }
+        catch { display(error); return false }
+    }
+
     /// Authoritative disk recovery continues to belong to the Worker's journal.
     func reviewRecoveryDocument() throws -> JSONValue {
         guard canEndExitedEngineSession else {
@@ -1067,6 +1193,7 @@ import NativeBridgeKit
     /// Reconcile only by reads. In particular, never resend save.execute after a timeout.
     @discardableResult func checkStatus() -> Task<Void, Never>? {
         guard !working, !engineProcessExited else { return nil }
+        if showingTransactionRecovery { errorMessage = nil; errorDetails = "" }
         working = true
         return Task {
             defer { working = false; if !statusUnconfirmed { operationID = nil; phase = "" } }
@@ -1081,7 +1208,7 @@ import NativeBridgeKit
                 var knownID = operationID
                 if knownID == nil {
                     let snapshot = try await worker.request("workspace.getSnapshot")
-                    knownID = snapshot["activeOperations"].arrayValue.first(where: { !$0["readOnly"].boolValue })?["operationId"].stringValue
+                    knownID = snapshot["activeOperations"].arrayValue.first(where: { !$0["readOnly"].boolValue || $0["blocksWorkspace"].boolValue })?["operationId"].stringValue
                     if let knownID, !knownID.isEmpty { operationID = knownID }
                     else {
                         // A successful snapshot with no active operation confirms that the engine is idle.
@@ -1092,6 +1219,10 @@ import NativeBridgeKit
                         statusUnconfirmed = false
                         if discoveryReview?.submitted == true { discoveryReview = nil }
                         resultSummary = LocalizedStatusMessage("statusChecked")
+                        if showingTransactionRecovery {
+                            try await loadTransactionRecovery()
+                            transactionRecoveryMessage = tr("recoveryStatusRefreshed")
+                        }
                         return
                     }
                 }
@@ -1101,7 +1232,7 @@ import NativeBridgeKit
                     try await refresh()
                     statusUnconfirmed = false
                     if state["status"].stringValue == "completed" {
-                        applyReconciledOperationResult(state["result"])
+                        try await applyReconciledOperationResult(state["result"])
                     } else {
                         let message = state["status"].stringValue == "canceled" ? tr("operationCanceled") : tr("operationFailed")
                         if discoveryReview != nil { discoveryErrorMessage = message; discoveryErrorDetails = state["error"]["message"].stringValue }
@@ -1111,7 +1242,7 @@ import NativeBridgeKit
                     // The same known operation is still active: wait for it; do not create another.
                     statusUnconfirmed = false
                     let result = try await waitOperation(.object(["operationId": .string(knownID)]))
-                    applyReconciledOperationResult(result)
+                    try await applyReconciledOperationResult(result)
                     try await refresh()
                 }
             } catch let missing as RPCFailure where missing.reason == "OPERATION_NOT_FOUND" {
@@ -1133,7 +1264,7 @@ import NativeBridgeKit
     private func reconcileMissingOperationReceipt() async throws -> Bool {
         let snapshot = try await worker.request("workspace.getSnapshot")
         guard snapshot["activeTrash"]["trashToken"].stringValue.isEmpty,
-              !snapshot["activeOperations"].arrayValue.contains(where: { !$0["readOnly"].boolValue }),
+              !snapshot["activeOperations"].arrayValue.contains(where: { !$0["readOnly"].boolValue || $0["blocksWorkspace"].boolValue }),
               !snapshot["jobs"].arrayValue.contains(where: { $0["busy"].boolValue || $0["saveState"].stringValue == "Saving" }) else { return false }
         applySnapshot(snapshot, preserveEmptySelection: true)
         confirmedSavePlanID = nil; preview = nil; previewStale = true
@@ -1144,10 +1275,21 @@ import NativeBridgeKit
         savedOutputs = []; operationResults = []; operationWarnings = []; operationCleanupIssues = []
         operationHadProblems = true
         resultSummary = LocalizedStatusMessage("operationReceiptUnavailable")
+        if showingTransactionRecovery {
+            try await loadTransactionRecovery()
+            transactionRecoveryMessage = tr("recoveryStatusRefreshed")
+        }
         return true
     }
-    private func applyReconciledOperationResult(_ result: JSONValue) {
-        if result["savedJobIds"] != .null { applySaveOutcome(result) }
+    private func applyReconciledOperationResult(_ result: JSONValue) async throws {
+        if result["archived"].boolValue {
+            try await loadTransactionRecovery()
+            transactionRecoveryMessage = tr("recoveryArchivedReimport")
+        } else if !result["recordPath"].stringValue.isEmpty && result["canArchive"] != .null && result["files"] != .null {
+            transactionRecoveryInspection = result
+            transactionRecoveryMessage = ""
+            errorMessage = nil; errorDetails = ""
+        } else if result["savedJobIds"] != .null { applySaveOutcome(result) }
         else if result["items"] != .null && !result["discoveryId"].stringValue.isEmpty { installDiscovery(result) }
         else if result["importedJobIds"] != .null { discoveryReview = nil; applyImportOutcome(result) }
         else { resultSummary = LocalizedStatusMessage("statusChecked") }
@@ -1294,12 +1436,18 @@ import NativeBridgeKit
         guard viewerImageURL == nil, viewerArtwork.indices.contains(viewerIndex) else { return nil }
         return artworkErrors[artworkKey(viewerArtwork[viewerIndex], jobID: viewerJobID)]
     }
-    func retryViewerArtwork() {
+    func retryViewerArtwork(invalidatePublishedPreview: Bool = false) {
         guard ready, !working, !statusUnconfirmed, showingImage, viewerArtwork.indices.contains(viewerIndex),
               let job = jobs.first(where: { $0.jobID == viewerJobID }),
               let artwork = job.artwork.first(where: { $0["artworkId"] == viewerArtwork[viewerIndex]["artworkId"] }) else { return }
         let key = artworkRequestKey(artwork, job: job)
         for request in imageRequests.values where request.key == key { cancelArtworkRequest(request) }
+        if invalidatePublishedPreview {
+            let publishedKey = artworkKey(artwork, jobID: job.jobID)
+            releaseArtworkLeases(for: [publishedKey])
+            artworkPaths.removeValue(forKey: publishedKey); artworkErrors.removeValue(forKey: publishedKey)
+            artworkDimensions.removeValue(forKey: publishedKey); artworkLowResolution.remove(publishedKey)
+        }
         loadArtwork(artwork, jobID: job.jobID, scope: "viewer")
     }
     func openArtwork(_ artwork: JSONValue, job: MovieJobSnapshot) {

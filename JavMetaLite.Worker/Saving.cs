@@ -17,6 +17,7 @@ internal sealed partial class Workspace
                 throw new RpcError(-32010, "PLAN_STALE", "The queue or review changed. Generate a new preview.");
             var blockers = preview.Items.SelectMany(i => i.Blockers).ToArray();
             if (blockers.Length > 0) throw new RpcError(-32010, "PATH_CONFLICT", "Resolve all preview conflicts first.", blockers);
+            RefreshRecoveryWarnings();
             if (_recoveryWarnings.Count > 0) throw new RpcError(-32010, "RECOVERY_REQUIRED", "Inspect unresolved transactions first.", _recoveryWarnings.ToArray());
             if (_importsActive > 0 || _discoveryActive) throw new RpcError(-32010, "JOB_BUSY", "Wait for discovery/import to finish, then regenerate the preview before saving.");
             if (_saveActive) throw new RpcError(-32010, "JOB_BUSY", "Another save is still committing or recovering.");
@@ -90,7 +91,16 @@ internal sealed partial class Workspace
     private async Task<OrganizedSaveResult> ExecuteTransactionAsync(Preview preview, PreviewItem item, Operation op, CancellationToken token)
     {
         var entry = item.Entry;
-        var journal = new Journal(op.Id + "-" + entry.Id, preview.Id, item.Plan.VideoTransfers.Select(t => t.SourcePath).ToArray(), item.Plan.Changes.ToArray());
+        var journal = new Journal(op.Id + "-" + entry.Id, preview.Id, item.Plan.VideoTransfers.Select(t => t.SourcePath).ToArray(), item.Plan.Changes.ToArray())
+        {
+            SessionId = _sessionId,
+            RecoveryRoots = item.SourceEntries.SelectMany(source => source.Job.VideoPaths).Select(path => Path.GetDirectoryName(path)!)
+                .Concat(item.Plan.OrganizationOptions.UsesCustomRoot ? [item.Plan.OrganizationOptions.CustomRootDirectory!] : [])
+                .Select(FileSystemPathSemantics.CanonicalizePath).Distinct(FileSystemPathSemantics.PathComparer).ToArray(),
+            // Reuse the preview's existing hashes. Unchanged videos are intentionally
+            // excluded: recovery must not add a full-film read to an NFO-only save.
+            BeforeFiles = item.Stamps.Where(stamp => stamp.Hash is not null || !stamp.Exists).ToArray()
+        };
         var journalPath = Path.Combine(_recoveryRoot, journal.TransactionId + ".json");
         OrganizedSaveResult? committedResult = null;
         try
@@ -108,9 +118,14 @@ internal sealed partial class Workspace
                     totalJobs = preview.Items.Length, completedBytes = stage.BytesProcessed, totalBytes = stage.TotalBytes });
             });
             committedResult = await service.ExecuteAsync(item.Plan, entry.Job.Metadata, item.Plan.SaveOptions.OverwriteExisting, token, progress);
+            // Preserve Core's committed evidence before touching public paths. If
+            // another program changes an output now, the cleanupRequired journal
+            // must still describe what the user can restore and verify later.
+            journal.AfterFiles = BuildRecoveryAfter(item, journal.BeforeFiles, committedResult);
             journal.Status = committedResult.CleanupIssues.Count == 0 ? "completed" : "cleanupRequired";
             journal.CleanupIssues.AddRange(committedResult.CleanupIssues);
             journal.TemporaryPaths.AddRange(committedResult.CleanupIssues.Select(x => x.Path));
+            await ValidateRecoveryAfterAsync(journal.AfterFiles);
             WriteJournal(journalPath, journal);
             await ReloadAfterSaveAsync(entry, committedResult, item.Plan);
             lock (_gate)
@@ -219,6 +234,47 @@ internal sealed partial class Workspace
         File.Move(temp, path, true);
     }
     private sealed class Journal(string transactionId, string planId, string[] sourcePaths, PlannedFileChange[] changes)
-    { public int ProtocolVersion { get; } = 1; public string TransactionId { get; } = transactionId; public string PlanId { get; } = planId; public string[] SourcePaths { get; } = sourcePaths; public PlannedFileChange[] Changes { get; } = changes; public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow; public string Status { get; set; } = "inProgress"; public string Phase { get; set; } = "preparing"; public List<string> TemporaryPaths { get; } = []; public List<TemporaryCleanupIssue> CleanupIssues { get; } = []; public string? ErrorReason { get; set; } }
+    {
+        public int ProtocolVersion { get; } = 1;
+        public int RecoveryVersion { get; } = 1;
+        public string SessionId { get; init; } = "";
+        public string[] RecoveryRoots { get; init; } = [];
+        public FileStamp[] BeforeFiles { get; init; } = [];
+        public FileStamp[] AfterFiles { get; set; } = [];
+        public string TransactionId { get; } = transactionId; public string PlanId { get; } = planId;
+        public string[] SourcePaths { get; } = sourcePaths; public PlannedFileChange[] Changes { get; } = changes;
+        public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow; public string Status { get; set; } = "inProgress";
+        public string Phase { get; set; } = "preparing"; public List<string> TemporaryPaths { get; } = [];
+        public List<TemporaryCleanupIssue> CleanupIssues { get; } = []; public string? ErrorReason { get; set; }
+    }
+    private static FileStamp[] BuildRecoveryAfter(PreviewItem item, FileStamp[] before, OrganizedSaveResult saved)
+    {
+        var result = new List<FileStamp>();
+        foreach (var stamp in before)
+        {
+            // All these names were canonicalized by the frozen plan. Compare their
+            // strings only: even a symlink replacement must not make evidence
+            // construction depend on the newly changed public filesystem.
+            var committed = saved.CommittedFiles.FirstOrDefault(file => FileSystemPathSemantics.PathComparer.Equals(file.Path, stamp.Path));
+            var retired = item.Plan.SourcePathsToRetire.Any(path => FileSystemPathSemantics.PathComparer.Equals(path, stamp.Path)) ||
+                item.Plan.VideoTransfers.Any(video => !FileSystemPathSemantics.PathComparer.Equals(video.SourcePath, video.TargetPath) && FileSystemPathSemantics.PathComparer.Equals(video.SourcePath, stamp.Path));
+            var expected = committed is not null ? new FileStamp(stamp.Path, true, committed.Length, committed.WriteTicks, committed.Sha256)
+                : retired ? new FileStamp(stamp.Path, false, 0, 0, null) : stamp;
+            // Hashes originate from Core's private staged output / verified video
+            // copy, never from bytes an external editor could replace after commit.
+            // Normal saving performs no extra full-video hash for recovery records.
+            result.Add(expected);
+        }
+        return result.ToArray();
+    }
+    private static async Task ValidateRecoveryAfterAsync(FileStamp[] expectedFiles)
+    {
+        foreach (var expected in expectedFiles)
+        {
+            var current = await CaptureAsync(expected.Path, false, CancellationToken.None);
+            if (current.Exists != expected.Exists || current.Length != expected.Length)
+                throw new IOException("Committed file state changed before the recovery record was finalized.");
+        }
+    }
     private sealed class SynchronousProgress<T>(Action<T> action) : IProgress<T> { public void Report(T value) => action(value); }
 }

@@ -267,8 +267,24 @@ class ReadinessTests(unittest.TestCase):
             return {'exitCode': code, 'stdout': out, 'stderr': error}
         return call
 
-    def test_default_signed_only_keeps_trust_checks_independent(self):
-        report = readiness.evaluate(self.app, checker=self.checker())
+    def test_default_github_adhoc_accepts_local_integrity_without_inventing_trust(self):
+        for gatekeeper in (0, 1):
+            with self.subTest(gatekeeper=gatekeeper):
+                report = readiness.evaluate(self.app, checker=self.checker(mode='adhoc', gatekeeper=gatekeeper))
+                self.assertEqual(report['distributionPolicy'], 'github-adhoc')
+                self.assertTrue(report['localPackageVerified'])
+                self.assertTrue(report['localSignatureVerified'])
+                self.assertTrue(report['distributionReady'])
+                self.assertFalse(report['signatureReady'])
+                self.assertFalse(report['notarizationVerified'])
+                self.assertEqual(report['gatekeeperAccepted'], gatekeeper == 0)
+                self.assertFalse(report['notarizedDistributionReady'])
+                self.assertFalse(report['manualAcceptanceVerified'])
+                self.assertEqual(report['blockers'], [])
+        self.assertFalse(any(value in command for command in self.commands for value in ('submit', 'staple', 'store-credentials', '--master-disable', '--disable', 'xattr')))
+
+    def test_explicit_signed_only_keeps_trust_checks_independent(self):
+        report = readiness.evaluate(self.app, distribution_policy='signed-only', checker=self.checker())
         self.assertEqual(report['distributionPolicy'], 'signed-only')
         self.assertTrue(report['localSignatureVerified'])
         self.assertTrue(report['signatureReady'])
@@ -301,24 +317,28 @@ class ReadinessTests(unittest.TestCase):
                 self.assertFalse(report['signatureReady'])
                 self.assertFalse(report['distributionReady'])
 
-    def test_failed_integrity_or_signature_inspection_blocks_signed_only(self):
-        for options in ({'package': 1}, {'signature': 1}, {'mode': 'unknown'}):
-            with self.subTest(options=options):
-                report = readiness.evaluate(self.app, checker=self.checker(**options))
-                self.assertFalse(report['localSignatureVerified'])
-                self.assertFalse(report['signatureReady'])
-                self.assertFalse(report['distributionReady'])
-                self.assertTrue(report['blockers'])
+    def test_failed_integrity_or_signature_inspection_blocks_every_policy(self):
+        for policy in ('github-adhoc', 'signed-only', 'notarized'):
+            for options in ({'package': 1}, {'signature': 1}, {'mode': 'unknown'}, {'mode': 'adhoc', 'package': 1}):
+                with self.subTest(policy=policy, options=options):
+                    report = readiness.evaluate(self.app, distribution_policy=policy, checker=self.checker(**options))
+                    self.assertFalse(report['localSignatureVerified'])
+                    self.assertFalse(report['signatureReady'])
+                    self.assertFalse(report['distributionReady'])
+                    self.assertTrue(report['blockers'])
 
-    def test_cli_default_and_explicit_notarized_policy_exit_codes(self):
+    def test_cli_default_github_adhoc_and_explicit_strict_policy_exit_codes(self):
         report_file = Path(self.tmp.name) / 'report.json'
         with contextlib.redirect_stdout(io.StringIO()):
             result = readiness.main([str(self.app), '--require-distribution', '--report', str(report_file)], checker=self.checker())
             strict = readiness.main([str(self.app), '--require-distribution', '--policy', 'notarized'], checker=self.checker())
             local_adhoc = readiness.main([str(self.app)], checker=self.checker(mode='adhoc'))
             require_adhoc = readiness.main([str(self.app), '--require-distribution'], checker=self.checker(mode='adhoc'))
-        self.assertEqual((result, strict, local_adhoc, require_adhoc), (0, 1, 0, 1))
-        self.assertEqual(json.loads(report_file.read_text())['distributionPolicy'], 'signed-only')
+            signed_adhoc = readiness.main([str(self.app), '--require-distribution', '--policy', 'signed-only'], checker=self.checker(mode='adhoc'))
+            explicit_adhoc = readiness.main([str(self.app), '--require-distribution', '--policy', 'github-adhoc'], checker=self.checker(mode='adhoc'))
+            invalid_adhoc = readiness.main([str(self.app), '--require-distribution'], checker=self.checker(mode='adhoc', package=1))
+        self.assertEqual((result, strict, local_adhoc, require_adhoc, signed_adhoc, explicit_adhoc, invalid_adhoc), (0, 1, 0, 0, 1, 0, 1))
+        self.assertEqual(json.loads(report_file.read_text())['distributionPolicy'], 'github-adhoc')
 
     def test_invalid_policy_and_report_inside_app_fail_before_commands(self):
         for arguments in ([str(self.app), '--policy', 'unsigned'], [str(self.app), '--report', str(self.app / 'report.json')]):

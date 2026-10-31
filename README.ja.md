@@ -7,7 +7,7 @@
 [![Windows CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 [![macOS CI](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml)
 
-> Windows **1.2.3** · macOS **0.4.0 プレビュー2（build47）**。
+> Windows **1.2.3** · macOS **1.0.0（build50）**。
 
 ローカル動画の情報を確認・整理する Windows／macOS アプリです。単体編集と一括処理に対応し、Jellyfin 用のメタデータや画像を出力できます。
 
@@ -60,11 +60,13 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj -c Release --no-bu
 
 EXE を含むフォルダー、ZIP、SHA-256 ファイルは `release/` に出力されます。全テストの実行方法は[開発とテスト](TESTING.md)を参照してください。
 
-## macOS プレビュー版
+## macOS 1.0
 
 **Apple Silicon · macOS 15 以降。** ネイティブエディターでポスターとジャケット全体を同時に表示し、情報・画像の編集、チェックした動画の一括検索・保存ができます。標準で保存前に変更を確認し、未編集の NFO 内容を保持してファイルの競合を確認します。設定は自動保存されます。
 
-[macOS 0.4.0 Preview 2 (build47)](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2) から [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v0.4.0-preview.2/JavMetaLite-macOS-arm64-Release-adhoc.zip) を取得し、展開して `JavMetaLite.app` を開きます。.NET のインストールは不要です。
+[macOS 1.0.0](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) から [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.0.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) を取得し、展開して `JavMetaLite.app` を開きます。.NET のインストールは不要です。
+
+macOS 1.0 版はアドホック署名で、Developer ID 署名と公証はありません。Apple による発行者の確認や公証を受けたパッケージではありません。Release に記載された ZIP の SHA-256 を照合し、展開した `JavMetaLite.app` を「アプリケーション」に移動します。信頼できるアプリが開発元の未確認や Apple による確認不可を理由にブロックされた場合は、一度起動を試みてから **システム設定 → プライバシーとセキュリティ → このまま開く** で、このアプリの起動を確認します。破損やマルウェアの警告にはこの手順を使わないでください。[Apple の手順](https://support.apple.com/ja-jp/102445) · [初回起動](macos/README.md#first-launch)。
 
 ビルドには [global.json](global.json) 指定の SDK と、macOS 15 以降の SDK を含む Xcode または Command Line Tools が必要です。リポジトリのルートで実行します。
 
@@ -77,7 +79,7 @@ EXE を含むフォルダー、ZIP、SHA-256 ファイルは `release/` に出�
 
 ## 詳細
 
-[macOS リリースノート](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2) · [Windows リリースノート](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [変更履歴](CHANGELOG.md) · [開発とテスト](TESTING.md)
+[macOS リリースノート](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) · [Windows リリースノート](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [変更履歴](CHANGELOG.md) · [開発とテスト](TESTING.md)
 
 Windows のログと設定は `%LOCALAPPDATA%\JavMetaLite` に保存されます。
 

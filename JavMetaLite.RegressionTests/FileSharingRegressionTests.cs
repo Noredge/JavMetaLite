@@ -27,6 +27,14 @@ internal static class FileSharingRegressionTests
                 if (++calls < 2) throw new IOException("busy", unchecked((int)0x80070000) | code);
             }, "test", "synthetic");
             AssertEx.Equal(2, calls);
+            calls = 0;
+            var captured = await FileSharingRetry.RunAsync(() =>
+            {
+                if (++calls < 2) throw new IOException("busy", unchecked((int)0x80070000) | code);
+                return "ownership-evidence";
+            }, "test-value", "synthetic");
+            AssertEx.Equal(2, calls);
+            AssertEx.Equal("ownership-evidence", captured);
         }
         var attempts = 0;
         await AssertEx.ThrowsAsync<IOException>(() => FileSharingRetry.RunAsync(() =>
@@ -76,26 +84,43 @@ internal static class FileSharingRegressionTests
     private static async Task TestTransientCommit()
     {
         foreach (var multipart in new[] { false, true })
+        foreach (var lockStagedOutput in new[] { false, true })
         {
             using var fixture = new Fixture(multipart);
             var reachedCommit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var fileLock = new FileStream(fixture.Fanart, FileMode.Open, FileAccess.Read, FileShare.None);
+            FileStream? fileLock = lockStagedOutput ? null :
+                new FileStream(fixture.Fanart, FileMode.Open, FileAccess.Read, FileShare.None);
+            string? stagedSample = null;
             Task<OrganizedSaveResult>? execution = null;
             try
             {
                 execution = fixture.Organizer.ExecuteAsync(fixture.Plan, fixture.Metadata, true, default,
                     new InlineProgress<FileTransactionProgress>(update =>
                     {
-                        if (update.Stage == FileTransactionStage.Committing) reachedCommit.TrySetResult();
+                        if (update.Stage != FileTransactionStage.Committing) return;
+                        if (lockStagedOutput)
+                        {
+                            var stage = Directory.EnumerateDirectories(fixture.SourceDirectory, ".JavMetaLite-*.tmp").Single();
+                            stagedSample = Directory.EnumerateFiles(stage, "fanart1.jpg", SearchOption.AllDirectories).Single();
+                            fileLock = new FileStream(stagedSample, FileMode.Open, FileAccess.Read, FileShare.None);
+                        }
+                        reachedCommit.TrySetResult();
                     }));
                 await reachedCommit.Task.WaitAsync(TimeSpan.FromSeconds(5));
                 await Task.Delay(180);
                 AssertEx.False(execution.IsCompleted, "The locked commit neither yielded nor retried.");
+                if (lockStagedOutput)
+                    AssertEx.True(ReadTestLog().Contains(
+                        $"文件被占用，有限重试 operation=capture-ownership path={stagedSample} ", StringComparison.Ordinal),
+                        "Staged output ownership was not captured through the sharing retry policy.");
             }
-            finally { fileLock.Dispose(); }
+            finally { fileLock?.Dispose(); }
             var result = await execution!;
             AssertEx.True(result.Outputs.FanartPath is not null, "Retried commit omitted fanart.");
             AssertEx.True(new FileInfo(fixture.Fanart).Length > 3, "Old fanart was not replaced.");
+            AssertEx.True(result.CommittedFiles.Count > 0, "Retried commit omitted ownership evidence.");
+            foreach (var file in result.CommittedFiles)
+                AssertEx.Equal(AssertEx.Sha256(file.Path), file.Sha256, "Retried commit recorded incorrect ownership evidence.");
             fixture.AssertVideosUnchanged();
             fixture.Workspace.AssertNoTemporaryArtifacts();
         }
@@ -126,14 +151,14 @@ internal static class FileSharingRegressionTests
                     }));
                 var timer = Stopwatch.StartNew();
                 while (stagedSample is null || !ReadTestLog().Contains(
-                    $"文件被占用，有限重试 operation=move path={stagedSample} ->", StringComparison.Ordinal))
+                    $"文件被占用，有限重试 operation=capture-ownership path={stagedSample} ", StringComparison.Ordinal))
                 {
                     if (execution.IsCompleted) await execution;
                     if (timer.Elapsed > TimeSpan.FromSeconds(5)) throw new InvalidOperationException("Sample commit did not reach its retry boundary.");
                     await Task.Delay(5);
                 }
                 // File visibility alone is too early: the moving thread may still be
-                // returning from the OS call. The following sample retry proves fanart
+                // returning from the OS call. The following sample ownership retry proves fanart
                 // was committed AND recorded before this test locks/cancels it.
                 committedLock = new FileStream(fixture.Fanart, FileMode.Open, FileAccess.Read, FileShare.None);
                 if (!permanent)

@@ -1076,3 +1076,233 @@ for line in sys.stdin:
     func mediaUnchanged() throws -> Bool { try Data(contentsOf: video) == videoBytes && Data(contentsOf: nfo) == nfoBytes }
     func remove() { try? FileManager.default.removeItem(at: directory) }
 }
+
+extension WorkspaceInteractionTests {
+    @Test func liveReviewReferencePreservesDraftsWithoutGrantingExitOrReplayAuthority() throws {
+        _ = NSApplication.shared
+        let store = WorkspaceStore(defaults: preferences.defaults)
+        store.ready = true
+        store.update(.object(["jobId": .string("reference"), "reviewRevision": .number(7), "metadata": .object(["id": .string("DEMO-401"), "title": .string("Disk title")]), "videoPaths": .array([.string("/synthetic/DEMO-401.mp4")])]))
+        store.drafts["reference"] = ["title": "Keep this unsent title"]
+        store.checkedJobIDs = ["reference"]; store.selectNavigation(["reference"])
+        let session = store.editorSession(field: "title", jobID: "reference")
+        let before = store.drafts
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("JML review reference \(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        #expect(store.canExportReviewReference && !store.canEndExitedEngineSession)
+        #expect(throws: (any Error).self) { try store.reviewRecoveryDocument() }
+        let file = root.appendingPathComponent("review.json")
+        try store.exportReviewReference(to: file)
+        let document = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: file))
+        #expect(document["kind"].stringValue == "JavMetaLite.review-reference")
+        #expect(!document["engineProcessExited"].boolValue && document["drafts"]["reference"]["title"].stringValue == before["reference"]?["title"])
+        #expect(document["jobs"].arrayValue.first?["reviewRevision"] == .null)
+        for key in ["planId", "verificationToken", "operationID", "operations", "plans"] { #expect(document[key] == .null) }
+        #expect(throws: (any Error).self) { try store.exportReviewReference(to: root.appendingPathComponent("missing/review.json")) }
+        #expect(store.drafts == before && store.checkedJobIDs == ["reference"] && store.editorSession(field: "title", jobID: "reference") === session)
+        store.statusUnconfirmed = true
+        #expect(!store.canExportReviewReference && !store.canEndExitedEngineSession)
+        #expect(throws: (any Error).self) { try store.reviewReferenceDocument() }
+    }
+
+    @Test(arguments: ["verifyAck", "archivePoll"])
+    func transactionRecoveryLostResponsesReconcileWithoutReplayingOrClearingDrafts(mode: String) async throws {
+        _ = NSApplication.shared
+        let fixture = try RecoveryInteractionFixture(mode: mode)
+        defer { fixture.remove() }
+        let store = fixture.makeStore(defaults: preferences.defaults)
+        do {
+            await store.start()
+            #expect(store.ready)
+            store.showingTransactionRecovery = true
+            store.drafts["review"] = ["title": "Unsaved recovery draft"]
+            store.checkedJobIDs = ["review"]
+            let session = store.editorSession(field: "title", jobID: "review")
+            store.reloadTransactionRecovery(); try await recoveryIdle(store)
+            store.inspectTransactionRecovery("record"); try await recoveryIdle(store)
+            if mode == "archivePoll" {
+                #expect(store.transactionRecoveryInspection["canArchive"].boolValue)
+                store.archiveVerifiedTransactionRecovery(); try await recoveryIdle(store)
+            }
+            #expect(store.statusUnconfirmed && store.errorMessage != nil)
+            #expect(!store.canArchiveTransactionRecovery && !store.canExportReviewReference)
+            if mode == "verifyAck" { #expect(store.operationID == nil) }
+            else { #expect(store.operationID == "archive-operation") }
+            _ = try await store.worker.request("fixture.complete")
+            await store.checkStatus()?.value
+            #expect(!store.statusUnconfirmed && !store.working && store.operationID == nil)
+            #expect(store.errorMessage == nil)
+            if mode == "verifyAck" {
+                #expect(store.transactionRecoveryInspection["canArchive"].boolValue)
+                #expect(store.transactionRecoveryInspection["verificationToken"].stringValue == "single-use-token")
+            } else {
+                #expect(store.transactionRecoveryRecords.isEmpty)
+                #expect(store.transactionRecoveryMessage == tr("recoveryArchivedReimport"))
+                #expect(store.jobs.first?.localNfoSaveBlocked == true)
+            }
+            #expect(store.drafts["review"]?["title"] == "Unsaved recovery draft" && store.checkedJobIDs == ["review"])
+            #expect(store.editorSession(field: "title", jobID: "review") === session)
+            let state = try await store.worker.request("fixture.state")
+            let methods = state["methods"].arrayValue.map(\.stringValue)
+            #expect(methods.filter { $0 == "recovery.verify" }.count == 1)
+            #expect(methods.filter { $0 == "recovery.archive" }.count == (mode == "archivePoll" ? 1 : 0))
+            #expect(!methods.contains("save.execute") && !methods.contains("jobs.applyEdits"))
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
+
+    @Test func transactionRecoveryCancellationKeepsDraftsAndNeverEnablesArchive() async throws {
+        _ = NSApplication.shared
+        let fixture = try RecoveryInteractionFixture(mode: "running")
+        defer { fixture.remove() }
+        let store = fixture.makeStore(defaults: preferences.defaults)
+        do {
+            await store.start(); store.showingTransactionRecovery = true
+            store.drafts["review"] = ["title": "Cancel must retain this"]
+            store.reloadTransactionRecovery(); try await recoveryIdle(store)
+            store.inspectTransactionRecovery("record")
+            for _ in 0..<200 where store.operationID == nil { try await Task.sleep(for: .milliseconds(5)) }
+            #expect(store.working && store.operationID != nil)
+            store.cancel(); try await recoveryIdle(store)
+            #expect(!store.statusUnconfirmed && !store.canArchiveTransactionRecovery)
+            #expect(store.transactionRecoveryInspection == .null && store.drafts["review"]?["title"] == "Cancel must retain this")
+            let methods = try await store.worker.request("fixture.state")["methods"].arrayValue.map(\.stringValue)
+            #expect(methods.contains("operations.cancel") && !methods.contains("recovery.archive"))
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
+
+    private func recoveryIdle(_ store: WorkspaceStore) async throws {
+        for _ in 0..<1000 where store.working { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(!store.working)
+    }
+}
+
+private struct RecoveryInteractionFixture {
+    let directory: URL, script: URL
+    init(mode: String) throws {
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent("JML recovery interaction \(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        script = directory.appendingPathComponent("worker.py")
+        try mode.write(to: directory.appendingPathComponent("mode"), atomically: true, encoding: .utf8)
+        try #"""
+import json,sys
+from pathlib import Path
+root=Path(sys.argv[1]);mode=(root/'mode').read_text();methods=[];op=None;released=False;archived=False
+jobs=[{'jobId':'review','reviewRevision':1,'metadata':{'id':'DEMO-401','title':'Preserved review'},'videoPaths':[str(root/'DEMO-401.mp4')],'localNfoSaveBlocked':False}]
+def emit(id,result):print(json.dumps({'jsonrpc':'2.0','id':id,'result':result}),flush=True)
+def inspection():return {'recordPath':str(root/'record.json'),'outcome':'committed','canArchive':True,'verificationToken':'single-use-token','files':[],'issues':[],'mediaChanged':False,'requiresReimport':True}
+for line in sys.stdin:
+ r=json.loads(line);id=r['id'];m=r['method'];p=r['params'];methods.append(m)
+ if m=='initialize':emit(id,{'protocolVersion':1,'capabilities':{'transactionRecovery':True}})
+ elif m=='preferences.get':emit(id,{'logRoot':str(root),'dataRoot':str(root)})
+ elif m=='workspace.getSnapshot':emit(id,{'jobs':jobs,'activeOperations':[op] if op and op['status']=='running' else [],'recoveryWarnings':[]})
+ elif m=='recovery.list':emit(id,{'records':[] if archived else [{'recordId':'record','recordPath':str(root/'record.json'),'status':'completed'}],'nextOffset':None,'recoveryRoot':str(root)})
+ elif m=='recovery.verify':
+  op={'operationId':'verify-operation','readOnly':False,'status':'running','result':inspection()}
+  if mode!='verifyAck':emit(id,{'operationId':op['operationId']})
+ elif m=='recovery.archive':
+  assert p['confirmed'] and p['verificationToken']=='single-use-token'
+  archived=True;jobs[0]['localNfoSaveBlocked']=True;jobs[0]['reviewRevision']+=1
+  op={'operationId':'archive-operation','readOnly':False,'status':'running','result':{'archived':True,'requiresReimport':True,'affectedJobIds':['review']}}
+  emit(id,{'operationId':op['operationId']})
+ elif m=='operations.get':
+  if mode=='archivePoll' and op['operationId']=='archive-operation' and not released:continue
+  if op['status']!='canceled' and (released or mode=='archivePoll'):op['status']='completed'
+  emit(id,op)
+ elif m=='operations.cancel':op['status']='canceled';emit(id,{'accepted':True})
+ elif m=='fixture.complete':released=True;emit(id,{'ok':True})
+ elif m=='fixture.state':emit(id,{'methods':methods})
+ elif m=='shutdown':emit(id,{'shutdown':True});break
+ else:raise Exception('Unexpected recovery fixture method '+m)
+"""#.write(to: script, atomically: true, encoding: .utf8)
+    }
+    @MainActor func makeStore(defaults: UserDefaults) -> WorkspaceStore {
+        WorkspaceStore(worker: WorkerClient(requestTimeout: .seconds(2)), engineExecutable: { URL(fileURLWithPath: "/usr/bin/python3") }, engineArguments: [script.path, directory.path], defaults: defaults)
+    }
+    func remove() { try? FileManager.default.removeItem(at: directory) }
+}
+
+extension WorkspaceInteractionTests {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["JAVMETALITE_TEST_WORKER"] != nil))
+    func realWorkerRecoveryArchivePreservesDraftReferenceAndRequiresFreshAffectedBaseline() async throws {
+        _ = NSApplication.shared
+        let workerPath = try #require(ProcessInfo.processInfo.environment["JAVMETALITE_TEST_WORKER"])
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("JML native recovery 合成 \(UUID())")
+        let incoming = root.appendingPathComponent("incoming"), other = root.appendingPathComponent("other")
+        try FileManager.default.createDirectory(at: incoming, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let video = incoming.appendingPathComponent("DEMO-401.mp4"), nfo = incoming.appendingPathComponent("DEMO-401.nfo")
+        let otherVideo = other.appendingPathComponent("DEMO-402.mp4"), otherNfo = other.appendingPathComponent("DEMO-402.nfo")
+        let videoBytes = Data("Synthetic recovery movie".utf8)
+        let otherBytes = Data("<movie><id>DEMO-402</id><title>Unrelated baseline</title></movie>".utf8)
+        try videoBytes.write(to: video); try videoBytes.write(to: otherVideo)
+        try Data("<movie><id>DEMO-401</id><title>Before</title><unknown keep=\"yes\">Preserve</unknown></movie>".utf8).write(to: nfo)
+        try otherBytes.write(to: otherNfo)
+        let store = WorkspaceStore(engineExecutable: { URL(fileURLWithPath: workerPath) }, engineArguments: ["--data-root", root.appendingPathComponent("state").path], defaults: preferences.defaults)
+        do {
+            await store.start(); #expect(store.ready)
+            _ = try await finishRecoveryOperation(try await store.worker.request("workspace.importInputs", params: .object(["paths": .array([.string(video.path), .string(otherVideo.path)])])), worker: store.worker)
+            try await store.refresh()
+            #expect(store.jobs.count == 2)
+            var job = try #require(store.jobs.first { $0.videoPaths.contains { URL(fileURLWithPath: $0).lastPathComponent == video.lastPathComponent } })
+            let otherID = try #require(store.jobs.first { $0.videoPaths.contains { URL(fileURLWithPath: $0).lastPathComponent == otherVideo.lastPathComponent } }).jobID
+            let edited = try await store.worker.request("jobs.applyEdits", params: .object(["jobId": .string(job.jobID), "expectedReviewRevision": .number(Double(job.reviewRevision)), "edits": .object(["title": .string("Committed recovery fixture")])]))
+            let plan = try await store.worker.request("save.preview", params: .object(["jobId": .string(job.jobID), "expectedReviewRevision": edited["reviewRevision"], "options": .object(["overwriteExisting": .bool(true), "includeIdInTitle": .bool(false)])]))
+            _ = try await finishRecoveryOperation(try await store.worker.request("save.execute", params: .object(["planId": plan["planId"]])), worker: store.worker)
+            try await store.refresh(); job = try #require(store.jobs.first { $0.jobID == job.jobID })
+            let committedNfo = try Data(contentsOf: nfo)
+            store.edit("title", value: "Manually restored draft after reimport", job: job)
+            store.checkedJobIDs = [job.jobID]; store.selectNavigation([job.jobID]); store.showingTransactionRecovery = true
+            store.reloadTransactionRecovery(); try await recoveryIdle(store)
+            let record = try #require(store.transactionRecoveryRecords.first)
+            store.inspectTransactionRecovery(record["recordId"].stringValue); try await recoveryIdle(store)
+            #expect(store.transactionRecoveryInspection["canArchive"].boolValue && store.transactionRecoveryInspection["outcome"].stringValue == "committed")
+            do { try await store.archiveTransactionRecovery(confirmed: false); Issue.record("Archiving requires explicit confirmation.") } catch { }
+            #expect(FileManager.default.fileExists(atPath: record["recordPath"].stringValue))
+            store.archiveVerifiedTransactionRecovery(); try await recoveryIdle(store)
+            #expect(store.errorMessage == nil && store.transactionRecoveryRecords.isEmpty)
+            #expect(store.jobs.first { $0.jobID == job.jobID }?.localNfoSaveBlocked == true)
+            #expect(store.jobs.first { $0.jobID == otherID }?.localNfoSaveBlocked == false)
+            #expect(store.drafts[job.jobID]?["title"] == "Manually restored draft after reimport")
+            #expect(try Data(contentsOf: nfo) == committedNfo && Data(contentsOf: video) == videoBytes && Data(contentsOf: otherNfo) == otherBytes)
+            let reference = root.appendingPathComponent("review-reference.json")
+            try store.exportReviewReference(to: reference)
+            let document = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: reference))
+            let preservedTitle = document["drafts"][job.jobID]["title"].stringValue
+            #expect(!preservedTitle.isEmpty && document["verificationToken"] == .null)
+            let blockedJob = try #require(store.jobs.first { $0.jobID == job.jobID })
+            do {
+                _ = try await store.worker.request("save.preview", params: .object(["jobId": .string(job.jobID), "expectedReviewRevision": .number(Double(blockedJob.reviewRevision))]))
+                Issue.record("The pre-recovery baseline must not remain saveable.")
+            } catch let error as RPCFailure { #expect(error.reason == "SOURCE_CHANGED") }
+            _ = try await store.worker.request("jobs.remove", params: .object(["jobId": .string(job.jobID)]))
+            _ = try await finishRecoveryOperation(try await store.worker.request("workspace.importInputs", params: .object(["paths": .array([.string(video.path)])])), worker: store.worker)
+            try await store.refresh()
+            let fresh = try #require(store.jobs.first { $0.videoPaths.contains { URL(fileURLWithPath: $0).lastPathComponent == video.lastPathComponent } })
+            #expect(!fresh.localNfoSaveBlocked && fresh.jobID != job.jobID)
+            store.showingTransactionRecovery = false; store.writeNfo = true; store.writePoster = false; store.writeFanart = false; store.writeSamples = false
+            store.targetMode = "VideoDirectory"; store.renameVideo = false; store.includeIDInTitle = false; store.skipSavePreview = true
+            store.checkedJobIDs = [fresh.jobID]; store.edit("title", value: preservedTitle, job: fresh)
+            store.saveActionTargets(); try await recoveryIdle(store)
+            #expect(store.errorMessage == nil && !store.operationHadProblems)
+            let saved = try String(contentsOf: nfo, encoding: .utf8)
+            #expect(saved.contains(preservedTitle) && saved.contains("unknown") && saved.contains("Preserve"))
+            #expect(try Data(contentsOf: video) == videoBytes && Data(contentsOf: otherNfo) == otherBytes)
+            await store.worker.shutdown()
+        } catch { await store.worker.shutdown(); throw error }
+    }
+
+    private func finishRecoveryOperation(_ started: JSONValue, worker: WorkerClient) async throws -> JSONValue {
+        let id = started["operationId"]
+        for _ in 0..<1000 {
+            let state = try await worker.request("operations.get", params: .object(["operationId": id]))
+            if state["status"].stringValue == "completed" { return state["result"] }
+            if ["failed", "canceled"].contains(state["status"].stringValue) { throw RPCFailure(code: -1, message: String(describing: state)) }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        throw RPCFailure(code: -1, message: "Synthetic recovery operation did not settle.")
+    }
+}

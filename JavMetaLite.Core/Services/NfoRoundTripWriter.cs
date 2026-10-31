@@ -124,7 +124,7 @@ public static class NfoRoundTripWriter
         Directory.CreateDirectory(directory);
         var temporaryPath = Path.Combine(
             directory,
-            $".{Path.GetFileName(destinationPath)}.{Guid.NewGuid():N}.tmp");
+            $".jml-nfo-{Guid.NewGuid():N}.tmp");
         try
         {
             var settings = new XmlWriterSettings

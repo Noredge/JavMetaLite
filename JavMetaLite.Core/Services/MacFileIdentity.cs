@@ -2,9 +2,26 @@ using System.Runtime.InteropServices;
 
 namespace JavMetaLite.Core.Services;
 
-// Discovery-only evidence. It must not authorize an overwrite, rename or retirement.
+// Native identity is additional evidence, never sufficient on its own to authorize
+// an overwrite or retirement. Rollback also checks staged content and metadata.
 internal readonly record struct MacFileIdentity(uint Device, ulong FileId)
 {
+    internal static MacFileIdentity ReadDirectory(string path)
+    {
+        if (Marshal.SizeOf<AttributeList>() != 24 || Marshal.SizeOf<IdentityAttributes>() != 16)
+            throw new IOException("Directory identity ABI layout is unsupported.");
+        var attributes = new AttributeList { BitmapCount = 5, Common = 0x02000002 };
+        var result = new IdentityAttributes();
+        // A detached mountpoint can remain as an ordinary directory on its parent
+        // device. Its name and readability alone cannot prove the original volume.
+        if (GetDirectoryAttributes(path, ref attributes, ref result,
+                (nuint)Marshal.SizeOf<IdentityAttributes>(), 1) != 0) // FSOPT_NOFOLLOW
+            throw new IOException($"Directory identity could not be verified (errno {Marshal.GetLastPInvokeError()}): {path}");
+        if (result.Length != 16 || result.FileId == 0)
+            throw new IOException("Directory identity returned an unsupported layout: " + path);
+        return new(result.Device, result.FileId);
+    }
+
     internal static bool TryRead(string path, out MacFileIdentity identity, out Exception? error)
     {
         identity = default;
@@ -68,4 +85,8 @@ internal readonly record struct MacFileIdentity(uint Device, ulong FileId)
     [DllImport("/usr/lib/libSystem.B.dylib", EntryPoint = "fgetattrlist", SetLastError = true)]
     private static extern int GetAttributes(int descriptor, ref AttributeList attributes,
         ref IdentityAttributes buffer, nuint bufferSize, nuint options);
+
+    [DllImport("/usr/lib/libSystem.B.dylib", EntryPoint = "getattrlist", SetLastError = true)]
+    private static extern int GetDirectoryAttributes([MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        ref AttributeList attributes, ref IdentityAttributes buffer, nuint bufferSize, nuint options);
 }

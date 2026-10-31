@@ -18,8 +18,8 @@ def check(arguments):
         return {'exitCode': -1, 'stdout': '', 'stderr': str(error)}
 
 
-def evaluate(app, manifest=None, distribution_policy='signed-only', checker=check):
-    if distribution_policy not in ('signed-only', 'notarized'):
+def evaluate(app, manifest=None, distribution_policy='github-adhoc', checker=check):
+    if distribution_policy not in ('github-adhoc', 'signed-only', 'notarized'):
         raise ValueError('Unknown distribution policy: ' + distribution_policy)
     package_command = [HERE / 'verify-package.sh', app]
     if manifest: package_command += ['--manifest', manifest]
@@ -39,11 +39,16 @@ def evaluate(app, manifest=None, distribution_policy='signed-only', checker=chec
     notarization_verified = ticket['exitCode'] == 0
     gatekeeper_accepted = gatekeeper['exitCode'] == 0
     notarized_ready = signature_ready and notarization_verified and gatekeeper_accepted
-    ready = signature_ready if distribution_policy == 'signed-only' else notarized_ready
+    ready = {'github-adhoc': local_signature_verified,
+             'signed-only': signature_ready,
+             'notarized': notarized_ready}[distribution_policy]
     reasons = []
     if not local: reasons.append('Local package verification failed.')
     if signature['exitCode'] != 0: reasons.append('Signature details could not be established.')
-    if mode != 'developer-id': reasons.append('Artifact is not Developer ID Application signed.')
+    if mode not in ('adhoc', 'developer-id'):
+        reasons.append('A supported local signature could not be established.')
+    if distribution_policy != 'github-adhoc' and mode != 'developer-id':
+        reasons.append('Artifact is not Developer ID Application signed.')
     if distribution_policy == 'notarized':
         if not notarization_verified: reasons.append('No valid stapled notarization ticket was established.')
         if not gatekeeper_accepted: reasons.append('Gatekeeper assessment did not pass.')
@@ -53,10 +58,11 @@ def evaluate(app, manifest=None, distribution_policy='signed-only', checker=chec
               'notarizationVerified': notarization_verified, 'gatekeeperAccepted': gatekeeper_accepted,
               'notarizedDistributionReady': notarized_ready,
               'distributionReady': ready, 'blockers': reasons, 'validCodeSigningIdentityCount': identity_count,
+              'manualAcceptanceVerified': False,
               'notarizationCredentialsVerified': False, 'package': package, 'signature': signature,
               'stapledTicket': ticket, 'gatekeeper': gatekeeper, 'tools': tools,
-              'policyScope': 'localSignatureVerified includes verified local ad-hoc signing. signatureReady and signed-only distribution readiness require a verified Developer ID package; they do not imply notarization or Gatekeeper acceptance. notarized additionally requires both checks to pass. Notarization verification here means stapled-ticket validation, not an Apple account or submission query.',
-              'scope': 'Read-only automated policy checks on this Mac; not a fresh browser download, physical IME/VoiceOver or another platform acceptance.'}
+              'policyScope': 'distributionReady means only that the selected automated distribution policy passed. github-adhoc permits GitHub stable or preview distribution with verified package integrity and a verified local ad-hoc or Developer ID signature; this project policy does not establish Apple identity verification, malware scanning or automatic launch acceptance. signatureReady retains its Developer ID requirement. signed-only requires signatureReady; notarized additionally requires a valid stapled ticket and Gatekeeper acceptance. Notarization verification here means stapled-ticket validation, not an Apple account or submission query.',
+              'scope': 'Read-only automated policy checks on this Mac. manualAcceptanceVerified is always false because this tool does not verify fresh browser download, per-app Open Anyway, native workflows, physical IME/VoiceOver or another platform acceptance. Record those results separately.'}
 
 
 def main(argv=None, checker=check):
@@ -64,8 +70,8 @@ def main(argv=None, checker=check):
     parser.add_argument('app', type=Path)
     parser.add_argument('--manifest', type=Path)
     parser.add_argument('--report', type=Path)
-    parser.add_argument('--policy', choices=('signed-only', 'notarized'), default='signed-only',
-                        help='Distribution requirements: signed-only (default) requires Developer ID; notarized also requires a stapled ticket and Gatekeeper acceptance.')
+    parser.add_argument('--policy', choices=('github-adhoc', 'signed-only', 'notarized'), default='github-adhoc',
+                        help='Automated distribution requirements: github-adhoc (default) requires local package/signature verification; signed-only requires Developer ID; notarized also requires a stapled ticket and Gatekeeper acceptance. Manual acceptance is separate.')
     parser.add_argument('--require-distribution', action='store_true',
                         help='Return nonzero unless the selected distribution policy passes. Without this flag, success only means local package verification passed.')
     args = parser.parse_args(argv)

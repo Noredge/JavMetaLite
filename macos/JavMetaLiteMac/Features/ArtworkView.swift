@@ -16,6 +16,7 @@ struct CachedArtwork: View {
     var body: some View {
         Group {
             if let image, loadedKey == requestKey { Image(nsImage: image).resizable().scaledToFit() }
+            else if loadedKey == requestKey { Image(systemName: "exclamationmark.triangle").foregroundStyle(.secondary).accessibilityLabel(tr("artworkPreviewFailed")) }
             else { Image(systemName: "photo").foregroundStyle(.secondary).accessibilityLabel(tr("artworkLoading")) }
         }.task(id: requestKey) {
             let key = requestKey
@@ -93,9 +94,13 @@ struct ArtworkViewer: View {
     @ViewState private var nativeSize: CGSize = .zero
     @ViewState private var decodedImage: NSImage?
     @ViewState private var loadedURL = ""
+    @ViewState private var failedDecodeURL = ""
+    @ViewState private var decodeAttempt = UUID()
     @ViewState private var command = ArtworkZoomCommand.fit
     @ViewState private var commandID = UUID()
     private var url: URL? { store.viewerImageURL }
+    private var nativeDecodeFailed: Bool { url.map { failedDecodeURL == $0.path } ?? false }
+    private var decodeRequestKey: String { (url?.path ?? "") + "/" + decodeAttempt.uuidString }
     private func zoom(_ action: ArtworkZoomCommand) { command = action; commandID = UUID() }
     var body: some View {
         VStack(spacing: 0) {
@@ -122,13 +127,20 @@ struct ArtworkViewer: View {
                         onScale: { if abs(scale - $0) > 0.0001 { scale = $0 } },
                         onNavigate: { store.moveViewer(by: $0) })
                         .accessibilityLabel(tr("viewArtwork")).help(tr("artworkGestureHint"))
-                } else if let error = store.viewerImageError {
+                } else if store.viewerImageError != nil || nativeDecodeFailed {
                     VStack(spacing: 16) {
                         Label(tr("artworkPreviewFailed"), systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
-                        Button(tr("retryArtwork")) { store.retryViewerArtwork(); viewerHasKeyboardFocus = true }
+                        Button(tr("retryArtwork")) {
+                            let invalidate = nativeDecodeFailed
+                            failedDecodeURL = ""; decodeAttempt = UUID()
+                            store.retryViewerArtwork(invalidatePublishedPreview: invalidate)
+                            viewerHasKeyboardFocus = true
+                        }
                             .accessibilityIdentifier("retryCurrentArtwork").disabled(!store.ready || store.working || store.statusUnconfirmed)
-                        DisclosureGroup(tr("technicalDetails")) { NativeDiagnosticTextView(text: error, accessibilityLabel: tr("technicalDetails")).frame(height: 120) }
-                            .font(.caption).frame(maxWidth: 560)
+                        if let error = store.viewerImageError {
+                            DisclosureGroup(tr("technicalDetails")) { NativeDiagnosticTextView(text: error, accessibilityLabel: tr("technicalDetails")).frame(height: 120) }
+                                .font(.caption).frame(maxWidth: 560)
+                        }
                     }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else { ProgressView(tr("artworkLoading")).frame(maxWidth: .infinity, maxHeight: .infinity) }
                 HStack {
@@ -143,12 +155,14 @@ struct ArtworkViewer: View {
         .onKeyPress(.leftArrow) { guard viewerHasKeyboardFocus else { return .ignored }; store.moveViewer(by: -1); return .handled }
         .onKeyPress(.rightArrow) { guard viewerHasKeyboardFocus else { return .ignored }; store.moveViewer(by: 1); return .handled }
         .onDisappear { store.closeArtworkViewer() }
-        .task(id: url) {
-            decodedImage = nil; loadedURL = ""; nativeSize = .zero; scale = 1; zoom(.fit)
+        .task(id: decodeRequestKey) {
+            decodedImage = nil; loadedURL = ""; failedDecodeURL = ""; nativeSize = .zero; scale = 1; zoom(.fit)
             guard let url, let reader = store.beginArtworkURLRead(url) else { return }
             defer { store.endArtworkURLRead(reader) }
-            guard let dimensions = await ArtworkDimensions.read(url: url),
-                  let decoded = await ArtworkThumbnailCache.shared.image(url: url, maximumPixelSize: 8192), !Task.isCancelled else { return }
+            let dimensions = await ArtworkDimensions.read(url: url)
+            let decoded = await ArtworkThumbnailCache.shared.image(url: url, maximumPixelSize: 8192)
+            guard !Task.isCancelled else { return }
+            guard let dimensions, let decoded else { failedDecodeURL = url.path; return }
             nativeSize = dimensions; decodedImage = decoded.image; loadedURL = url.path
         }
     }

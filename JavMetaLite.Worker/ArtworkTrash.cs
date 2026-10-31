@@ -12,6 +12,7 @@ internal sealed partial class Workspace
 
     private void EnsureNoTrash()
     {
+        if (_recoveryActive) throw new RpcError(-32010, "JOB_BUSY", "Wait for transaction recovery verification to finish.");
         if (_trashLease is not null)
             throw new RpcError(-32010, "TRASH_PENDING", "Finish or cancel the local image Trash operation before changing this workspace.", TrashSnapshot());
     }

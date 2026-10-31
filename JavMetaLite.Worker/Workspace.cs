@@ -57,22 +57,15 @@ internal sealed partial class Workspace : IAsyncDisposable
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         _dataRoot = dataRoot ?? Path.Combine(home, "Library", "Application Support", "JavMetaLite");
         _cacheRoot = FileSystemPathSemantics.CanonicalizePath(Path.Combine(dataRoot is null ? Path.Combine(home, "Library", "Caches", "JavMetaLite") : Path.Combine(dataRoot, "cache"), "artwork", _sessionId));
-        _recoveryRoot = Path.Combine(_dataRoot, "recovery");
+        var recoveryRoot = Path.Combine(_dataRoot, "recovery");
+        if (new DirectoryInfo(recoveryRoot).LinkTarget is not null) throw new IOException("Recovery root must not be a symbolic link.");
+        _recoveryRoot = FileSystemPathSemantics.CanonicalizePath(recoveryRoot);
         _artworkCache = new ArtworkDiskCache(_cacheRoot, artworkCacheLimits);
         Directory.CreateDirectory(_recoveryRoot);
         AppLog.ConfigureDirectory(dataRoot is null ? Path.Combine(home, "Library", "Logs", "JavMetaLite") : Path.Combine(dataRoot, "logs"));
         _preferencesStore = new AppPreferencesStore(_dataRoot);
         _preferences = _preferencesStore.Load();
-        foreach (var path in Directory.EnumerateFiles(_recoveryRoot, "*.json"))
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(File.ReadAllBytes(path));
-                if (doc.RootElement.GetProperty("status").GetString() is not ("completed" or "failedRestored" or "canceledRestored"))
-                    _recoveryWarnings.Add(path);
-            }
-            catch { _recoveryWarnings.Add(path); }
-        }
+        InitializeRecovery();
     }
 
     public async Task<object> Dispatch(string method, JsonElement p)
@@ -82,15 +75,21 @@ internal sealed partial class Workspace : IAsyncDisposable
             if (!p.TryGetProperty("protocolVersion", out var version) || version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var n) || n != 1)
             { _initialized = false; throw new RpcError(-32010, "PROTOCOL_VERSION_MISMATCH", "Client and bundled engine versions do not match."); }
             _initialized = true;
-            return new { protocolVersion = 1, workerVersion = "0.4.0-dev", sessionId = _sessionId, cacheRoot = _cacheRoot,
-                capabilities = new { readLocal = true, searchLibreDmm = true, writeNfo = true, searchR18Dev = true, writeArtwork = true, organizeVideo = true, manualBrowserImport = true, localArtworkTrash = true, batchSave = true, confirmParts = true, discoverInputs = true, selectReviewSource = true, artworkPreviewLeases = true },
+            return new { protocolVersion = 1, workerVersion = "1.0.0", sessionId = _sessionId, cacheRoot = _cacheRoot,
+                capabilities = new { readLocal = true, searchLibreDmm = true, writeNfo = true, searchR18Dev = true, writeArtwork = true, organizeVideo = true, manualBrowserImport = true, localArtworkTrash = true, batchSave = true, confirmParts = true, discoverInputs = true, selectReviewSource = true, artworkPreviewLeases = true, transactionRecovery = true },
                 discoveryLimits = new { maximumTokens = MaximumDiscoveries, maximumItems = MaximumDiscoveryItems, maximumResultBytes = MaximumDiscoveryBytes, expiresAfterSeconds = DiscoveryLifetime.TotalSeconds } };
         }
         if (!_initialized) throw new RpcError(-32010, "NOT_INITIALIZED", "Initialize the engine before sending commands.");
+        lock (_gate)
+            if (_recoveryActive && method is not ("operations.get" or "operations.cancel" or "workspace.getSnapshot" or "artwork.releasePreview" or "shutdown"))
+                throw new RpcError(-32010, "JOB_BUSY", "Wait for transaction recovery verification to finish.");
         switch (method)
         {
             case "workspace.getSnapshot": lock (_gate) { PruneDiscoveries(); PruneRetainedState(); return new { protocolVersion = 1, jobs = _jobs.Values.Select(Snapshot).ToArray(), activeOperations = _operations.Values.Where(x => x.Status == "running").Select(OperationSnapshot).ToArray(), recoveryWarnings = _recoveryWarnings.ToArray(), activeTrash = TrashSnapshot(), retention = RetentionSnapshot(), artworkCache = _artworkCache.Snapshot() }; }
             case "workspace.importInputs": return Import(p);
+            case "recovery.list": return ListRecovery(p);
+            case "recovery.verify": return VerifyRecovery(p);
+            case "recovery.archive": return ArchiveRecovery(p);
             case "workspace.discoverInputs": return DiscoverInputs(p);
             case "workspace.importDiscovery": return ImportDiscovery(p);
             case "workspace.discardDiscovery": return DiscardDiscovery(p);

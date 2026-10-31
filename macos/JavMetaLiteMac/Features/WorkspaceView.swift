@@ -88,6 +88,7 @@ struct WorkspaceView: View {
             .sheet(isPresented: Binding(get: { store.discoveryReview != nil }, set: { if !$0 { store.discardDiscovery() } })) { DiscoveryReviewView().environmentObject(store) }
             .sheet(item: $store.preview, onDismiss: { store.previewDidDismiss() }) { preview in SaveReviewView(preview: preview).environmentObject(store) }
             .sheet(isPresented: $store.showingResults) { BatchResultView().environmentObject(store) }
+            .sheet(isPresented: $store.showingTransactionRecovery) { TransactionRecoveryView().environmentObject(store) }
             .sheet(isPresented: $store.showingParts, onDismiss: { store.partsReviewDidDismiss() }) { MultipartReviewView().environmentObject(store) }
             .sheet(item: $store.browser, onDismiss: { store.browser?.close() }) { BrowserImportView(session: $0).environmentObject(store) }
             .sheet(isPresented: $store.showingImage) { ArtworkViewer().environmentObject(store) }
@@ -102,7 +103,7 @@ struct WorkspaceView: View {
                     }
                 }.padding(24).frame(width: 700, height: 440)
             }
-            .alert(tr("attention"), isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
+            .alert(tr("attention"), isPresented: Binding(get: { store.errorMessage != nil && !store.showingTransactionRecovery }, set: { if !$0 && !store.showingTransactionRecovery { store.errorMessage = nil } })) {
                 Button(tr("ok"), role: .cancel) { store.errorMessage = nil }
                 if !store.errorDetails.isEmpty {
                     Button(tr("technicalDetails")) {
@@ -354,6 +355,10 @@ struct SaveInspector: View {
                             ForEach(store.recoveryWarnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.orange).textSelection(.enabled) }
                         }
                     }
+                    Button(tr("transactionRecovery")) { store.presentTransactionRecovery() }
+                        .disabled(!store.canInspectTransactionRecovery).accessibilityIdentifier("transactionRecovery")
+                    Button(tr("exportReviewReference")) { store.presentReviewReferenceExport() }
+                        .disabled(!store.canExportReviewReference)
                 }.toggleStyle(.checkbox).controlSize(.small).font(.callout).padding(.horizontal, 16).padding(.vertical, 10)
                     .disabled(store.working || store.statusUnconfirmed)
             }
@@ -362,4 +367,106 @@ struct SaveInspector: View {
         }.frame(maxHeight: .infinity).background(Color(nsColor: .controlBackgroundColor))
     }
     private func sectionLabel(_ key: String) -> some View { Text(tr(key)).font(.caption).foregroundStyle(.secondary) }
+}
+
+private struct TransactionRecoveryView: View {
+    @EnvironmentObject var store: WorkspaceStore
+    @ViewState<Bool> private var confirmingArchive = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(tr("transactionRecovery")).font(.title2.bold())
+            Text(tr("recoveryExplanation")).font(.callout).foregroundStyle(.secondary)
+            HSplitView {
+                VStack(alignment: .leading, spacing: 10) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            if store.transactionRecoveryRecords.isEmpty { Text(tr("recoveryNoRecords")).foregroundStyle(.secondary) }
+                            ForEach(store.transactionRecoveryRecords.indices, id: \.self) { index in
+                                let record = store.transactionRecoveryRecords[index]
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Label(tr(record["blocksSaving"].boolValue ? "recoveryRequired" : "recoveryFinishedRecord"), systemImage: record["blocksSaving"].boolValue ? "exclamationmark.triangle" : "doc.text")
+                                    Text(record["recordPath"].stringValue).font(.caption).textSelection(.enabled).lineLimit(3)
+                                    Text(tr("recovery.status." + record["status"].stringValue) + " · " + record["startedAt"].stringValue).font(.caption2).foregroundStyle(.secondary)
+                                    HStack {
+                                        Button(tr("recoveryVerify")) { store.inspectTransactionRecovery(record["recordId"].stringValue) }
+                                            .disabled(!store.canInspectTransactionRecovery)
+                                        Button(tr("showFinder")) { store.reveal(record["recordPath"].stringValue) }
+                                    }
+                                }.padding(10).frame(maxWidth: .infinity, alignment: .leading).background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                            }
+                        }.padding(.trailing, 8)
+                    }
+                    HStack {
+                        Button(tr("recoveryRefresh")) { store.reloadTransactionRecovery() }.disabled(!store.canInspectTransactionRecovery)
+                        if let offset = store.transactionRecoveryNextOffset {
+                            Button(tr("recoveryNextRecords")) { store.reloadTransactionRecovery(offset: offset) }.disabled(!store.canInspectTransactionRecovery)
+                        }
+                    }
+                }.frame(minWidth: 260, idealWidth: 310)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if store.transactionRecoveryInspection == .null {
+                            Text(tr("recoverySelectRecord")).foregroundStyle(.secondary)
+                        } else {
+                            let inspection = store.transactionRecoveryInspection
+                            Text(tr(inspection["canArchive"].boolValue ? "recoveryVerified." + inspection["outcome"].stringValue : "recoveryCannotArchive")).font(.headline)
+                            ForEach(inspection["issues"].arrayValue.indices, id: \.self) { index in
+                                Text(tr("recovery.issue." + inspection["issues"].arrayValue[index].stringValue)).foregroundStyle(.orange)
+                            }
+                            if !inspection["canArchive"].boolValue {
+                                Text(tr("recoveryManualInstructions")).font(.callout).foregroundStyle(.secondary)
+                            }
+                            ForEach(inspection["files"].arrayValue.indices, id: \.self) { index in
+                                let file = inspection["files"].arrayValue[index]
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(file["path"].stringValue).font(.caption).textSelection(.enabled)
+                                    Text(tr("recovery.file." + file["state"].stringValue)).font(.caption).foregroundStyle(.secondary)
+                                }.padding(.vertical, 5)
+                                Divider()
+                            }
+                        }
+                    }.padding(.leading, 14).frame(maxWidth: .infinity, alignment: .leading)
+                }.frame(minWidth: 390)
+            }
+            if !store.transactionRecoveryMessage.isEmpty { Text(store.transactionRecoveryMessage).foregroundStyle(.secondary) }
+            if let message = store.errorMessage {
+                HStack {
+                    Text(message).foregroundStyle(.red).textSelection(.enabled)
+                    Spacer()
+                    Button(tr("ok")) { store.errorMessage = nil; store.errorDetails = "" }
+                }
+                if !store.errorDetails.isEmpty {
+                    DisclosureGroup(tr("technicalDetails")) {
+                        Text(store.errorDetails).font(.caption).textSelection(.enabled)
+                    }
+                }
+            }
+            if store.statusUnconfirmed {
+                HStack {
+                    Text(tr("statusUnconfirmed")).foregroundStyle(.orange)
+                    Button(tr("checkStatus")) { store.checkStatus() }.disabled(store.working)
+                    if store.operationID != nil { Button(tr("cancel")) { store.cancel() }.disabled(store.working) }
+                }
+            }
+            HStack {
+                if store.working {
+                    ProgressView().controlSize(.small); Text(tr("recoveryVerifying"))
+                    Button(tr("cancel")) { store.cancel() }.disabled(store.operationID == nil)
+                } else {
+                    Menu(tr("recoveryExports")) {
+                        Button(tr("recoveryExportReport")) { store.exportTransactionRecoveryReport() }.disabled(store.transactionRecoveryInspection == .null)
+                        Button(tr("exportReviewReference")) { store.presentReviewReferenceExport() }.disabled(!store.canExportReviewReference)
+                    }
+                }
+                Spacer()
+                Button(tr("close")) { store.showingTransactionRecovery = false }.keyboardShortcut(.cancelAction).disabled(store.working)
+                Button(tr("recoveryArchive")) { confirmingArchive = true }.buttonStyle(.borderedProminent).disabled(!store.canArchiveTransactionRecovery)
+            }
+        }.padding(24).frame(minWidth: 800, idealWidth: 900, minHeight: 540, idealHeight: 620)
+            .interactiveDismissDisabled(store.working)
+            .alert(tr("recoveryArchiveTitle"), isPresented: $confirmingArchive) {
+                Button(tr("cancel"), role: .cancel) { }
+                Button(tr("recoveryArchive")) { store.archiveVerifiedTransactionRecovery() }
+            } message: { Text(tr("recoveryArchiveConfirmation")) }
+    }
 }

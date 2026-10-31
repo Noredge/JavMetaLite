@@ -1,24 +1,44 @@
-# macOS releases
+# macOS release procedure
 
-Current preview: [macOS 0.4.0 Preview 2 (build47)](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2), Apple Silicon, macOS 15+. Verified scope and limitations are maintained in [STATUS](STATUS.md).
+The stable macOS release is **1.0.0 (build50)**, tagged [`macos-v1.0.0`](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0), for Apple Silicon and macOS 15+. Windows **v1.2.3** keeps its own assets and GitHub Latest status. See [verified scope](STATUS.md) and the [release checklist](RELEASE-CHECKLIST.md).
 
-## Build and verify
+## Freeze and validate
+
+1. Freeze the intended source revision and version. Run the **full** Mac and Windows gates; docs/core checks are insufficient for a release. Record branch HEAD and actual CI checkout separately when a pull request uses a merge ref.
+2. Build from a clean checkout of the revision to be tagged. Do not treat a package built from a different merge revision as the same artifact. The embedded source manifest, external payload manifest and ZIP SHA-256 must agree with the chosen source and archive.
+3. Test the final extracted package and record native import, review, cancel, save/readback and recovery workflows using disposable media. Name the actual machine, OS, package hash and any isolated QA wrapper. Record first-launch approval and offline scope separately; do not substitute a developer-machine check for clean-machine coverage.
+4. Preserve logs and concise evidence with the release. Keep untested hardware, OS, accessibility and source-site combinations explicit in [STATUS](STATUS.md); do not append development diaries.
+
+Use the SDK pinned by [global.json](../../global.json). From the repository root:
 
 ```sh
-./scripts/macos/test.sh --arch arm64 --configuration Release
+./scripts/macos/test.sh --profile full --arch arm64 --configuration Release
 ./scripts/macos/package.sh --arch arm64 --configuration Release --sign-mode adhoc
 ./scripts/macos/verify-package.sh /path/to/JavMetaLite.app \
   --manifest /path/package.zip.manifest.json --archive /path/package.zip \
   --expected-sign-mode adhoc
+python3 scripts/macos/release-readiness.py /path/to/JavMetaLite.app \
+  --manifest /path/package.zip.manifest.json --policy github-adhoc --require-distribution \
+  --report /path/readiness.json
 ```
 
-Use the SDK pinned by `global.json`. The self-contained Worker needs no user-installed .NET runtime. NuGet restores use per-RID locks. The embedded build manifest records exact source/toolchain/dependencies; the external manifest and SHA bind the signed payload and archive. Extract with `ditto` to preserve signature attributes. Signed binaries/ZIPs are not promised byte-identical across toolchains or signing dates.
+The self-contained Worker needs no user-installed .NET. Packaging uses locked per-RID dependencies, signs the complete payload, extracts the final ZIP with `ditto` and verifies the extracted Worker without an SDK environment. It excludes the regression host. Signed ZIPs are not promised byte-identical across machines, toolchains or dates.
 
-## Signing policy
+## Distribution policies
 
-The policy is **sign only, no notarization**. Do not submit to Apple, staple tickets or request notarization credentials as part of this workflow.
+The default **`github-adhoc`** policy permits stable GitHub releases with local ad-hoc signing and per-app user approval. Developer ID and notarization are not required by this project policy. This does not establish Apple publisher verification, malware scanning or automatic Gatekeeper acceptance.
 
-Ad-hoc signatures verify local integrity; they do not establish Developer ID trust or Gatekeeper acceptance. Publish such a build only as a clearly labeled preview, with those limitations in its notes. A Developer ID build requires an existing matching Application certificate/private key in Keychain:
+| Policy | Automated requirements |
+| --- | --- |
+| `github-adhoc` (default) | Verified local package and a valid local ad-hoc or Developer ID signature |
+| `signed-only` | Verified package with Developer ID signing |
+| `notarized` | All `signed-only` requirements, a valid stapled ticket and accepted Gatekeeper assessment |
+
+`distributionReady` reports only the selected automated policy. `localPackageVerified` and `localSignatureVerified` report integrity; `signatureReady` still requires Developer ID. `notarizationVerified` and `gatekeeperAccepted` are independent observations. A valid ad-hoc package may pass the default policy with all three trust fields false. The tool always reports `manualAcceptanceVerified: false`; native/installation evidence is separate. Without `--require-distribution`, exit 0 means local package verification only. The tool does not change Gatekeeper or quarantine.
+
+Every release must identify the signing mode and link [first-launch instructions](../../macos/README.md#first-launch). [PACKAGE.md](PACKAGE.md) is copied into `Contents/Resources/READ-ME.md`. For a trusted app blocked as an unidentified developer or because Apple cannot check it, follow [Apple's per-app Open Anyway procedure](https://support.apple.com/en-us/102445). Do not apply it to damaged-app or malware alerts.
+
+When a stricter policy is deliberately selected, use an existing matching Developer ID Application certificate/private key:
 
 ```sh
 ./scripts/macos/package.sh --arch arm64 --configuration Release \
@@ -27,24 +47,12 @@ Ad-hoc signatures verify local integrity; they do not establish Developer ID tru
   --team-id ABCDE12345
 ```
 
-Missing/mismatched identities fail without fallback. Sign nested payload, Worker/helper and outer App in order; never sign with `--deep`. Verification uses strict/deep inspection. Developer ID mode checks consistent teams, hardened runtime and secure timestamps, with JIT entitlement on the Worker only. Keep credentials and private keys outside source, logs and artifacts.
+Missing or mismatched identities fail without fallback. Signing proceeds inside-out, never with `--deep`; strict/deep verification checks consistent teams, hardened runtime and secure timestamps, with JIT entitlement on the Worker only. Keep credentials out of source, logs and artifacts. Ad-hoc releases do not require Apple submission or notarization credentials.
 
-Read-only readiness:
+## Publish the verified assets
 
-```sh
-python3 scripts/macos/release-readiness.py /path/to/JavMetaLite.app \
-  --manifest /path/package.zip.manifest.json --policy signed-only \
-  --report /path/readiness.json
-```
-
-Exit 0 without `--require-distribution` means local package verification passed. `signatureReady` and `distributionReady` require verified Developer ID signing; ad-hoc previews do not satisfy them. Notarization, Gatekeeper and browser-download/manual acceptance remain separate results. Do not disable security features or remove quarantine to claim a pass.
-
-## Publish a preview
-
-1. Use a source commit with the full macOS profile (including signed ZIP and extracted-package tests) and Windows automated gate passing. Prefer the original verified CI ZIP; check its commit, clean source state, SHA and manifest.
-   Docs/core results do not validate a release candidate. If the chosen commit has no full platform runs and CI package, manually dispatch the Mac workflow with `validation=full` and the Windows workflow for that commit before publishing. New `macos-v*` tags also request full validation; wait for those gates before publishing.
-2. Create a `macos-v<version>-preview.<n>` draft at that exact commit, marked Pre-release and not Latest. Upload only the ZIP, matching `.sha256` and manifest.
-3. Compare uploaded asset sizes/digests with local files, then publish. Keep Windows Latest and its assets unchanged.
-4. Verify the published tag resolves to the tested commit, public download works and the release remains a Pre-release. Keep existing release assets immutable; publish a new preview for a different binary.
-
-See [release checklist](RELEASE-CHECKLIST.md) and [testing](TESTING.md). Update current status instead of appending development diaries; Git commits retain the history.
+1. Confirm the intended commit is merged and tag it with `macos-v<version>`; 1.0 uses exactly `macos-v1.0.0`. Mac release tags force full validation in both workflows. Wait for both final checks to pass at the tag before publishing. If needed, manually dispatch the full workflows for the exact revision.
+2. Create a draft GitHub Release at that tag. For a stable release, clear Pre-release and explicitly leave **Latest unchanged**. Keep Windows v1.2.3 and its assets untouched. Previews use `macos-v<version>-preview.<n>` and remain marked Pre-release.
+3. Upload the verified ZIP, matching `.sha256` and `.manifest.json`. Include version/build, minimum OS/architecture, source revision, signing mode, installation instructions, evidence links and known limitations in the release notes.
+4. Compare uploaded asset sizes and server digests with the local files, then publish. Verify the public tag target, download, checksums, stable/pre-release flag and unchanged Windows Latest.
+5. Keep published assets immutable. A different binary requires a new version/tag; do not overwrite a released ZIP or reuse its validation record.

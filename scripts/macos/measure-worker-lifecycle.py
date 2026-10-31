@@ -103,6 +103,32 @@ def timed(action):
     return result, round((time.monotonic() - start) * 1000, 3)
 
 
+def preview_after_cancel(worker, params):
+    """Retry JOB_BUSY for a 10-second admission window, never a save execution.
+
+    An already-started RPC/operation retains its normal timeout; this window
+    limits new preview attempts, not the end-to-end duration of an attempt.
+    """
+    started = time.monotonic()
+    deadline = started + 10
+    busy_count = 0
+    while True:
+        if time.monotonic() >= deadline:
+            raise TimeoutError('Canceled preview JOB_BUSY retry window expired after 10 seconds')
+        pending = worker.call('save.preview', params)
+        done = worker.operation(pending['operationId'])
+        reason = (done.get('error') or {}).get('data', {}).get('reason')
+        if done['status'] == 'failed' and reason == 'JOB_BUSY':
+            busy_count += 1
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('Canceled preview JOB_BUSY retry window expired after 10 seconds')
+            time.sleep(min(.05, remaining))
+            continue
+        assert done['status'] == 'completed' and done['result']['canExecute'], done
+        return {'busyResponses': busy_count, 'elapsedMs': round((time.monotonic() - started) * 1000, 3)}
+
+
 def measure(args, report):
     with tempfile.TemporaryDirectory(prefix='JavMetaLite lifecycle 合成 ') as directory:
         root = Path(directory)
@@ -171,9 +197,7 @@ def measure(args, report):
                 assert canceled['status'] in ('completed', 'canceled'), canceled
                 job = worker.call('jobs.get', {'jobId': job['jobId']})
                 preview_params['expectedReviewRevision'] = job['reviewRevision']
-                pending = worker.call('save.preview', preview_params)
-                done = worker.operation(pending['operationId'])
-                assert done['status'] == 'completed' and done['result']['canExecute'], done
+                preview_recovery = preview_after_cancel(worker, preview_params)
                 for item in snapshot['jobs']:
                     worker.call('jobs.remove', {'jobId': item['jobId']})
                 empty = worker.call('workspace.getSnapshot')
@@ -182,6 +206,7 @@ def measure(args, report):
                 record = {'index': len(report['cycles']) + 1, 'elapsedSeconds': round(time.monotonic() - start, 3),
                     'importMs': import_ms, 'firstLocalPreviewMs': first_ms, 'repeatLocalPreviewMs': repeat_ms,
                     'cancelRaceTerminalStatus': canceled['status'], 'rssBytes': rss(worker.proc.pid),
+                    'previewAfterCancel': preview_recovery,
                     'cacheFiles': sum(path.is_file() for path in cache.rglob('*')),
                     'cacheBytes': sum(path.stat().st_size for path in cache.rglob('*') if path.is_file()),
                     'retention': empty.get('retention')}

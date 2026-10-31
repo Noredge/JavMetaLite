@@ -21,6 +21,14 @@ internal static class FileSharingRetry
             File.Delete(path);
         }, "rollback-delete", path);
 
+    internal static async Task<T> RunAsync<T>(Func<T> action, string operation, string path,
+        CancellationToken token = default)
+    {
+        T result = default!;
+        await RunAsync(() => { result = action(); }, operation, path, token).ConfigureAwait(false);
+        return result;
+    }
+
     internal static async Task RunAsync(Action action, string operation, string path,
         CancellationToken token = default)
     {
