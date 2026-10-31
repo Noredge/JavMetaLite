@@ -7,7 +7,7 @@
 [![Windows CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 [![macOS CI](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml)
 
-> Windows **1.2.3** · macOS **0.4.0 预览版 2（build47）**。
+> Windows **1.2.3** · macOS **1.0.0（build50）**。
 
 用于本地影片资料审核与整理的 Windows／macOS 工具，支持单片编辑、批量处理和 Jellyfin 兼容输出。
 
@@ -60,13 +60,13 @@ dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj -c Release --no-bu
 
 EXE 所在文件夹、ZIP 和 SHA-256 文件均输出到 `release/`。完整测试命令见[开发与测试](TESTING.md)。
 
-## macOS 预览版
+## macOS 1.0
 
 **Apple Silicon · macOS 15+。** 原生编辑器同屏展示海报与完整封套，支持资料、图片编辑和勾选批量查询、保存。默认预览保存变更，保留未编辑的 NFO 内容，写入前检查文件冲突；常用设置自动记忆。
 
-从 [macOS 0.4.0 Preview 2 (build47)](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2) 下载 [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v0.4.0-preview.2/JavMetaLite-macOS-arm64-Release-adhoc.zip)，解压后打开 `JavMetaLite.app`，无需安装 .NET。
+从 [macOS 1.0.0](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) 下载 [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.0.0/JavMetaLite-macOS-arm64-Release-adhoc.zip)，解压后打开 `JavMetaLite.app`，无需安装 .NET。
 
-GitHub 包使用 ad-hoc 签名，没有 Developer ID 或公证；项目也允许以此方式发布正式版，但这不表示 Apple 已验证发布者或扫描应用。核对 Release 提供的 ZIP SHA-256，解压后将 `JavMetaLite.app` 移到“应用程序”。如果可信的应用因“无法验证开发者”或“Apple 无法检查”被阻止，先尝试打开，再到 **系统设置 → 隐私与安全性 → 仍要打开**，确认打开此 App。不要用此流程绕过损坏或恶意软件警报。[Apple 说明](https://support.apple.com/zh-cn/102445) · [首次启动](macos/README.md#first-launch)。
+macOS 1.0 包使用 ad-hoc 签名，没有 Developer ID 或公证；Apple 未验证发布者，也未公证此包。核对 Release 提供的 ZIP SHA-256，解压后将 `JavMetaLite.app` 移到“应用程序”。如果可信的应用因“无法验证开发者”或“Apple 无法检查”被阻止，先尝试打开，再到 **系统设置 → 隐私与安全性 → 仍要打开**，确认打开此 App。不要用此流程绕过损坏或恶意软件警报。[Apple 说明](https://support.apple.com/zh-cn/102445) · [首次启动](macos/README.md#first-launch)。
 
 自行构建需安装 [global.json](global.json) 指定的 SDK，以及带 macOS 15+ SDK 的 Xcode 或 Command Line Tools。在仓库根目录执行：
 
@@ -79,7 +79,7 @@ GitHub 包使用 ad-hoc 签名，没有 Developer ID 或公证；项目也允许
 
 ## 更多
 
-[macOS 版本说明](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v0.4.0-preview.2) · [Windows 版本说明](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [更新历史](CHANGELOG.md) · [开发与测试](TESTING.md)
+[macOS 版本说明](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) · [Windows 版本说明](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [更新历史](CHANGELOG.md) · [开发与测试](TESTING.md)
 
 Windows 日志和偏好设置位于 `%LOCALAPPDATA%\JavMetaLite`。
 

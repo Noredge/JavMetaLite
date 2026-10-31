@@ -1,20 +1,16 @@
-# Running this macOS package
+# JavMetaLite 1.0 for macOS
 
 Verify the ZIP against the SHA-256 on the project's GitHub Release, extract the
 complete ZIP and move JavMetaLite.app to Applications. Keep its internal
 Contents folder intact. The app includes its own .NET runtime and does not require
-an installed .NET SDK, Homebrew, or a developer PATH. The current minimum deployment
-target is macOS 15; actual tested systems are listed in the accompanying status.
+an installed .NET SDK, Homebrew, or a developer PATH. The minimum deployment
+target is macOS 15. This release is for Apple Silicon (arm64); Intel is not
+verified. The release notes identify the actual tested systems and limitations.
 
-This build is architecture-specific. An arm64 build is for Apple Silicon; an x64
-build requires separate Intel execution evidence. A successful cross-build alone
-does not verify another CPU or macOS version.
-
-The project permits ad-hoc signed preview and stable releases on GitHub. Ad-hoc
-signing verifies local integrity; it does not establish Developer ID, an Apple
-malware scan, notarization or automatic Gatekeeper acceptance. Release maturity
-and Apple trust are separate. The selected automated distribution policy passing
-also does not replace manual installation or native acceptance.
+The GitHub package uses ad-hoc signing without Developer ID or notarization.
+Ad-hoc signing verifies local integrity; it does not establish Apple publisher
+verification, a malware scan or automatic Gatekeeper acceptance. Manual approval
+may be needed on first launch.
 
 ## First launch / 首次启动 / 首次啟動 / 初回起動
 

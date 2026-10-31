@@ -75,7 +75,7 @@ internal sealed partial class Workspace : IAsyncDisposable
             if (!p.TryGetProperty("protocolVersion", out var version) || version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var n) || n != 1)
             { _initialized = false; throw new RpcError(-32010, "PROTOCOL_VERSION_MISMATCH", "Client and bundled engine versions do not match."); }
             _initialized = true;
-            return new { protocolVersion = 1, workerVersion = "0.4.0-dev", sessionId = _sessionId, cacheRoot = _cacheRoot,
+            return new { protocolVersion = 1, workerVersion = "1.0.0", sessionId = _sessionId, cacheRoot = _cacheRoot,
                 capabilities = new { readLocal = true, searchLibreDmm = true, writeNfo = true, searchR18Dev = true, writeArtwork = true, organizeVideo = true, manualBrowserImport = true, localArtworkTrash = true, batchSave = true, confirmParts = true, discoverInputs = true, selectReviewSource = true, artworkPreviewLeases = true, transactionRecovery = true },
                 discoveryLimits = new { maximumTokens = MaximumDiscoveries, maximumItems = MaximumDiscoveryItems, maximumResultBytes = MaximumDiscoveryBytes, expiresAfterSeconds = DiscoveryLifetime.TotalSeconds } };
         }

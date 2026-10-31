@@ -74,22 +74,6 @@ Use disposable synthetic videos and record actual actions, screenshots and disk 
 
 The [40-case checklist](WINDOWS-CASE-REGRESSION.md) covers product regression requirements. [STATUS](STATUS.md) records current verified and unverified scope; a controlled API test is not a physical-device or live-site pass.
 
-## Recorded local acceptance for build49
-
-On the current Apple Silicon Mac / macOS 27.0.1, `full-build49.log` passed Portable 60/60 with 770 assertions, Swift 97, all 103 Worker cases, 512 localization keys with 4126 runtime checks, release tools 37, manifest tests 15, lifecycle-helper tests 6 and CI-tool tests 12. Xcode membership and module typecheck passed; full Xcode/hosted UI tests were not run.
-
-Keep the distinct binaries and evidence scopes explicit:
-
-| Evidence | Observed result and boundary |
-| --- | --- |
-| APFS disk images with the newly compiled cleanup fix | 8/8: verified cross-device copy, full disk, read-only mount, detach after preview, detach during copy, direct mountpoint detach, permission denial and 300 saves across 3 sessions. Detach during copying retains `recoveryRequired`, warnings and staged files after remount. This uses a development Worker DLL, not the final build49 signed ZIP; it is not physical-disk or SMB acceptance. |
-| clean `4d3cbd6` build48 shipping Worker | 2169 lifecycle cycles over 1200.37 seconds with 16 synthetic jobs per cycle, media unchanged, queue emptied and cache removed after normal shutdown. RSS observations are bounded measurement, not leak freedom or native UI soak. |
-| Same build48 shipping Worker, explicit live opt-in | Three IDs × LibreDMM/R18.dev returned usable metadata; NFO-only saves and refusal/readback safeguards passed. No remote artwork download, live browser or long-term provider claim. |
-| Isolated build48 native wrapper | Export cancellation/write failure preserves review; repeated export failure after controlled idle engine exit retains drafts and requires another end-session confirmation. Only the designated synthetic image was trashed and restored using Finder Put Back. Controlled preview failure followed by Retry displayed the restored 600 × 300 image. |
-| Same native wrapper, main workspace | English/Japanese/Simplified/Traditional Chinese × light/dark, 8 smallest-window screenshots and AX checks. Other windows, physical IME, complete VoiceOver and display/gesture combinations remain separate. |
-
-The wrappers preserve the actual product executable and 200 Worker files but use their own bundle identity, launcher and temporary data root; they are not Gatekeeper or clean-device evidence. The final clean build49 package, frozen-revision cloud results and native offline acceptance were pending when this record was frozen. Subsequent evidence belongs in the candidate delivery report and PR validation, without reinterpreting an older binary's results. The published release remains Preview 2 until a separate release is made.
-
 ## Legacy transaction records
 
 Old Preview journals do not contain the before/after evidence required for automatic verification. An unreadable record, unavailable volume, unknown result or unverified temporary file must remain blocked. A programmatic "mark resolved" button cannot establish that the files are safe.
@@ -104,4 +88,4 @@ Only after the complete result is independently established, quit every JavMetaL
 
 [Provider](../../scripts/macos/live-provider-check.py) and [artwork/batch](../../scripts/macos/live-artwork-batch-check.py) checks require `--run-live`, a synthetic video and a fresh workspace/report. They access real sources; default CI does not. Do not upload private paths, original handoff documents or media. A partial result is not an all-source pass.
 
-Physical external volumes, SMB, power loss, full-disk behavior, complete accessibility and another CPU/OS require independent acceptance. Use [the safety requirements](SAFETY-MATRIX.md) when extending tests.
+APFS disk-image results do not establish physical external-volume, SMB, power-loss or other-filesystem behavior. Complete accessibility and another CPU/OS require independent acceptance. Use [the safety requirements](SAFETY-MATRIX.md) when extending tests.
