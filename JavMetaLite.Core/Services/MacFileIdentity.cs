@@ -2,7 +2,8 @@ using System.Runtime.InteropServices;
 
 namespace JavMetaLite.Core.Services;
 
-// Discovery-only evidence. It must not authorize an overwrite, rename or retirement.
+// Native identity is additional evidence, never sufficient on its own to authorize
+// an overwrite or retirement. Rollback also checks staged content and metadata.
 internal readonly record struct MacFileIdentity(uint Device, ulong FileId)
 {
     internal static bool TryRead(string path, out MacFileIdentity identity, out Exception? error)

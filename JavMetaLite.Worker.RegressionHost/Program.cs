@@ -73,6 +73,7 @@ sealed class FixedHttp : HttpMessageHandler
     private R18RequestScheduler _scheduler;
     private bool _holdScheduler;
     private bool _cleanupFailure;
+    private string? _alterCommittedNfoDuringCleanup;
     private string[] _discoveryReadFailures = [];
     private bool _holdDiscovery;
     private int _discoveryDelayMilliseconds;
@@ -97,7 +98,17 @@ sealed class FixedHttp : HttpMessageHandler
     }
     public FileOrganizationService CreateOrganization(OutputService output) => new(output, path =>
     {
-        lock (_gate) if (_cleanupFailure) return Task.FromResult<TemporaryCleanupIssue?>(new(path, "Synthetic cleanup access denied; original error retained."));
+        lock (_gate)
+        {
+            if (_alterCommittedNfoDuringCleanup is { } nfo && File.Exists(nfo))
+            {
+                _alterCommittedNfoDuringCleanup = null;
+                File.Copy(nfo, nfo + ".fixture-original", true);
+                File.WriteAllText(nfo, "SYNTHETIC EXTERNAL EDIT AFTER COMMIT");
+                _requests.Add(new { kind = "committedNfoAltered", path = nfo });
+            }
+            if (_cleanupFailure) return Task.FromResult<TemporaryCleanupIssue?>(new(path, "Synthetic cleanup access denied; original error retained."));
+        }
         return TemporaryDirectoryCleanup.TryDeleteAsync(path);
     });
     public DateTimeOffset UtcNow() { lock (_gate) return _now; }
@@ -161,6 +172,13 @@ sealed class FixedHttp : HttpMessageHandler
             if (p.TryGetProperty("advanceSeconds", out var advance)) _now += TimeSpan.FromSeconds(advance.GetDouble());
             if (p.TryGetProperty("holdScheduler", out var hold)) _holdScheduler = hold.GetBoolean();
             if (p.TryGetProperty("cleanupFailure", out var cleanup)) _cleanupFailure = cleanup.GetBoolean();
+            if (p.TryGetProperty("alterCommittedNfoDuringCleanup", out var alterCommitted))
+            {
+                var path = alterCommitted.ValueKind == JsonValueKind.Null ? null : alterCommitted.GetString();
+                if (path is not null && (!Path.IsPathFullyQualified(path) || Path.GetExtension(path) != ".nfo"))
+                    throw new ArgumentException("The synthetic committed-output edit requires an absolute NFO path.");
+                _alterCommittedNfoDuringCleanup = path;
+            }
             if (p.TryGetProperty("discoveryReadFailures", out var failures)) _discoveryReadFailures = failures.EnumerateArray().Select(v => v.GetString()!).ToArray();
             if (p.TryGetProperty("holdSidecarInventory", out var inventoryHold)) _holdSidecarInventory = inventoryHold.GetBoolean();
             if (p.TryGetProperty("sidecarInventoryPhase", out var inventoryPhase))

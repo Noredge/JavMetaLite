@@ -12,6 +12,8 @@ Manual web import captures only the explicitly requested supported page and clos
 
 If the engine process exits, the recovery screen retains the last review and unsent drafts. Export Review writes a JSON reference; quitting or closing offers export first, or a separately confirmed end without export. Canceling or failing export keeps the session open. A response timeout while the process remains alive still requires status reconciliation. Exports do not confirm disk outcomes or replay saves; reopen the app, inspect transaction recovery and reread files before reapplying edits.
 
+The current unreleased build48 source adds Transaction Recovery in the save Inspector lists transaction records and inspects the current source, output and temporary files. A compatible record can be archived only after its recorded before/after state matches the files and you confirm the result. Archival preserves the journal and never changes media. Export current review references before removing or reimporting affected movies; unsent drafts are not automatically restored from JSON. Legacy Preview records lack the necessary verification evidence and remain read-only. Follow the [manual recovery procedure](../docs/macos/TESTING.md#legacy-transaction-records) instead of deleting a warning record.
+
 Generated artwork previews have a 256 MiB / 1024-file session budget. Preview leases protect images still held by the editor; unused files can be evicted, and removing movies releases their references. Startup reclaims only recognized inactive sessions with an acquired ownership lock. Unmarked older caches are retained conservatively.
 
 ## Build and test

@@ -12824,6 +12824,1518 @@
           }
         }
       }
+    },
+    "transactionRecovery": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transaction Records…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "事务恢复记录…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "交易復原記錄…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "処理の復旧記録…"
+          }
+        }
+      }
+    },
+    "recoveryExplanation": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inspect the recorded file outcome before archiving a transaction record. Verification and archiving never replay a save or change your media."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先核验记录对应的文件结果，再归档事务记录。核验和归档不会重放保存或修改媒体文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先核驗記錄對應的檔案結果，再封存交易記錄。核驗和封存不會重播儲存或修改媒體檔案。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記録されたファイルの状態を確認してから記録を保管します。保存の再実行やメディアの変更は行いません。"
+          }
+        }
+      }
+    },
+    "recoveryNoRecords": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No transaction records in this page."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本页没有事务记录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本頁沒有交易記錄。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このページには処理記録がありません。"
+          }
+        }
+      }
+    },
+    "recoveryFinishedRecord": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finished transaction"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已结束的事务"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已結束的交易"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "終了した処理"
+          }
+        }
+      }
+    },
+    "recoveryVerify": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verify Files"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核验文件"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核驗檔案"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイルを確認"
+          }
+        }
+      }
+    },
+    "recoveryRefresh": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh Records"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新记录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新整理記錄"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記録を更新"
+          }
+        }
+      }
+    },
+    "recoveryNextRecords": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next Records"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一页记录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一頁記錄"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次の記録"
+          }
+        }
+      }
+    },
+    "recoverySelectRecord": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a record and verify its current files."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择记录并核验当前文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇記錄並核驗目前檔案。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記録を選択して現在のファイルを確認してください。"
+          }
+        }
+      }
+    },
+    "recoveryVerified.committed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verified: committed files still match"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已核验：文件仍与提交后的记录一致"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已核驗：檔案仍與提交後的記錄一致"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認済み：確定後のファイルと一致"
+          }
+        }
+      }
+    },
+    "recoveryVerified.restored": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verified: original file contents restored"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已核验：已恢复原始文件内容"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已核驗：已還原原始檔案內容"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認済み：元のファイル内容に復旧"
+          }
+        }
+      }
+    },
+    "recoveryCannotArchive": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outcome not verified — record remains open"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结果尚未核实，记录继续保留"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "結果尚未核實，記錄繼續保留"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "結果は未確認です。記録は未解決のまま保持します"
+          }
+        }
+      }
+    },
+    "recoveryManualInstructions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep the journal and all media. Export any current review drafts and this inspection report. Compare every source, destination and temporary path with trusted backups; restore files only after establishing the correct outcome. Legacy journals have no verifiable before/after hashes. If their outcome cannot be established, keep saving blocked. Only after documenting a complete manual verification: close every app instance, move the original legacy journal into a separate manual-reviewed folder without changing its status or deleting it, then restart and reimport the movies. This is a manual migration, not automatic verification."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留原日志和全部媒体，先导出当前审核草稿及本检查报告。对照可信备份，逐项核对源文件、目标文件和临时路径，确认正确结果后再恢复文件。旧日志没有可验证的前后哈希；无法证实结果时，请继续保留保存阻止。仅在完成全部人工核对并保存核对说明后：退出所有应用实例，将旧日志原件移入独立的 manual-reviewed 文件夹，不改原始状态、不删除原件，然后重启并重新导入影片。这是人工迁移，不是应用自动验证。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留原記錄與全部媒體，先匯出目前審核草稿及本檢查報告。對照可信備份，逐項核對來源檔案、目標檔案與暫存路徑，確認正確結果後再還原檔案。舊記錄沒有可驗證的前後雜湊；無法證實結果時，請繼續保留儲存阻止。僅在完成全部人工核對並保存核對說明後：退出所有應用程式實例，將舊記錄原件移入獨立的 manual-reviewed 資料夾，不改原始狀態、不刪除原件，然後重啟並重新匯入影片。這是人工遷移，不是應用程式自動驗證。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "元の記録と全メディアを保管し、現在の下書きとこの検査レポートを書き出してください。信頼できるバックアップとすべての元ファイル・出力先・一時パスを照合し、正しい結果を確定してから復元します。旧記録には検証可能な前後ハッシュがありません。結果を確定できない場合は保存を禁止したままにしてください。全項目を手動確認し、その記録を残した場合のみ、すべてのアプリを終了し、旧記録の原本を独立した manual-reviewed フォルダーに移します。元の状態は書き換えず、原本は削除しないでください。その後再起動して動画を再取り込みします。これは手動移行であり、自動検証ではありません。"
+          }
+        }
+      }
+    },
+    "recoveryVerifying": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifying transaction files…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在核验事务文件…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在核驗交易檔案…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "処理ファイルを確認中…"
+          }
+        }
+      }
+    },
+    "recoveryExportReport": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Inspection…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出核验说明…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯出核驗說明…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認結果を書き出す…"
+          }
+        }
+      }
+    },
+    "recoveryArchive": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archive Verified Record"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "归档已核验记录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "封存已核驗記錄"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認済み記録を保管"
+          }
+        }
+      }
+    },
+    "recoveryArchiveTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm this file outcome?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认这些文件结果？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認這些檔案結果？"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このファイルの結果を確認しますか？"
+          }
+        }
+      }
+    },
+    "recoveryArchiveConfirmation": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I have reviewed the verified file outcome. Move this journal into the archive and clear its recovery warning. Media will remain unchanged. Reimport affected movies before saving again; unsent drafts are retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我已审阅核验结果。同意将本日志移入归档并解除它的恢复提示。媒体文件不会改变。再次保存前需重新导入相关影片；未提交草稿仍保留。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我已審閱核驗結果。同意將本日誌移入封存並解除它的復原提示。媒體檔案不會變更。再次儲存前需重新匯入相關影片；未提交草稿仍保留。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認結果を確認しました。記録を保管先へ移動し、この復旧警告を解除します。メディアは変更しません。再保存の前に関連する動画を再読み込みしてください。未送信の下書きは保持されます。"
+          }
+        }
+      }
+    },
+    "recoveryArchivedReimport": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record archived; no media changed. Export any review drafts you need before removing and reimporting the affected movies. Other folders remain available."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录已归档，媒体未改变。请先导出需要保留的审核草稿，再移除并重新导入相关影片；其他文件夹中的影片不受影响。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記錄已歸檔，媒體未改變。請先匯出需要保留的審核草稿，再移除並重新匯入相關影片；其他資料夾中的影片不受影響。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記録をアーカイブしました。メディアは変更していません。必要な下書きを書き出してから、対象の動画を一覧から削除して再取り込みしてください。別フォルダーの動画はそのまま使えます。"
+          }
+        }
+      }
+    },
+    "recoveryRefreshFirst": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh the recovery list before selecting this record."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先刷新恢复列表，再选择该记录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請先重新整理復原清單，再選擇該記錄。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "復旧一覧を更新してから記録を選択してください。"
+          }
+        }
+      }
+    },
+    "recoveryConfirmRequired": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A successful file verification and your explicit confirmation are required."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "必须先成功核验文件并明确确认。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "必須先成功核驗檔案並明確確認。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイルの確認と明示的な承認が必要です。"
+          }
+        }
+      }
+    },
+    "recoveryArchiveUnconfirmed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archiving was not confirmed. Refresh the records before continuing."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "归档结果未确认，请刷新记录后继续。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "封存結果未確認，請重新整理記錄後繼續。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保管結果を確認できません。一覧を更新してください。"
+          }
+        }
+      }
+    },
+    "recovery.issue.legacyRecord": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This older journal has no verifiable before/after hashes. It remains read-only."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此旧日志没有可验证的前后状态哈希，仅供只读审查。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此舊日誌沒有可驗證的前後狀態雜湊，僅供唯讀審查。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旧記録には確認できる前後のハッシュがありません。読み取り専用で保持します。"
+          }
+        }
+      }
+    },
+    "recovery.issue.unreadableRecord": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The record is missing, unreadable, linked, malformed or too large. Preserve it for manual inspection."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录缺失、不可读、被链接替换、格式异常或过大，请保留供人工检查。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記錄缺失、無法讀取、被連結取代、格式異常或過大，請保留供人工檢查。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記録が欠落、読取不能、リンク、形式不正、または大きすぎます。手動調査のため保持してください。"
+          }
+        }
+      }
+    },
+    "recovery.issue.invalidRecord": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Required recovery evidence is incomplete or invalid."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "必需的恢复证据不完整或无效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "必要的復原證據不完整或無效。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "必要な復旧情報が不完全または無効です。"
+          }
+        }
+      }
+    },
+    "recovery.issue.ownerActiveOrUnverifiable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The owning engine is still running, or its ownership cannot be verified. Close that app safely and try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所属引擎仍在运行，或无法核实其所有权。请安全关闭对应应用后重试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所屬引擎仍在執行，或無法核實其所有權。請安全關閉對應應用程式後重試。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有元のエンジンが実行中、または所有状態を確認できません。対応するアプリを安全に終了して再試行してください。"
+          }
+        }
+      }
+    },
+    "recovery.issue.fileUnverifiable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A file could not be verified safely. Check permissions and linked paths."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有文件无法安全核验，请检查权限和链接路径。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有檔案無法安全核驗，請檢查權限和連結路徑。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安全に確認できないファイルがあります。権限とリンクを確認してください。"
+          }
+        }
+      }
+    },
+    "recovery.issue.temporaryRemains": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporary or backup paths still exist. Inspect and resolve them before rechecking."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍有临时或备份路径，请检查并处理后重新核验。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍有暫存或備份路徑，請檢查並處理後重新核驗。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時ファイルまたはバックアップが残っています。確認と処理の後に再確認してください。"
+          }
+        }
+      }
+    },
+    "recovery.issue.temporaryUnverifiable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A temporary path could not be verified safely."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "临时路径无法安全核验。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暫存路徑無法安全核驗。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時パスを安全に確認できません。"
+          }
+        }
+      }
+    },
+    "recovery.issue.unknownOutcome": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The journal outcome is unknown. No archive permission was granted."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日志结果未知，未授予归档许可。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日誌結果未知，未授予封存許可。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記録の結果は不明です。保管は許可されませんでした。"
+          }
+        }
+      }
+    },
+    "recovery.issue.filesDoNotMatch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Files match neither the recorded original state nor a recorded successful commit."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件既不匹配原始状态，也不匹配已记录的成功提交状态。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檔案既不符合原始狀態，也不符合已記錄的成功提交狀態。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイルは元の状態にも、記録された確定後の状態にも一致しません。"
+          }
+        }
+      }
+    },
+    "recovery.issue.recordChanged": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The journal changed during verification. Refresh and verify again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核验期间日志发生变化，请刷新后重新核验。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核驗期間日誌發生變更，請重新整理後再次核驗。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認中に記録が変更されました。更新して再確認してください。"
+          }
+        }
+      }
+    },
+    "recovery.issue.filesChangedDuringVerification": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A file changed during verification. Verify again after file activity stops."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核验期间文件发生变化，请停止相关文件操作后重试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核驗期間檔案發生變更，請停止相關檔案操作後重試。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認中にファイルが変更されました。ファイル操作の終了後に再確認してください。"
+          }
+        }
+      }
+    },
+    "recovery.file.present": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Present; SHA-256 checked"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件存在，已检查 SHA-256"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檔案存在，已檢查 SHA-256"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存在：SHA-256 を確認済み"
+          }
+        }
+      }
+    },
+    "recovery.file.missing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Absent"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不存在"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不存在"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存在しません"
+          }
+        }
+      }
+    },
+    "recovery.file.temporaryPresent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporary or backup path remains"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "临时或备份路径仍存在"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暫存或備份路徑仍存在"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時パスまたはバックアップが残っています"
+          }
+        }
+      }
+    },
+    "recovery.file.temporaryAbsent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporary path is absent"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "临时路径已不存在"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暫存路徑已不存在"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時パスは存在しません"
+          }
+        }
+      }
+    },
+    "recovery.file.unverifiable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not verify"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法核验"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法核驗"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認できません"
+          }
+        }
+      }
+    },
+    "recovery.file.legacyUnverified": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legacy reference; outcome not verified"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旧记录路径，结果未核实"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "舊記錄路徑，結果未核實"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旧記録の参照先：結果は未確認"
+          }
+        }
+      }
+    },
+    "recovery.status.completed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已完成"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已完成"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完了"
+          }
+        }
+      }
+    },
+    "recovery.status.failedRestored": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed; restored"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失败，已恢复"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失敗，已還原"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失敗：復旧済み"
+          }
+        }
+      }
+    },
+    "recovery.status.canceledRestored": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canceled; restored"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消，已恢复"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消，已還原"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消：復旧済み"
+          }
+        }
+      }
+    },
+    "recovery.status.inProgress": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrupted or still in progress"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中断或仍在进行"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中斷或仍在進行"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中断または処理中"
+          }
+        }
+      }
+    },
+    "recovery.status.cleanupRequired": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cleanup needs inspection"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要检查清理结果"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要檢查清理結果"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "後処理の確認が必要"
+          }
+        }
+      }
+    },
+    "recovery.status.recoveryRequired": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recovery needs inspection"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要检查恢复结果"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要檢查復原結果"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "復旧結果の確認が必要"
+          }
+        }
+      }
+    },
+    "recovery.status.unknown": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不明"
+          }
+        }
+      }
+    },
+    "error.RECOVERY_NOT_FOUND": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh the transaction records and select one again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请刷新事务记录后重新选择。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請重新整理交易記錄後重新選擇。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "処理記録を更新して再選択してください。"
+          }
+        }
+      }
+    },
+    "error.RECOVERY_STALE": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The recovery record or files changed. Verify again before archiving."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复记录或文件已变化，归档前请重新核验。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "復原記錄或檔案已變更，封存前請重新核驗。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "復旧記録またはファイルが変更されました。保管前に再確認してください。"
+          }
+        }
+      }
+    },
+    "error.RECOVERY_ARCHIVE_CONFLICT": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An archived record already occupies this path. Inspect both records first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "归档位置已有记录，请先检查两份记录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "封存位置已有記錄，請先檢查兩份記錄。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保管先に記録が既に存在します。両方を確認してください。"
+          }
+        }
+      }
+    },
+    "error.CONFIRMATION_REQUIRED": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review and explicitly confirm the verified file outcome first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先审阅并明确确认核验结果。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請先審閱並明確確認核驗結果。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認結果を確認し、明示的に承認してください。"
+          }
+        }
+      }
+    },
+    "exportReviewReference": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Review Drafts…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出审核草稿…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯出審核草稿…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認中の下書きを書き出す…"
+          }
+        }
+      }
+    },
+    "recoveryExports": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯出…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "書き出す…"
+          }
+        }
+      }
+    },
+    "reviewReferenceUnavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wait until the engine is idle and its status is confirmed before exporting this review reference."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请等待引擎空闲并核实操作状态后，再导出审核参考。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請等待引擎閒置並核實操作狀態後，再匯出審核參考。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エンジンが待機状態になり、操作状態を確認してから下書きを書き出してください。"
+          }
+        }
+      }
+    },
+    "reviewReferenceInstructions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This JSON preserves current review values and unsent drafts for manual reference. It cannot be imported or used to run a save. After reimporting movies, compare the fresh disk contents before manually reapplying edits. Keep this file until those edits are saved."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此 JSON 保留当前审核值与未提交草稿，供人工参考，不能导入或执行保存。重新导入影片后，请对照最新磁盘内容，再手动补回需要的编辑；在这些编辑保存前保留此文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此 JSON 保留目前審核值與未提交草稿，供人工參考，不能匯入或執行儲存。重新匯入影片後，請對照最新磁碟內容，再手動補回需要的編輯；在這些編輯儲存前保留此檔案。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この JSON は現在の確認値と未送信の下書きを手動確認用に保存します。読み込みや保存処理の実行には使えません。動画を再取り込みした後、新しいディスク内容と照合して必要な編集を手動で戻してください。その編集を保存するまで、このファイルを保管してください。"
+          }
+        }
+      }
+    },
+    "recoveryStatusRefreshed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The engine is idle and the record list has been refreshed. No operation was replayed. Inspect the remaining records and reimport movies whose disk baseline is blocked."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "引擎已空闲，记录列表已刷新；未重放任何操作。请检查剩余记录，并重新导入磁盘基线被阻止的影片。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "引擎已閒置，記錄清單已重新整理；未重播任何操作。請檢查剩餘記錄，並重新匯入磁碟基線被阻止的影片。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エンジンは待機中で、記録一覧を更新しました。操作は再実行していません。残った記録を確認し、ディスク状態が未確認の動画を再取り込みしてください。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

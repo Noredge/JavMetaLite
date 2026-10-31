@@ -332,10 +332,147 @@ class WorkerTests(unittest.TestCase):
         with Worker(self.temp.name) as worker:
             self.reason(worker.request('save.execute', {'planId': plan}), 'PLAN_STALE')
             snapshot = worker.request('workspace.getSnapshot')['result']
-            self.assertIn(str(journal), snapshot['recoveryWarnings'])
+            self.assertIn(str(journal.resolve()), snapshot['recoveryWarnings'])
             _, job = worker.import_video('DEMO-002.mp4', None)
             self.reason(worker.request('save.preview', {'jobId': job['jobId'], 'expectedReviewRevision': job['reviewRevision']}), 'RECOVERY_REQUIRED')
             self.assertTrue(journal.exists())
+
+    def recovery_fixture(self, worker):
+        video, job = worker.import_video()
+        original = video.with_suffix('.nfo').read_bytes()
+        job = worker.edit(job, {'title': 'Recovery verification fixture'})
+        plan = worker.preview(job)
+        done = worker.operation(worker.request('save.execute', {'planId': plan['planId']})['result']['operationId'])
+        self.assertEqual('completed', done['result']['outcome'], done)
+        journal = next((worker.data / 'recovery').glob('*.json'))
+        return video, journal, original
+
+    def recovery_verify(self, worker, journal):
+        rows = worker.request('recovery.list')['result']['records']
+        row = next(item for item in rows if Path(item['recordPath']) == journal.parent.resolve() / journal.name)
+        result = worker.request('recovery.verify', {'recordId': row['recordId']})
+        self.assertIn('result', result, result)
+        done = worker.operation(result['result']['operationId'])
+        self.assertEqual('completed', done['status'], done)
+        return done['result']
+
+    def recovery_archive(self, worker, inspection):
+        response = worker.request('recovery.archive', {'verificationToken': inspection['verificationToken'], 'confirmed': True})
+        self.assertIn('result', response, response)
+        return worker.operation(response['result']['operationId'])
+
+    def test_78_recovery_verified_archive_preserves_media_requires_confirmation_and_reimport(self):
+        with Worker(self.temp.name) as worker:
+            video, journal, original = self.recovery_fixture(worker)
+            media = {str(path): path.read_bytes() for path in video.parent.iterdir() if path.is_file()}
+            document = json.loads(journal.read_text())
+            self.assertEqual(1, document['recoveryVersion'])
+            self.assertTrue(document['beforeFiles'] and document['afterFiles'])
+            self.assertNotIn(str(video.resolve()), [item['path'] for item in document['beforeFiles']], 'NFO-only recovery must not rehash the unchanged video')
+            inspection = self.recovery_verify(worker, journal)
+            self.assertEqual('committed', inspection['outcome'])
+            self.assertTrue(inspection['canArchive'])
+            self.reason(worker.request('recovery.archive', {'verificationToken': inspection['verificationToken']}), 'CONFIRMATION_REQUIRED')
+            done = self.recovery_archive(worker, inspection)
+            self.assertEqual('completed', done['status'], done)
+            self.assertFalse(done['result']['mediaChanged'])
+            self.assertFalse(journal.exists())
+            self.assertTrue(Path(done['result']['archivedPath']).is_file())
+            self.assertEqual(media, {str(path): path.read_bytes() for path in video.parent.iterdir() if path.is_file()})
+            self.reason(worker.request('recovery.archive', {'verificationToken': inspection['verificationToken'], 'confirmed': True}), 'RECOVERY_STALE')
+            self.assertTrue(all(job['localNfoSaveBlocked'] for job in worker.request('workspace.getSnapshot')['result']['jobs']))
+
+    def test_79_recovery_legacy_unknown_and_arbitrary_paths_never_authorize_archive(self):
+        with Worker(self.temp.name) as worker:
+            journal = worker.data / 'recovery' / 'legacy.json'
+            journal.write_text(json.dumps({'status': 'inProgress', 'sourcePaths': [str(Path(self.temp.name) / 'unverified.mp4')]}))
+            inspection = self.recovery_verify(worker, journal)
+            self.assertFalse(inspection['canArchive'])
+            self.assertIn('legacyRecord', inspection['issues'])
+            self.assertTrue(inspection['files'])
+            self.reason(worker.request('recovery.verify', {'recordId': str(journal)}), 'RECOVERY_NOT_FOUND')
+            self.reason(worker.request('recovery.archive', {'verificationToken': str(journal), 'confirmed': True}), 'RECOVERY_STALE')
+            self.assertTrue(journal.exists())
+            self.assertIn(str(journal.resolve()), worker.request('workspace.getSnapshot')['result']['recoveryWarnings'])
+
+    def test_80_recovery_changed_record_invalidates_archive_authorization(self):
+        with Worker(self.temp.name) as worker:
+            video, journal, _ = self.recovery_fixture(worker)
+            inspection = self.recovery_verify(worker, journal)
+            record = json.loads(journal.read_text()); record['status'] = 'unknown-external-outcome'; journal.write_text(json.dumps(record))
+            done = self.recovery_archive(worker, inspection)
+            self.assertEqual('failed', done['status'], done)
+            self.reason({'error': done['error']}, 'RECOVERY_STALE')
+            self.assertTrue(journal.exists())
+            fresh = self.recovery_verify(worker, journal)
+            self.assertFalse(fresh['canArchive']); self.assertIn('unknownOutcome', fresh['issues'])
+
+    def test_81_recovery_same_size_media_edit_invalidates_archive_authorization(self):
+        with Worker(self.temp.name) as worker:
+            video, journal, _ = self.recovery_fixture(worker)
+            inspection = self.recovery_verify(worker, journal)
+            nfo = video.with_suffix('.nfo'); original = nfo.read_bytes()
+            changed = original.replace(b'Recovery verification fixture', b'External verification change!')
+            stat = nfo.stat()
+            self.assertEqual(len(original), len(changed)); nfo.write_bytes(changed)
+            os.utime(nfo, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+            done = self.recovery_archive(worker, inspection)
+            self.assertEqual('failed', done['status']); self.reason({'error': done['error']}, 'RECOVERY_STALE')
+            self.assertEqual(changed, nfo.read_bytes()); self.assertTrue(journal.exists())
+
+    def test_82_recovery_cleanup_requires_proven_absence_then_clears_only_verified_warning(self):
+        with Worker(self.temp.name) as worker:
+            video, journal, _ = self.recovery_fixture(worker)
+            temporary = video.parent / 'synthetic staging'; temporary.mkdir()
+            record = json.loads(journal.read_text()); record['status'] = 'cleanupRequired'; record['temporaryPaths'].append(str(temporary.resolve())); journal.write_text(json.dumps(record))
+            inspection = self.recovery_verify(worker, journal)
+            self.assertFalse(inspection['canArchive']); self.assertIn('temporaryRemains', inspection['issues'])
+            temporary.rmdir()
+            inspection = self.recovery_verify(worker, journal)
+            self.assertTrue(inspection['canArchive'])
+            self.assertEqual('completed', self.recovery_archive(worker, inspection)['status'])
+            self.assertEqual([], worker.request('workspace.getSnapshot')['result']['recoveryWarnings'])
+
+    def test_83_recovery_refuses_record_owned_by_another_running_engine(self):
+        first = Worker(self.temp.name); self.addCleanup(first.close)
+        video, journal, _ = self.recovery_fixture(first)
+        with Worker(self.temp.name) as second:
+            inspection = self.recovery_verify(second, journal)
+            self.assertFalse(inspection['canArchive']); self.assertIn('ownerActiveOrUnverifiable', inspection['issues'])
+            first.close()
+            inspection = self.recovery_verify(second, journal)
+            self.assertTrue(inspection['canArchive'])
+            self.assertEqual('completed', self.recovery_archive(second, inspection)['status'])
+
+    @unittest.skipIf(os.name == 'nt', 'Symlink permissions vary on Windows; macOS release path is mandatory')
+    def test_84_recovery_refuses_symlink_record_and_archive_directory(self):
+        with Worker(self.temp.name) as worker:
+            video, journal, _ = self.recovery_fixture(worker)
+            outside = Path(self.temp.name) / 'external.json'; journal.rename(outside); journal.symlink_to(outside)
+            inspection = self.recovery_verify(worker, journal)
+            self.assertFalse(inspection['canArchive']); self.assertIn('unreadableRecord', inspection['issues'])
+            journal.unlink(); outside.rename(journal)
+            inspection = self.recovery_verify(worker, journal)
+            external_dir = Path(self.temp.name) / 'external archive'; external_dir.mkdir()
+            (worker.data / 'recovery' / 'archived').symlink_to(external_dir, target_is_directory=True)
+            done = self.recovery_archive(worker, inspection)
+            self.assertEqual('failed', done['status']); self.assertTrue(journal.exists()); self.assertEqual([], list(external_dir.iterdir()))
+
+    def test_85_recovery_accepts_hash_verified_restoration_but_not_unavailable_parent(self):
+        with Worker(self.temp.name) as worker:
+            video, journal, original = self.recovery_fixture(worker)
+            video.with_suffix('.nfo').write_bytes(original)
+            record = json.loads(journal.read_text()); record['status'] = 'recoveryRequired'; record['afterFiles'] = []
+            record['beforeFiles'].append({'path': str(video.parent.resolve() / 'rolled-back target' / 'new.nfo'), 'exists': False, 'length': 0, 'writeTicks': 0, 'hash': None})
+            missing_parent = Path(self.temp.name).resolve() / 'offline volume' / 'missing.tmp'
+            record['temporaryPaths'].append(str(missing_parent)); journal.write_text(json.dumps(record))
+            inspection = self.recovery_verify(worker, journal)
+            self.assertFalse(inspection['canArchive']); self.assertIn('temporaryUnverifiable', inspection['issues'])
+            missing_parent.parent.mkdir()
+            inspection = self.recovery_verify(worker, journal)
+            self.assertEqual('restored', inspection['outcome'])
+            done = self.recovery_archive(worker, inspection)
+            self.assertEqual('completed', done['status']); self.assertEqual(original, video.with_suffix('.nfo').read_bytes())
 
     def test_09_eof_during_save_exits_without_replay_or_orphan(self):
         worker = Worker(self.temp.name)
@@ -628,6 +765,10 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(2, len([item for item in current['artwork'] if item['kind'] == 'sample']))
             self.assertGreaterEqual(len(done['result']['outputs']), 5, 'Result must report written NFO and images')
             self.assertTrue(all(Path(path).exists() for path in done['result']['outputs']))
+            journal = next((worker.data / 'recovery').glob('*.json'))
+            inspection = self.recovery_verify(worker, journal)
+            self.assertTrue(inspection['canArchive'], inspection)
+            self.assertEqual('committed', inspection['outcome'])
 
     def test_21_artwork_selection_is_revisioned_and_does_not_write_before_save(self):
         with Worker(self.temp.name) as worker:
@@ -1698,6 +1839,40 @@ class ProviderWorkerTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.worker = Worker(self.temp.name, executable=SEARCH_TEST_HOST)
         self.addCleanup(self.worker.close)
+
+    def test_86_recovery_retains_committed_evidence_after_postcommit_output_change(self):
+        video, job = self.worker.import_video()
+        original_video = video.read_bytes()
+        job = self.worker.edit(job, {'title': 'Restore this committed output'})
+        plan = self.worker.preview(job, targetMode='SourceNumberFolder', renameVideo=True)
+        output = Path(next(change['target'] for change in plan['changes'] if change['target'].endswith('.nfo') and change['operation'] in ('CreateFile', 'OverwriteFile', 'UpdateFile')))
+        self.configure(alterCommittedNfoDuringCleanup=str(output))
+        done = self.worker.operation(self.worker.request('save.execute', {'planId': plan['planId']})['result']['operationId'])
+        self.assertEqual('completed', done['status'], done)
+        self.assertEqual('cleanupRequired', done['result']['outcome'], done)
+        self.assertEqual(1, len(self.requests(kind='committedNfoAltered')))
+        self.assertFalse(video.exists(), 'The source video was committed to its new location; before state cannot be assumed recoverable.')
+        current = self.worker.get_job(job['jobId'])
+        self.assertEqual(original_video, Path(current['videoPaths'][0]).read_bytes())
+        journal = next(self.worker.data.glob('recovery/*.json'))
+        record = json.loads(journal.read_text())
+        expected = Path(str(output) + '.fixture-original').read_bytes()
+        after = next(item for item in record['afterFiles'] if Path(item['path']) == output)
+        self.assertEqual(hashlib.sha256(expected).hexdigest().upper(), after['hash'])
+        self.assertEqual(len(expected), after['length'])
+        self.assertNotEqual(expected, output.read_bytes())
+        inspection = WorkerTests.recovery_verify(self, self.worker, journal)
+        self.assertFalse(inspection['canArchive'])
+        self.assertIn('filesDoNotMatch', inspection['issues'])
+        output.write_bytes(expected)
+        Path(str(output) + '.fixture-original').unlink()
+        inspection = WorkerTests.recovery_verify(self, self.worker, journal)
+        self.assertEqual('committed', inspection['outcome'])
+        self.assertTrue(inspection['canArchive'])
+        archived = WorkerTests.recovery_archive(self, self.worker, inspection)
+        self.assertEqual('completed', archived['status'], archived)
+        self.assertEqual(expected, output.read_bytes())
+        self.assertEqual(original_video, Path(current['videoPaths'][0]).read_bytes())
 
     @staticmethod
     def libre_url(movie): return f'https://www.libredmm.com/movies/{movie}.json'

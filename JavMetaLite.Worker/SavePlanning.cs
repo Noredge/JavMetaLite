@@ -107,6 +107,7 @@ internal sealed partial class Workspace
     private Entry[] ValidatePreviewAdmission(JsonElement p)
     {
         if (_saveActive) throw new RpcError(-32010, "JOB_BUSY", "Wait for the active save before preparing another preview.");
+        RefreshRecoveryWarnings();
         if (_recoveryWarnings.Count > 0) throw new RpcError(-32010, "RECOVERY_REQUIRED", "Inspect unresolved transaction records before saving.", _recoveryWarnings.ToArray());
         return RequestedEntries(p, requireRevisions: true);
     }

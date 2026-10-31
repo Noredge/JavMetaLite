@@ -7,6 +7,7 @@ public sealed class FileOrganizationService
 {
     private readonly OutputService _outputService;
     private readonly Func<string, Task<TemporaryCleanupIssue?>> _cleanupDirectory;
+    private readonly Action<string, string>? _afterRollbackQuarantine;
 
     public FileOrganizationService(OutputService outputService)
         : this(outputService, TemporaryDirectoryCleanup.TryDeleteAsync)
@@ -14,10 +15,12 @@ public sealed class FileOrganizationService
     }
 
     internal FileOrganizationService(OutputService outputService,
-        Func<string, Task<TemporaryCleanupIssue?>> cleanupDirectory)
+        Func<string, Task<TemporaryCleanupIssue?>> cleanupDirectory,
+        Action<string, string>? afterRollbackQuarantine = null)
     {
         _outputService = outputService;
         _cleanupDirectory = cleanupDirectory;
+        _afterRollbackQuarantine = afterRollbackQuarantine;
     }
 
     public static SavePlan BuildPlan(
@@ -482,7 +485,7 @@ public sealed class FileOrganizationService
         var fullVerification = crossVolumeCopy &&
                                plan.OrganizationOptions.CrossVolumeVerification is
                                    CrossVolumeVerificationMode.FullSha256;
-        var targetStagingRoot = crossVolumeCopy
+        var targetStagingRoot = crossVolumeCopy || !PathsEqual(sourceDirectory, plan.TargetDirectory)
             ? Path.Combine(plan.TargetDirectory, $".JavMetaLite-target-{operationId}.tmp")
             : sourceStagingRoot;
         var targetPayloadRoot = crossVolumeCopy
@@ -490,7 +493,7 @@ public sealed class FileOrganizationService
             : sourceStagingRoot;
         var backupRoot = Path.Combine(targetStagingRoot, "backup");
         var sourceRetireRoot = Path.Combine(sourceStagingRoot, "retired");
-        var committedOutputs = new List<string>();
+        var committedOutputs = new List<TransactionFileOwnership>();
         var backups = new List<(string BackupPath, string OriginalPath)>();
         var createdTargetDirectory = false;
         var videoMoved = false;
@@ -498,6 +501,7 @@ public sealed class FileOrganizationService
         var sourceVideoRetired = false;
         string? sourceVideoBackupPath = null;
         string? copiedSourceSha256 = null;
+        TransactionFileOwnership? committedVideo = null;
         var operationSucceeded = false;
         var rollbackSucceeded = false;
         OrganizedSaveResult? completedResult = null;
@@ -568,6 +572,10 @@ public sealed class FileOrganizationService
                 Directory.CreateDirectory(plan.TargetDirectory);
                 createdTargetDirectory = true;
             }
+
+            if (!crossVolumeCopy && !PathsEqual(sourceStagingRoot, targetStagingRoot))
+                progress?.Report(new FileTransactionProgress(FileTransactionStage.Preparing,
+                    "Preparing target transaction recovery directory", TemporaryPath: targetStagingRoot));
 
             string? targetStagedVideoPath = null;
             IReadOnlyList<string> commitStagedPaths = stagedPaths;
@@ -670,14 +678,19 @@ public sealed class FileOrganizationService
                     backups.Add((backupPath, mapping.FinalPath));
                     ValidateBackedUpTarget(plan.PreviewTargetExpectations, mapping.FinalPath, backupPath);
                 }
+                var ownership = TransactionFileOwnership.Capture(mapping.StagedPath, mapping.FinalPath,
+                    targetStagingRoot, ComputeSha256(mapping.StagedPath));
                 await FileSharingRetry.MoveAsync(mapping.StagedPath, mapping.FinalPath, cancellationToken);
-                committedOutputs.Add(mapping.FinalPath);
+                committedOutputs.Add(ownership);
             }
 
             if (crossVolumeCopy)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                var ownership = TransactionFileOwnership.Capture(targetStagedVideoPath!, plan.TargetVideoPath,
+                    targetStagingRoot, copiedSourceSha256);
                 await FileSharingRetry.MoveAsync(targetStagedVideoPath!, plan.TargetVideoPath, cancellationToken);
+                committedVideo = ownership;
                 targetVideoCommitted = true;
             }
 
@@ -719,7 +732,9 @@ public sealed class FileOrganizationService
                 }
                 else
                 {
+                    var ownership = TransactionFileOwnership.Capture(plan.SourceVideoPath, plan.TargetVideoPath, targetStagingRoot);
                     await FileSharingRetry.MoveAsync(plan.SourceVideoPath, plan.TargetVideoPath, cancellationToken);
+                    committedVideo = ownership;
                 }
                 videoMoved = true;
             }
@@ -743,7 +758,11 @@ public sealed class FileOrganizationService
             operationSucceeded = true;
             rollbackSucceeded = true;
             timing.Complete();
-            return completedResult = new OrganizedSaveResult(finalResult, plan.TargetVideoPath, videoMoved);
+            return completedResult = new OrganizedSaveResult(finalResult, plan.TargetVideoPath, videoMoved)
+            {
+                CommittedFiles = committedOutputs.Append(committedVideo).OfType<TransactionFileOwnership>()
+                    .Select(file => file.Fingerprint).OfType<CommittedFileFingerprint>().ToArray()
+            };
         }
         catch (Exception exception)
         {
@@ -757,13 +776,13 @@ public sealed class FileOrganizationService
                 targetVideoCommitted,
                 sourceVideoRetired,
                 sourceVideoBackupPath,
-                copiedSourceSha256,
+                committedVideo,
                 committedOutputs,
                 backups);
             rollbackSucceeded = rollbackErrors.Count == 0;
             if (!rollbackSucceeded)
             {
-                var recoveryPaths = crossVolumeCopy
+                var recoveryPaths = !PathsEqual(sourceStagingRoot, targetStagingRoot)
                     ? $"{sourceStagingRoot}；{targetStagingRoot}"
                     : sourceStagingRoot;
                 AppLog.Error($"文件恢复不完整，临时备份保留在 {recoveryPaths}", new AggregateException(rollbackErrors));
@@ -845,7 +864,7 @@ public sealed class FileOrganizationService
         var fullVerification = crossVolumeCopy &&
                                plan.OrganizationOptions.CrossVolumeVerification is
                                    CrossVolumeVerificationMode.FullSha256;
-        var targetStagingRoot = crossVolumeCopy
+        var targetStagingRoot = crossVolumeCopy || !PathsEqual(sourceDirectory, plan.TargetDirectory)
             ? Path.Combine(plan.TargetDirectory, $".JavMetaLite-target-{operationId}.tmp")
             : sourceStagingRoot;
         var targetPayloadRoot = crossVolumeCopy
@@ -853,12 +872,12 @@ public sealed class FileOrganizationService
             : sourceStagingRoot;
         var backupRoot = Path.Combine(targetStagingRoot, "backup");
         var sourceRetireRoot = Path.Combine(sourceStagingRoot, "retired");
-        var committedOutputs = new List<string>();
+        var committedOutputs = new List<TransactionFileOwnership>();
         var backups = new List<(string BackupPath, string OriginalPath)>();
-        var committedVideoTargets = new List<string>();
+        var committedVideoTargets = new List<TransactionFileOwnership>();
         var copiedSourceHashes = new Dictionary<string, string?>(FileSystemPathSemantics.PathComparer);
         var retiredVideoSources = new List<(string BackupPath, string OriginalPath)>();
-        var sameVolumeMoves = new List<VideoFileTransfer>();
+        var sameVolumeMoves = new List<(VideoFileTransfer Transfer, TransactionFileOwnership Ownership)>();
         var createdTargetDirectory = false;
         var operationSucceeded = false;
         var rollbackSucceeded = false;
@@ -931,6 +950,10 @@ public sealed class FileOrganizationService
                 Directory.CreateDirectory(plan.TargetDirectory);
                 createdTargetDirectory = true;
             }
+
+            if (!crossVolumeCopy && !PathsEqual(sourceStagingRoot, targetStagingRoot))
+                progress?.Report(new FileTransactionProgress(FileTransactionStage.Preparing,
+                    "Preparing target transaction recovery directory", TemporaryPath: targetStagingRoot));
 
             IReadOnlyList<string> commitStagedPaths = stagedPaths;
             var stagedVideos = new List<(VideoFileTransfer Transfer, string StagedPath)>();
@@ -1031,15 +1054,19 @@ public sealed class FileOrganizationService
                     backups.Add((backupPath, mapping.FinalPath));
                     ValidateBackedUpTarget(plan.PreviewTargetExpectations, mapping.FinalPath, backupPath);
                 }
+                var ownership = TransactionFileOwnership.Capture(mapping.StagedPath, mapping.FinalPath,
+                    targetStagingRoot, ComputeSha256(mapping.StagedPath));
                 await FileSharingRetry.MoveAsync(mapping.StagedPath, mapping.FinalPath, cancellationToken);
-                committedOutputs.Add(mapping.FinalPath);
+                committedOutputs.Add(ownership);
             }
 
             foreach (var stagedVideo in stagedVideos)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                var ownership = TransactionFileOwnership.Capture(stagedVideo.StagedPath, stagedVideo.Transfer.TargetPath,
+                    targetStagingRoot, copiedSourceHashes.GetValueOrDefault(stagedVideo.Transfer.SourcePath));
                 await FileSharingRetry.MoveAsync(stagedVideo.StagedPath, stagedVideo.Transfer.TargetPath, cancellationToken);
-                committedVideoTargets.Add(stagedVideo.Transfer.TargetPath);
+                committedVideoTargets.Add(ownership);
             }
 
             for (var index = 0; index < plan.SourcePathsToRetire.Count; index++)
@@ -1085,8 +1112,9 @@ public sealed class FileOrganizationService
                 foreach (var transfer in movingVideoTransfers)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    var ownership = TransactionFileOwnership.Capture(transfer.SourcePath, transfer.TargetPath, targetStagingRoot);
                     await FileSharingRetry.MoveAsync(transfer.SourcePath, transfer.TargetPath, cancellationToken);
-                    sameVolumeMoves.Add(transfer);
+                    sameVolumeMoves.Add((transfer, ownership));
                 }
             }
 
@@ -1110,7 +1138,9 @@ public sealed class FileOrganizationService
             timing.Complete();
             return completedResult = new OrganizedSaveResult(finalResult, targetVideoPaths[0], movingVideoTransfers.Length > 0)
             {
-                VideoPaths = targetVideoPaths
+                VideoPaths = targetVideoPaths,
+                CommittedFiles = committedOutputs.Concat(committedVideoTargets).Concat(sameVolumeMoves.Select(move => move.Ownership))
+                    .Select(file => file.Fingerprint).OfType<CommittedFileFingerprint>().ToArray()
             };
         }
         catch (Exception exception)
@@ -1119,25 +1149,23 @@ public sealed class FileOrganizationService
             AppLog.Error("多分段保存计划失败，开始恢复文件", exception);
             operationError = exception;
             var rollbackErrors = new List<Exception>();
-            foreach (var transfer in sameVolumeMoves.AsEnumerable().Reverse())
+            foreach (var moved in sameVolumeMoves.AsEnumerable().Reverse())
             {
-                await TryRollbackAsync(() => FileSharingRetry.MoveAsync(transfer.TargetPath, transfer.SourcePath), rollbackErrors);
+                await TryRollbackAsync(() => moved.Ownership.RestoreAsync(moved.Transfer.SourcePath, _afterRollbackQuarantine), rollbackErrors);
             }
             foreach (var retired in retiredVideoSources.AsEnumerable().Reverse())
             {
                 await TryRollbackAsync(() => FileSharingRetry.MoveAsync(retired.BackupPath, retired.OriginalPath), rollbackErrors);
             }
-            foreach (var targetPath in committedVideoTargets.AsEnumerable().Reverse())
+            foreach (var target in committedVideoTargets.AsEnumerable().Reverse())
             {
                 var matchingSource = plan.VideoTransfers.First(transfer =>
-                    PathsEqual(transfer.TargetPath, targetPath)).SourcePath;
-                if (await CanRemoveCommittedCopyAsync(matchingSource, targetPath,
-                        copiedSourceHashes.GetValueOrDefault(matchingSource), rollbackErrors))
-                    await TryRollbackAsync(() => FileSharingRetry.DeleteAsync(targetPath), rollbackErrors);
+                    PathsEqual(transfer.TargetPath, target.Path)).SourcePath;
+                await TryRollbackAsync(() => target.RetireAsync(matchingSource, _afterRollbackQuarantine), rollbackErrors);
             }
-            foreach (var outputPath in committedOutputs.AsEnumerable().Reverse())
+            foreach (var output in committedOutputs.AsEnumerable().Reverse())
             {
-                await TryRollbackAsync(() => FileSharingRetry.DeleteAsync(outputPath), rollbackErrors);
+                await TryRollbackAsync(() => output.RetireAsync(null, _afterRollbackQuarantine), rollbackErrors);
             }
             foreach (var backup in backups.AsEnumerable().Reverse())
             {
@@ -1148,10 +1176,13 @@ public sealed class FileOrganizationService
                 }, rollbackErrors);
             }
 
+            foreach (var retired in committedOutputs.Concat(committedVideoTargets))
+                await TryRollbackAsync(retired.VerifyRetiredBeforeCleanupAsync, rollbackErrors);
+
             rollbackSucceeded = rollbackErrors.Count == 0;
             if (!rollbackSucceeded)
             {
-                var recoveryPaths = crossVolumeCopy
+                var recoveryPaths = !PathsEqual(sourceStagingRoot, targetStagingRoot)
                     ? $"{sourceStagingRoot}；{targetStagingRoot}"
                     : sourceStagingRoot;
                 throw new FileRecoveryException(
@@ -1421,22 +1452,6 @@ public sealed class FileOrganizationService
             throw new IOException($"来源影片在复制后发生变化，未移除来源：{sourcePath}");
     }
 
-    private static async Task<bool> CanRemoveCommittedCopyAsync(string sourcePath, string targetPath,
-        string? copiedSha256, ICollection<Exception> errors)
-    {
-        try
-        {
-            // A different file at the original path is not proof that the verified copy is redundant.
-            await ValidateCopiedSourceAsync(sourcePath, copiedSha256, CancellationToken.None);
-            return true;
-        }
-        catch (Exception exception)
-        {
-            errors.Add(new IOException($"来源影片未能确认恢复原内容，已保留校验后的目标供恢复：{targetPath}", exception));
-            return false;
-        }
-    }
-
     private static void EnsureTargetCapacity(string sourceVideoPath, string targetDirectory)
     {
         EnsureTargetCapacity([sourceVideoPath], targetDirectory);
@@ -1610,15 +1625,15 @@ public sealed class FileOrganizationService
     private static bool HasOutputs(SaveOptions options) =>
         options.WriteNfo || options.DownloadPoster || options.DownloadFanart || options.DownloadExtrafanart;
 
-    private static async Task<List<Exception>> RollbackAsync(
+    private async Task<List<Exception>> RollbackAsync(
         SavePlan plan,
         bool videoMoved,
         bool verifiedCopy,
         bool targetVideoCommitted,
         bool sourceVideoRetired,
         string? sourceVideoBackupPath,
-        string? copiedSourceSha256,
-        IReadOnlyList<string> committedOutputs,
+        TransactionFileOwnership? committedVideo,
+        IReadOnlyList<TransactionFileOwnership> committedOutputs,
         IReadOnlyList<(string BackupPath, string OriginalPath)> backups)
     {
         var errors = new List<Exception>();
@@ -1638,17 +1653,16 @@ public sealed class FileOrganizationService
 
             if (targetVideoCommitted)
             {
-                if (await CanRemoveCommittedCopyAsync(plan.SourceVideoPath, plan.TargetVideoPath, copiedSourceSha256, errors))
-                    await TryRollbackAsync(() => FileSharingRetry.DeleteAsync(plan.TargetVideoPath), errors);
+                await TryRollbackAsync(() => committedVideo!.RetireAsync(plan.SourceVideoPath, _afterRollbackQuarantine), errors);
             }
         }
         else if (videoMoved)
         {
-            await TryRollbackAsync(() => FileSharingRetry.MoveAsync(plan.TargetVideoPath, plan.SourceVideoPath), errors);
+            await TryRollbackAsync(() => committedVideo!.RestoreAsync(plan.SourceVideoPath, _afterRollbackQuarantine), errors);
         }
-        foreach (var outputPath in committedOutputs.Reverse())
+        foreach (var output in committedOutputs.AsEnumerable().Reverse())
         {
-            await TryRollbackAsync(() => FileSharingRetry.DeleteAsync(outputPath), errors);
+            await TryRollbackAsync(() => output.RetireAsync(null, _afterRollbackQuarantine), errors);
         }
         foreach (var backup in backups.Reverse())
         {
@@ -1658,6 +1672,8 @@ public sealed class FileOrganizationService
                 await FileSharingRetry.MoveAsync(backup.BackupPath, backup.OriginalPath);
             }, errors);
         }
+        foreach (var retired in committedOutputs.Append(committedVideo).OfType<TransactionFileOwnership>())
+            await TryRollbackAsync(retired.VerifyRetiredBeforeCleanupAsync, errors);
         return errors;
     }
 

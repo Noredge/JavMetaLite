@@ -133,7 +133,7 @@ class RunnerTests(unittest.TestCase):
                     for name in unittest.defaultTestLoader.getTestCaseNames(case):
                         qualified = cls + '.' + name; names.add(qualified)
                         if getattr(getattr(case, name), '__unittest_skip__', False): skipped.add(qualified)
-                self.assertEqual(94, len(names))
+                self.assertEqual(103, len(names))
                 self.assertEqual(expected if profile == 'core' else set(), skipped)
         finally:
             sys.path.remove(worker_dir)

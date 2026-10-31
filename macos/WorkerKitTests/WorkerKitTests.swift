@@ -475,3 +475,222 @@ for line in sys.stdin:
         #expect(bytesLimited.count == 0 && bytesLimited.retainedBytes == 0)
     }
 }
+
+/// Real pipes with a deliberately stalled reader, independent of the .NET Worker.
+private struct StalledPipeFixture {
+    let directory: URL
+    let script: URL
+    let release: URL
+    let received: URL
+    let partial: URL
+    init() throws {
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent("JavMetaLite stalled pipe \(UUID())", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        script = directory.appendingPathComponent("worker.py")
+        release = directory.appendingPathComponent("release")
+        received = directory.appendingPathComponent("received.jsonl")
+        partial = directory.appendingPathComponent("partial-bytes.txt")
+        try #"""
+import json,sys,time
+from pathlib import Path
+release,received,partial=map(Path,sys.argv[1:])
+for line in sys.stdin:
+    if not line.endswith('\n'):
+        partial.write_text(str(len(line)));break
+    request=json.loads(line)
+    method=request['method'];params=request['params']
+    with received.open('a') as output: output.write(json.dumps({'method':method,'id':request['id']})+'\n')
+    if method=='initialize': result={'protocolVersion':1}
+    elif method=='fixture.holdReply': continue
+    elif method=='fixture.echo':
+        payload=params['payload'];result={'index':params['index'],'length':len(payload),'first':payload[:1],'last':payload[-1:]}
+    else: result={'accepted':True}
+    print(json.dumps({'jsonrpc':'2.0','id':request['id'],'result':result}),flush=True)
+    if method=='shutdown': break
+    if method=='fixture.pause':
+        # A failsafe bounds a broken-client test without supplying its expected recovery.
+        deadline=time.monotonic()+8
+        while not release.exists() and time.monotonic()<deadline: time.sleep(.005)
+"""#.write(to: script, atomically: true, encoding: .utf8)
+    }
+    func start(_ client: WorkerClient, paused: Bool = true) async throws {
+        _ = try await client.start(executable: URL(fileURLWithPath: "/usr/bin/python3"), arguments: [script.path, release.path, received.path, partial.path])
+        if paused { _ = try await client.request("fixture.pause") }
+    }
+    func finish(_ client: WorkerClient) async {
+        try? Data().write(to: release)
+        await client.shutdown()
+        for _ in 0..<200 {
+            if !(await client.isRunning()) { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+    func records() throws -> [JSONValue] {
+        try String(contentsOf: received, encoding: .utf8).split(separator: "\n").map { try JSONDecoder().decode(JSONValue.self, from: Data($0.utf8)) }
+    }
+    func remove() { try? FileManager.default.removeItem(at: directory) }
+}
+
+extension WorkerKitTests {
+    @Test func cancelingAnUnwrittenQueuedFrameKeepsTheConnectionUsable() async throws {
+        let fixture = try StalledPipeFixture()
+        defer { fixture.remove() }
+        let client = WorkerClient(requestTimeout: .seconds(5))
+        do {
+            try await fixture.start(client)
+            let large = Task { try await client.request("browser.importPage", params: .object(["html": .string(String(repeating: "q", count: 1024 * 1024))])) }
+            try await Task.sleep(for: .milliseconds(100))
+            let canceledSave = Task { try await client.request("save.execute", params: .object(["planId": .string("queued-canceled")])) }
+            for _ in 0..<100 {
+                if (await client.requestRetention).queued == 2 { break }
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            #expect((await client.requestRetention).queued == 2)
+            canceledSave.cancel()
+            do { _ = try await canceledSave.value; Issue.record("A canceled queued frame must not be sent.") }
+            catch let error as RPCFailure { #expect(error.reason == "WORKER_UNAVAILABLE") }
+            #expect((await client.requestRetention).pending == 1)
+            try Data().write(to: fixture.release)
+            #expect(try await large.value["accepted"].boolValue)
+            #expect(try await client.request("workspace.getSnapshot")["accepted"].boolValue)
+            await fixture.finish(client)
+            #expect(try fixture.records().map { $0["method"].stringValue } == ["initialize", "fixture.pause", "browser.importPage", "workspace.getSnapshot", "shutdown"])
+        } catch { await fixture.finish(client); throw error }
+    }
+
+    @Test func unansweredRequestCountIsBoundedAndCancelReleasesEveryDeadline() async throws {
+        let fixture = try StalledPipeFixture()
+        defer { fixture.remove() }
+        let client = WorkerClient(requestTimeout: .seconds(5))
+        do {
+            try await fixture.start(client, paused: false)
+            let tasks = (0..<128).map { _ in Task { try await client.request("fixture.holdReply") } }
+            for _ in 0..<200 {
+                if (await client.requestRetention).pending == 128 { break }
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            #expect((await client.requestRetention).pending == 128)
+            do { _ = try await client.request("save.execute"); Issue.record("The pending request count must be bounded.") }
+            catch let error as RPCFailure { #expect(error.reason == "CLIENT_BACKPRESSURE") }
+            for task in tasks { task.cancel() }
+            for task in tasks { do { _ = try await task.value } catch { } }
+            let state = await client.requestRetention
+            #expect(state.pending == 0 && state.queued == 0 && state.bytes == 0 && state.timers == 0)
+            await fixture.finish(client)
+            #expect(try !fixture.records().contains { $0["method"].stringValue == "save.execute" })
+        } catch { await fixture.finish(client); throw error }
+    }
+
+    @Test func stalledPipeDeadlineIncludesWritingAndDropsQueuedSaveWithoutLateTransmission() async throws {
+        let fixture = try StalledPipeFixture()
+        defer { fixture.remove() }
+        let client = WorkerClient(requestTimeout: .seconds(2))
+        do {
+            try await fixture.start(client)
+            let started = ContinuousClock.now
+            let large = Task { try await client.request("browser.importPage", params: .object(["html": .string(String(repeating: "x", count: 1024 * 1024))])) }
+            try await Task.sleep(for: .milliseconds(100))
+            let heartbeat = ContinuousClock.now
+            #expect(await client.isRunning())
+            #expect(heartbeat.duration(to: .now) < .seconds(1), "Actor reads must stay responsive while the pipe is full.")
+            let queuedSave = Task { try await client.request("save.execute", params: .object(["planId": .string("never-send")])) }
+            for task in [large, queuedSave] {
+                do { _ = try await task.value; Issue.record("The stalled request must fail without transmission completing.") }
+                catch let error as RPCFailure { #expect(error.reason == "WORKER_UNAVAILABLE") }
+            }
+            #expect(started.duration(to: .now) < .seconds(4), "The deadline must cover queue and pipe time, before the fixture's eight-second failsafe.")
+            let state = await client.requestRetention
+            #expect(state.pending == 0 && state.queued == 0 && state.bytes == 0 && state.timers == 0)
+            #expect(await client.isRunning(), "Closing a partial frame must not pretend the Worker process has already exited.")
+            await fixture.finish(client)
+            #expect(try fixture.records().map { $0["method"].stringValue } == ["initialize", "fixture.pause"])
+            #expect((Int(try String(contentsOf: fixture.partial, encoding: .utf8)) ?? 0) > 0, "The fixture must observe an incomplete frame, never a late completed request.")
+        } catch { await fixture.finish(client); throw error }
+    }
+
+    @Test func cancelingAPartialWriteClosesFramingAndShutdownRemainsBounded() async throws {
+        let fixture = try StalledPipeFixture()
+        defer { fixture.remove() }
+        let client = WorkerClient(requestTimeout: .seconds(2))
+        do {
+            try await fixture.start(client)
+            let large = Task { try await client.request("browser.importPage", params: .object(["html": .string(String(repeating: "c", count: 1024 * 1024))])) }
+            try await Task.sleep(for: .milliseconds(100))
+            #expect((await client.requestRetention).bytes > 0)
+            let started = ContinuousClock.now
+            large.cancel()
+            do { _ = try await large.value; Issue.record("Canceling a partially transmitted request must fail.") }
+            catch let error as RPCFailure { #expect(error.reason == "WORKER_UNAVAILABLE") }
+            await client.shutdown()
+            #expect(started.duration(to: .now) < .seconds(1), "Cancel and shutdown must not await a stalled pipe.")
+            let state = await client.requestRetention
+            #expect(state.pending == 0 && state.queued == 0 && state.bytes == 0 && state.timers == 0)
+            await fixture.finish(client)
+            #expect(try fixture.records().map { $0["method"].stringValue } == ["initialize", "fixture.pause"])
+            #expect((Int(try String(contentsOf: fixture.partial, encoding: .utf8)) ?? 0) > 0)
+        } catch { await fixture.finish(client); throw error }
+    }
+
+    @Test func concurrentLargeFramesKeepRequestOrderAndReleaseDeadlineResources() async throws {
+        let fixture = try StalledPipeFixture()
+        defer { fixture.remove() }
+        let client = WorkerClient(requestTimeout: .seconds(5))
+        do {
+            try await fixture.start(client, paused: false)
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                for index in 0..<20 {
+                    group.addTask {
+                        let marker = String(UnicodeScalar(65 + index)!)
+                        let result = try await client.request("fixture.echo", params: .object(["index": .number(Double(index)), "payload": .string(String(repeating: marker, count: 128 * 1024))]))
+                        #expect(result["index"].intValue == index && result["length"].intValue == 128 * 1024)
+                        #expect(result["first"].stringValue == marker && result["last"].stringValue == marker)
+                    }
+                }
+                try await group.waitForAll()
+            }
+            let state = await client.requestRetention
+            #expect(state.pending == 0 && state.queued == 0 && state.bytes == 0 && state.timers == 0)
+            let ids = try fixture.records().map { Int($0["id"].stringValue.dropFirst("swift-".count))! }
+            #expect(ids == Array(1...21), "Concurrent requests must remain complete frames in their actor admission order.")
+            await fixture.finish(client)
+        } catch { await fixture.finish(client); throw error }
+    }
+
+    @Test func queuedPayloadBudgetRejectsBeforeSendingAndPreCanceledCallsRetainNothing() async throws {
+        let fixture = try StalledPipeFixture()
+        defer { fixture.remove() }
+        let client = WorkerClient(requestTimeout: .seconds(2))
+        do {
+            try await fixture.start(client)
+            let payload = JSONValue.object(["html": .string(String(repeating: "b", count: 7 * 1024 * 1024))])
+            let first = Task { try await client.request("browser.importPage", params: payload) }
+            for _ in 0..<100 {
+                if (await client.requestRetention).queued == 1 { break }
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            let second = Task { try await client.request("browser.importPage", params: payload) }
+            for _ in 0..<100 {
+                if (await client.requestRetention).queued == 2 { break }
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            do { _ = try await client.request("save.execute", params: payload); Issue.record("The 16 MiB queue budget must reject another large request.") }
+            catch let error as RPCFailure { #expect(error.reason == "CLIENT_BACKPRESSURE") }
+            let before = await client.requestRetention
+            #expect(before.pending == 2 && before.queued == 2 && before.bytes <= 16 * 1024 * 1024)
+            // Cancellation before request registration must not allocate a timer,
+            // leave an orphan continuation, or later send the canceled command.
+            let canceled = Task {
+                withUnsafeCurrentTask { $0?.cancel() }
+                return try await client.request("save.execute", params: .object(["planId": .string("pre-canceled")]))
+            }
+            do { _ = try await canceled.value; Issue.record("A pre-canceled call must fail.") }
+            catch is CancellationError { }
+            first.cancel(); second.cancel()
+            for task in [first, second] { do { _ = try await task.value } catch { } }
+            let state = await client.requestRetention
+            #expect(state.pending == 0 && state.queued == 0 && state.bytes == 0 && state.timers == 0)
+            await fixture.finish(client)
+            #expect(try fixture.records().map { $0["method"].stringValue } == ["initialize", "fixture.pause"])
+        } catch { await fixture.finish(client); throw error }
+    }
+}

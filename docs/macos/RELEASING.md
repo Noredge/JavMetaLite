@@ -39,6 +39,14 @@ python3 scripts/macos/release-readiness.py /path/to/JavMetaLite.app \
 
 Exit 0 without `--require-distribution` means local package verification passed. `signatureReady` and `distributionReady` require verified Developer ID signing; ad-hoc previews do not satisfy them. Notarization, Gatekeeper and browser-download/manual acceptance remain separate results. Do not disable security features or remove quarantine to claim a pass.
 
+## Prepare a 1.0 candidate
+
+Keep the candidate on a review branch until rollback ownership, transport backpressure and transaction-recovery regression tests pass. An ad-hoc build remains a preview even when it is being evaluated for 1.0; changing the version or release label does not establish distribution readiness.
+
+Freeze one implementation commit and run full Mac and Windows gates for it. Verify the final ZIP and manifest, then use that same packaged binary for native acceptance: import, review, cancel, save/readback, partial failure, recovery inspection and verified archival. Include a fresh browser download and offline first launch on a clean supported Apple Silicon Mac. Record the minimum supported macOS separately from the development machine; physical volumes/SMB need their own results when advertised as supported.
+
+Under the signed-only policy, a stable candidate needs a verified Developer ID package and Worker JIT/launch checks. Record Gatekeeper behavior separately. Do not upload a candidate as stable while required signing or native acceptance is outstanding. Stable publication uses an exact `macos-v1.0.0` tag and new immutable ZIP/SHA/manifest assets; keep the Windows Latest release unchanged unless its release policy is deliberately changed.
+
 ## Publish a preview
 
 1. Use a source commit with the full macOS profile (including signed ZIP and extracted-package tests) and Windows automated gate passing. Prefer the original verified CI ZIP; check its commit, clean source state, SHA and manifest.

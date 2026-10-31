@@ -86,6 +86,7 @@ internal sealed partial class Workspace
         // Ownership and all in-flight readers are settled before cache disposal.
         // Only this session's generated preview cache is disposable; never recovery.
         _artworkCache.Dispose();
+        _recoveryOwnership?.Dispose();
     }
 
     private sealed class Operation(string? jobId, bool readOnly)

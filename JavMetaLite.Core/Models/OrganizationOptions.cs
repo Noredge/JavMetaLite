@@ -182,12 +182,17 @@ public sealed record TargetFileExpectation(string Path, bool Exists, string? Exp
 
 public sealed record TemporaryCleanupIssue(string Path, string Error);
 
+// Actual staged/verified bytes published by this transaction, not bytes reread
+// from public paths after commit. Size-only Windows copies have no SHA evidence.
+public sealed record CommittedFileFingerprint(string Path, long Length, long WriteTicks, string Sha256);
+
 public sealed record OrganizedSaveResult(
     SaveResult Outputs,
     string VideoPath,
     bool VideoMoved)
 {
     public IReadOnlyList<string> VideoPaths { get; init; } = [VideoPath];
+    public IReadOnlyList<CommittedFileFingerprint> CommittedFiles { get; init; } = [];
     public IReadOnlyList<TemporaryCleanupIssue> CleanupIssues { get; internal set; } = [];
 
     // Commit has already succeeded; journal/reload cleanup cannot turn it into a failed movie.
