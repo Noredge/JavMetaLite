@@ -1,6 +1,6 @@
 # JavMetaLite
 
-<img src="JavMetaLite.App/Resources/Brand/JavMetaLite-64.png" width="64" alt="JavMetaLite icon">
+<img src="windows/JavMetaLite.App/Resources/Brand/JavMetaLite-64.png" width="64" alt="JavMetaLite icon">
 
 [简体中文](README.zh-Hans.md) · [繁體中文](README.zh-Hant.md) · **English** · [日本語](README.ja.md)
 
@@ -11,9 +11,18 @@
 
 A Windows and macOS app for reviewing and organizing local movie metadata, individually or in batches, with Jellyfin-compatible output.
 
+## Download
+
+| Platform | Requirements | Download |
+| --- | --- | --- |
+| Windows **1.2.3** | Windows 10/11 x64 | [Portable ZIP](https://github.com/Noredge/JavMetaLite/releases/download/v1.2.3/JavMetaLite-v1.2.3-win-x64-portable.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/v1.2.3) |
+| macOS **1.0.0** | Apple Silicon · macOS 15+ | [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.0.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) |
+
+Verify the release SHA-256 before opening. Windows needs WebView2 for the embedded browser. The macOS package is ad-hoc signed and not notarized; see the [first-launch guide](macos/README.md#first-launch). Intel is unverified.
+
 ![Windows single-movie workspace, v1.2.0](docs/images/javmetalite-v1.2.0-main-single.en.png)
 
-Synthetic demo data. [More screenshots](docs/SCREENSHOTS-v1.2.0.md).
+[More screenshots](docs/SCREENSHOTS-v1.2.0.md) · Synthetic demo data.
 
 ## Features
 
@@ -24,63 +33,35 @@ Synthetic demo data. [More screenshots](docs/SCREENSHOTS-v1.2.0.md).
 - Compare and delete local images in the viewer; the main window flags low-resolution covers for review.
 - Preview file changes before saving; keep movies in place or organize them into a chosen folder. Four UI languages supported.
 
-## Quick start (Windows)
+## Build from source
 
-Windows 10/11 x64. No separate .NET Runtime installation; the embedded browser requires Microsoft Edge WebView2 Runtime.
+Install Git and the exact .NET SDK in [global.json](global.json), then clone this repository. Run these commands from its root:
 
-1. Get a published portable ZIP from [Releases](https://github.com/Noredge/JavMetaLite/releases), or use the supplied local build. Verify its SHA-256 and extract it.
-2. Run `JavMetaLite.exe`, then choose or drop movies/folders.
-3. Check IDs, search and adjust metadata, images and save settings as needed.
-4. Click Save and review the changes. Batch saving does not require opening every movie's preview.
-
-## Keep in mind
-
-- LibreDMM is recommended for batches. R18 rate limits can slow searches.
-- The queue is not restored after closing. Removing queue entries does not delete movie files; confirmed local-image deletion is immediate.
-- Back up important media. Saves stop on failure or cancellation; keep recovery folders if restoration fails.
-- Sources may contain adult material. Respect their terms and applicable age/legal requirements.
-
-## Build from source (Windows)
-
-On Windows 10/11 x64, install Git and the exact .NET SDK pinned in [global.json](global.json) (currently 10.0.400). In PowerShell:
+**Windows (PowerShell)**
 
 ```powershell
-git clone https://github.com/Noredge/JavMetaLite.git
-cd JavMetaLite
-dotnet build .\JavMetaLite.App\JavMetaLite.App.csproj -c Release
-dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj -c Release --no-build
-```
-
-The build restores NuGet packages automatically; the first build needs network access. To create and verify a self-contained portable package from the repository root:
-
-```powershell
+dotnet build .\windows\JavMetaLite.App\JavMetaLite.App.csproj -c Release
 .\scripts\New-ReleasePackage.ps1
 .\scripts\Test-PortablePackage.ps1
 ```
 
-The EXE folder, ZIP and SHA-256 files are written to `release/`. See [Development and testing](TESTING.md) for the full test suite.
-
-## macOS 1.0
-
-**Apple Silicon · macOS 15+.** The native editor shows the poster and full cover together, with metadata/artwork editing and checkbox-based batch queries and saves. Save preview is on by default; unedited NFO content is preserved and file conflicts are checked before writing. Common settings are remembered.
-
-Download the [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.0.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) from [macOS 1.0.0](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0), extract it and open `JavMetaLite.app`. The runtime is bundled.
-
-The macOS 1.0 package is ad-hoc signed, without Developer ID or notarization. Apple has not verified the publisher or notarized this package. Verify the ZIP against the release's SHA-256, extract it and move `JavMetaLite.app` to Applications. If macOS blocks the trusted app because its developer cannot be verified or Apple cannot check it, try opening it first, then use **System Settings → Privacy & Security → Open Anyway** and confirm Open for this app. Do not bypass a damaged-app or malware alert. [Apple's instructions](https://support.apple.com/en-us/102445) · [First launch](macos/README.md#first-launch).
-
-To build from the repository root, install the SDK pinned in [global.json](global.json) and Xcode or Command Line Tools with a macOS 15+ SDK:
+**macOS (Xcode or Command Line Tools with macOS 15+ SDK)**
 
 ```sh
 ./scripts/macos/package.sh --arch arm64 --configuration Release --sign-mode adhoc
 ./scripts/macos/test.sh --arch arm64 --configuration Release
 ```
 
-Output: `artifacts/macos/`. CI builds use ad-hoc signing and are not notarized; Intel is unverified. [Mac guide](macos/README.md) · [Verification status](docs/macos/STATUS.md).
+Builds restore NuGet packages on first use. Outputs: `release/` (Windows), `artifacts/macos/` (macOS). [Windows](windows/README.md) · [macOS](macos/README.md)
 
-## More
+## Repository
 
-[macOS release notes](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) · [Windows release notes](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [Changelog](CHANGELOG.md) · [Development and testing](TESTING.md)
+| Directory | Purpose |
+| --- | --- |
+| [windows/](windows/README.md) | Windows application and tests |
+| [macos/](macos/README.md) | Native macOS application, Worker and tests |
+| [shared/](shared/README.md) | Shared Core, portable imaging and tests |
+| [docs/](docs/README.md) | Current guides, technical docs and historical records |
+| [scripts/](scripts/README.md) | Build, test and release tools |
 
-Windows logs and preferences are under `%LOCALAPPDATA%\JavMetaLite`.
-
-[MIT License](LICENSE) · © 2026 Noredge · [Third-party notices](THIRD_PARTY_NOTICES.md). Not affiliated with source sites; their data is not covered by this project's license.
+[Documentation](docs/README.md) · [Changelog](CHANGELOG.md) · [MIT License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md)

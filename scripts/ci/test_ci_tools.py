@@ -20,14 +20,14 @@ spec.loader.exec_module(runner)
 class ScopeTests(unittest.TestCase):
     def test_core_source_changes_and_risk_boundaries(self):
         for path in ['macos/JavMetaLiteMac/Features/EditorView.swift',
-                     'macos/WorkerKit/WorkerClient.swift', 'JavMetaLite.Core/Models/MovieJob.cs',
-                     'JavMetaLite.Worker/Saving.cs', 'JavMetaLite.UiSmokeTests/Program.cs']:
+                     'macos/WorkerKit/WorkerClient.swift', 'shared/JavMetaLite.Core/Models/MovieJob.cs',
+                     'macos/JavMetaLite.Worker/Saving.cs', 'windows/JavMetaLite.UiSmokeTests/Program.cs']:
             with self.subTest(path=path):
                 self.assertEqual('core', validation_level([('M', path), ('M', 'README.md')], 'push', {}))
                 self.assertEqual('full', validation_level([('A', path)], 'push', {}))
                 self.assertEqual('full', validation_level([('D', path)], 'push', {}))
         for path in [*PRESSURE_SENSITIVE, 'global.json', 'NuGet.Config',
-                     'JavMetaLite.Worker/JavMetaLite.Worker.csproj', 'macos/Package.swift',
+                     'macos/JavMetaLite.Worker/JavMetaLite.Worker.csproj', 'macos/Package.swift',
                      'macos/JavMetaLiteMac/Resources/Info.plist', 'docs/macos/PACKAGE.md',
                      'scripts/macos/package.sh', 'scripts/macos/test.sh',
                      '.github/workflows/macos.yml', 'contracts/protocol-v1.json', 'unknown.file']:

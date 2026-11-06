@@ -34,14 +34,14 @@ if [ "$TEST_PROFILE" = full ]; then
   run_logged lifecycle-measurement python3 "$SCRIPT_DIR/test_lifecycle_measurement.py"
 fi
 run_logged ci-tools python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
-run_logged portable "$DOTNET" run --project JavMetaLite.PortableTests/JavMetaLite.PortableTests.csproj -c "$CONFIGURATION"
-run_logged worker-build "$DOTNET" build JavMetaLite.Worker/JavMetaLite.Worker.csproj -c "$CONFIGURATION"
-run_logged search-host-build "$DOTNET" build JavMetaLite.Worker.RegressionHost/JavMetaLite.Worker.RegressionHost.csproj -c "$CONFIGURATION"
-WORKER="$REPO_ROOT/JavMetaLite.Worker/bin/$CONFIGURATION/net10.0/JavMetaLite.Worker"
+run_logged portable "$DOTNET" run --project shared/JavMetaLite.PortableTests/JavMetaLite.PortableTests.csproj -c "$CONFIGURATION"
+run_logged worker-build "$DOTNET" build macos/JavMetaLite.Worker/JavMetaLite.Worker.csproj -c "$CONFIGURATION"
+run_logged search-host-build "$DOTNET" build macos/JavMetaLite.Worker.RegressionHost/JavMetaLite.Worker.RegressionHost.csproj -c "$CONFIGURATION"
+WORKER="$REPO_ROOT/macos/JavMetaLite.Worker/bin/$CONFIGURATION/net10.0/JavMetaLite.Worker"
 # The development apphost needs this explicit SDK root. Published apps never do.
 export DOTNET_ROOT="${DOTNET_ROOT:-$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve().parent)' "$DOTNET")}"
 export JAVMETALITE_TEST_WORKER="$WORKER"
-export JAVMETALITE_SEARCH_TEST_HOST="$REPO_ROOT/JavMetaLite.Worker.RegressionHost/bin/$CONFIGURATION/net10.0/JavMetaLite.Worker.RegressionHost"
+export JAVMETALITE_SEARCH_TEST_HOST="$REPO_ROOT/macos/JavMetaLite.Worker.RegressionHost/bin/$CONFIGURATION/net10.0/JavMetaLite.Worker.RegressionHost"
 # CLT Swift 6.4 swiftbuild can omit the installed Testing macro plugin on incremental
 # builds. Load that toolchain's plugin explicitly when present; no machine path is stored.
 SWIFT_TEST_COMMAND=(/usr/bin/xcrun swift test --package-path "$REPO_ROOT/macos" -c "$SWIFT_CONFIGURATION" --arch "$SWIFT_ARCH")

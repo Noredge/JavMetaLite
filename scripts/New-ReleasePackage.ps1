@@ -12,13 +12,13 @@ $ErrorActionPreference = "Stop"
 $repositoryRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 . (Join-Path $PSScriptRoot "ReleasePackage.Common.ps1")
 . (Join-Path $PSScriptRoot "ReleaseNotices.Common.ps1")
-$projectPath = Join-Path $repositoryRoot "JavMetaLite.App\JavMetaLite.App.csproj"
+$projectPath = Join-Path $repositoryRoot "windows\JavMetaLite.App\JavMetaLite.App.csproj"
 $projectXml = [xml][System.IO.File]::ReadAllText($projectPath)
 $identity = Get-ReleaseIdentity -ProjectXml $projectXml -RequestedVersion $Version
 $Version = $identity.Version
 $noticeText = [System.IO.File]::ReadAllText((Join-Path $repositoryRoot "THIRD_PARTY_NOTICES.md"))
 Assert-ReleaseNoticeText -Text $noticeText
-$coreProjectXml = [xml][System.IO.File]::ReadAllText((Join-Path $repositoryRoot "JavMetaLite.Core\JavMetaLite.Core.csproj"))
+$coreProjectXml = [xml][System.IO.File]::ReadAllText((Join-Path $repositoryRoot "shared\JavMetaLite.Core\JavMetaLite.Core.csproj"))
 Assert-ReleaseProjectNoticeCoverage -Projects @($projectXml, $coreProjectXml)
 if ($ValidateOnly) {
     return $identity

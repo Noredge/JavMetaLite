@@ -1,6 +1,6 @@
 # JavMetaLite
 
-<img src="JavMetaLite.App/Resources/Brand/JavMetaLite-64.png" width="64" alt="JavMetaLite icon">
+<img src="windows/JavMetaLite.App/Resources/Brand/JavMetaLite-64.png" width="64" alt="JavMetaLite icon">
 
 [简体中文](README.zh-Hans.md) · [繁體中文](README.zh-Hant.md) · [English](README.md) · **日本語**
 
@@ -11,9 +11,18 @@
 
 ローカル動画の情報を確認・整理する Windows／macOS アプリです。単体編集と一括処理に対応し、Jellyfin 用のメタデータや画像を出力できます。
 
+## ダウンロード
+
+| プラットフォーム | 動作環境 | ダウンロード |
+| --- | --- | --- |
+| Windows **1.2.3** | Windows 10/11 x64 | [ポータブル ZIP](https://github.com/Noredge/JavMetaLite/releases/download/v1.2.3/JavMetaLite-v1.2.3-win-x64-portable.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/v1.2.3) |
+| macOS **1.0.0** | Apple Silicon · macOS 15 以降 | [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.0.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) |
+
+起動前に Release の SHA-256 を確認してください。Windows の内蔵ブラウザーには WebView2 が必要です。macOS 版はアドホック署名のみで未公証です。[初回起動ガイド](macos/README.md#first-launch)を参照してください。Intel は未検証です。
+
 ![Windows 単体編集画面、v1.2.0](docs/images/javmetalite-v1.2.0-main-single.ja.png)
 
-画像と情報は合成デモです。[その他の画面](docs/SCREENSHOTS-v1.2.0.md)。
+[その他のスクリーンショット](docs/SCREENSHOTS-v1.2.0.md) · 画像とデータは合成デモです。
 
 ## 主な機能
 
@@ -24,63 +33,35 @@
 - ビューアーでの画像比較とローカル画像削除、メイン画面での低解像度ジャケットの注意表示。
 - 保存前の変更プレビュー、動画の元の場所への保存または指定フォルダーへの整理。簡体字中国語・繁体字中国語・英語・日本語に対応。
 
-## クイックスタート（Windows）
+## ソースからビルド
 
-Windows 10/11 x64 が必要です。.NET Runtime の別途インストールは不要ですが、内蔵ブラウザーには Microsoft Edge WebView2 Runtime が必要です。
+Git と [global.json](global.json) 指定の .NET SDK をインストールし、リポジトリをクローンしてルートで実行します。
 
-1. [Releases](https://github.com/Noredge/JavMetaLite/releases) の公開済みポータブル ZIP、または案内されたローカル版を取得し、SHA-256 を確認して展開します。
-2. `JavMetaLite.exe` を実行し、動画やフォルダーを選択またはドロップします。
-3. 品番を確認して検索し、テキスト・画像・保存設定を必要に応じて調整します。
-4. 保存ボタンを押して変更プレビューを確認します。一括保存で全動画のプレビューを開く必要はありません。
-
-## 注意点
-
-- 一括検索には LibreDMM を推奨します。R18 はレート制限で遅くなる場合があります。
-- 終了後のキュー復元はありません。キューからの削除は動画ファイルを削除しませんが、確認済みのローカル画像削除は即時実行です。
-- 重要な動画はバックアップしてください。保存は失敗またはキャンセルで停止します。復元失敗時は復元用フォルダーを保持してください。
-- 取得元には成人向けコンテンツが含まれる場合があります。サイトの規約、適用される年齢条件・法令を守ってください。
-
-## ソースからビルド（Windows）
-
-Windows 10/11 x64 に Git と [global.json](global.json) で指定された .NET SDK（現在は 10.0.400）をインストールし、PowerShell で実行します。
+**Windows（PowerShell）**
 
 ```powershell
-git clone https://github.com/Noredge/JavMetaLite.git
-cd JavMetaLite
-dotnet build .\JavMetaLite.App\JavMetaLite.App.csproj -c Release
-dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj -c Release --no-build
-```
-
-ビルド時に NuGet パッケージが自動復元されるため、初回はネットワーク接続が必要です。リポジトリのルートで自己完結型ポータブルパッケージを作成・検証します。
-
-```powershell
+dotnet build .\windows\JavMetaLite.App\JavMetaLite.App.csproj -c Release
 .\scripts\New-ReleasePackage.ps1
 .\scripts\Test-PortablePackage.ps1
 ```
 
-EXE を含むフォルダー、ZIP、SHA-256 ファイルは `release/` に出力されます。全テストの実行方法は[開発とテスト](TESTING.md)を参照してください。
-
-## macOS 1.0
-
-**Apple Silicon · macOS 15 以降。** ネイティブエディターでポスターとジャケット全体を同時に表示し、情報・画像の編集、チェックした動画の一括検索・保存ができます。標準で保存前に変更を確認し、未編集の NFO 内容を保持してファイルの競合を確認します。設定は自動保存されます。
-
-[macOS 1.0.0](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) から [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.0.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) を取得し、展開して `JavMetaLite.app` を開きます。.NET のインストールは不要です。
-
-macOS 1.0 版はアドホック署名で、Developer ID 署名と公証はありません。Apple による発行者の確認や公証を受けたパッケージではありません。Release に記載された ZIP の SHA-256 を照合し、展開した `JavMetaLite.app` を「アプリケーション」に移動します。信頼できるアプリが開発元の未確認や Apple による確認不可を理由にブロックされた場合は、一度起動を試みてから **システム設定 → プライバシーとセキュリティ → このまま開く** で、このアプリの起動を確認します。破損やマルウェアの警告にはこの手順を使わないでください。[Apple の手順](https://support.apple.com/ja-jp/102445) · [初回起動](macos/README.md#first-launch)。
-
-ビルドには [global.json](global.json) 指定の SDK と、macOS 15 以降の SDK を含む Xcode または Command Line Tools が必要です。リポジトリのルートで実行します。
+**macOS（macOS 15 以降の SDK を含む Xcode または Command Line Tools）**
 
 ```sh
 ./scripts/macos/package.sh --arch arm64 --configuration Release --sign-mode adhoc
 ./scripts/macos/test.sh --arch arm64 --configuration Release
 ```
 
-出力先は `artifacts/macos/` です。CI 版はアドホック署名のみで、公証していません。Intel は未検証です。[Mac ガイド](macos/README.md) · [検証状況](docs/macos/STATUS.md)。
+初回ビルド時に NuGet パッケージを復元します。出力先は Windows が `release/`、macOS が `artifacts/macos/` です。 [Windows](windows/README.md) · [macOS](macos/README.md)
 
-## 詳細
+## リポジトリ構成
 
-[macOS リリースノート](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) · [Windows リリースノート](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [変更履歴](CHANGELOG.md) · [開発とテスト](TESTING.md)
+| ディレクトリ | 用途 |
+| --- | --- |
+| [windows/](windows/README.md) | Windows アプリとテスト |
+| [macos/](macos/README.md) | macOS ネイティブアプリ、Worker とテスト |
+| [shared/](shared/README.md) | 共通 Core、ポータブル画像処理とテスト |
+| [docs/](docs/README.md) | 利用ガイド、技術文書と過去の記録 |
+| [scripts/](scripts/README.md) | ビルド、テスト、リリースツール |
 
-Windows のログと設定は `%LOCALAPPDATA%\JavMetaLite` に保存されます。
-
-[MIT License](LICENSE) · © 2026 Noredge · [サードパーティーについて](THIRD_PARTY_NOTICES.md)。取得元サイトとは提携しておらず、本プロジェクトのライセンスはサイトのデータには適用されません。
+[ドキュメント](docs/README.md) · [Changelog](CHANGELOG.md) · [MIT License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md)

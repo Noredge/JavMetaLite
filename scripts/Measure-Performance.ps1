@@ -17,7 +17,7 @@ try {
     $benchmarkArguments = if ($SearchHotspots) { @("--search-hotspots", $Output) }
         else { @("--performance", $Output, $Sizes, "$Repetitions") }
     if ($SearchOnly) { $benchmarkArguments += "search" }
-    & $DotNet run --project JavMetaLite.UiSmokeTests --configuration Release --no-restore `
+    & $DotNet run --project windows/JavMetaLite.UiSmokeTests --configuration Release --no-restore `
         -p:OutputPath=bin/performance-measure/ -- @benchmarkArguments
     if ($LASTEXITCODE -ne 0) { throw "Performance measurement failed: $LASTEXITCODE" }
 }

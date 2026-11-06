@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repositoryRoot
 try {
-    & $DotNet run --project JavMetaLite.UiSmokeTests --configuration Release --no-restore `
+    & $DotNet run --project windows/JavMetaLite.UiSmokeTests --configuration Release --no-restore `
         -p:OutputPath=bin/stability-measure/ -- --stability $OutputDirectory "$Count" "$Rounds"
     if ($LASTEXITCODE -ne 0) { throw "Continuous stability verification failed: $LASTEXITCODE" }
 }

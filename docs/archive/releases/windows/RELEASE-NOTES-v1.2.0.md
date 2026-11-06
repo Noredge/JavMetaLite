@@ -72,6 +72,6 @@ Published 2026-09-05. 本页记录 1.2.0 的功能与使用边界。
 
 ## More
 
-[Screenshots](SCREENSHOTS-v1.2.0.md) · [Changelog](../CHANGELOG.md) · [Testing](../TESTING.md)
+[Screenshots](../../../SCREENSHOTS-v1.2.0.md) · [Changelog](../../../../CHANGELOG.md) · [Testing](../../../windows/TESTING.md)
 
 Screenshots use synthetic data and identify the build shown. Release packages include SHA-256 checksums.

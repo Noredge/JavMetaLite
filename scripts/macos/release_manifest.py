@@ -105,7 +105,7 @@ def inventory(root):
 def source_selected(relative):
     exact = {'global.json', 'NuGet.Config', 'LICENSE', 'THIRD_PARTY_NOTICES.md', '.gitignore',
              '.github/workflows/macos.yml', 'docs/macos/THIRD_PARTY_NOTICES.md', 'docs/macos/PACKAGE.md'}
-    return relative in exact or relative.startswith(('JavMetaLite.', 'macos/', 'scripts/macos/',
+    return relative in exact or relative.startswith(('windows/', 'shared/', 'macos/', 'scripts/macos/',
                                                       'scripts/ci/', '.github/workflows/',
                                                       'contracts/', 'fixtures/', 'docs/macos/licenses/'))
 
@@ -180,10 +180,10 @@ def package_hashes(folder, package_id, version):
 
 
 def dependencies(worker, arch, root=ROOT):
-    assets = json.loads((root / 'JavMetaLite.Worker/obj/project.assets.json').read_text())
+    assets = json.loads((root / 'macos/JavMetaLite.Worker/obj/project.assets.json').read_text())
     lock_name = f'packages.osx-{arch}.lock.json'
     locks = {}
-    for project in ('JavMetaLite.Core', 'JavMetaLite.Imaging.Skia', 'JavMetaLite.Worker'):
+    for project in ('shared/JavMetaLite.Core', 'shared/JavMetaLite.Imaging.Skia', 'macos/JavMetaLite.Worker'):
         path = root / project / lock_name
         require(path.is_file(), f'Missing dependency lock: {project}/{lock_name}')
         locks[f'{project}/{lock_name}'] = digest(path)

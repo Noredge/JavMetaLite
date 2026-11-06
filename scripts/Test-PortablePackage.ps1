@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "ReleaseNotices.Common.ps1")
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$projectXml = [xml][IO.File]::ReadAllText((Join-Path $repositoryRoot "JavMetaLite.App/JavMetaLite.App.csproj"))
+$projectXml = [xml][IO.File]::ReadAllText((Join-Path $repositoryRoot "windows/JavMetaLite.App/JavMetaLite.App.csproj"))
 $identity = Get-ReleaseIdentity -ProjectXml $projectXml
 $packageName = "JavMetaLite-v$($identity.Version)-win-x64-portable"
 if ([string]::IsNullOrWhiteSpace($ArchivePath)) {

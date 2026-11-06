@@ -1,6 +1,6 @@
 # JavMetaLite
 
-<img src="JavMetaLite.App/Resources/Brand/JavMetaLite-64.png" width="64" alt="JavMetaLite icon">
+<img src="windows/JavMetaLite.App/Resources/Brand/JavMetaLite-64.png" width="64" alt="JavMetaLite icon">
 
 [简体中文](README.zh-Hans.md) · **繁體中文** · [English](README.md) · [日本語](README.ja.md)
 
@@ -11,9 +11,18 @@
 
 用於本機影片資料審核與整理的 Windows／macOS 工具，支援單片編輯、批次處理及 Jellyfin 相容輸出。
 
+## 下載
+
+| 平台 | 需求 | 下載 |
+| --- | --- | --- |
+| Windows **1.2.3** | Windows 10/11 x64 | [可攜 ZIP](https://github.com/Noredge/JavMetaLite/releases/download/v1.2.3/JavMetaLite-v1.2.3-win-x64-portable.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/v1.2.3) |
+| macOS **1.0.0** | Apple Silicon · macOS 15+ | [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.0.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) |
+
+開啟前請核對 Release 的 SHA-256。Windows 內建瀏覽器需要 WebView2；macOS 套件採用 ad-hoc 簽署、未公證，詳見[首次啟動指南](macos/README.md#first-launch)。Intel 尚未驗證。
+
 ![Windows 單片工作區，v1.2.0](docs/images/javmetalite-v1.2.0-main-single.zh-Hant.png)
 
-圖片與資料皆為合成示範。[更多截圖](docs/SCREENSHOTS-v1.2.0.md)。
+[更多擷圖](docs/SCREENSHOTS-v1.2.0.md) · 圖片與資料均為合成示範。
 
 ## 主要功能
 
@@ -24,63 +33,35 @@
 - 圖片檢視器支援比較與本機圖片刪除，主介面提供低解析度封套提示。
 - 儲存前預覽檔案變更，可保持影片原位或整理到指定資料夾；支援簡、繁、英、日四語言。
 
-## 快速開始（Windows）
+## 從原始碼建置
 
-需要 Windows 10/11 x64；無需另裝 .NET Runtime，內建瀏覽器需要 Microsoft Edge WebView2 Runtime。
+安裝 Git 和 [global.json](global.json) 指定的確切 .NET SDK，複製儲存庫後在根目錄執行：
 
-1. 從 [Releases](https://github.com/Noredge/JavMetaLite/releases) 取得已發布的可攜套件，或使用提供的本機套件，核對 SHA-256 後解壓縮。
-2. 執行 `JavMetaLite.exe`，選取或拖入影片／資料夾。
-3. 檢查番號、搜尋資料，視需要調整文字、圖片與儲存設定。
-4. 點選儲存並檢查變更預覽。批次儲存不要求先開啟每部影片的預覽。
-
-## 必要提醒
-
-- 批次建議 LibreDMM；R18 可能因限流而較慢。
-- 關閉後不會還原佇列。移除佇列項目不刪除影片；確認刪除本機圖片會立即執行。
-- 請備份重要媒體。儲存遇到失敗或取消會停止；復原失敗時請保留復原目錄。
-- 來源網站可能含成人內容，請遵守其條款及適用的年齡與法律要求。
-
-## 從原始碼建置（Windows）
-
-在 Windows 10/11 x64 上安裝 Git 和 [global.json](global.json) 指定的確切 .NET SDK 版本（目前為 10.0.400），然後在 PowerShell 中執行：
+**Windows（PowerShell）**
 
 ```powershell
-git clone https://github.com/Noredge/JavMetaLite.git
-cd JavMetaLite
-dotnet build .\JavMetaLite.App\JavMetaLite.App.csproj -c Release
-dotnet run --project .\JavMetaLite.App\JavMetaLite.App.csproj -c Release --no-build
-```
-
-建置會自動還原 NuGet 相依套件，首次建置需要連線。在儲存庫根目錄產生並驗證自包含可攜式套件：
-
-```powershell
+dotnet build .\windows\JavMetaLite.App\JavMetaLite.App.csproj -c Release
 .\scripts\New-ReleasePackage.ps1
 .\scripts\Test-PortablePackage.ps1
 ```
 
-EXE 所在資料夾、ZIP 和 SHA-256 檔案均輸出至 `release/`。完整測試命令請見[開發與測試](TESTING.md)。
-
-## macOS 1.0
-
-**Apple Silicon · macOS 15+。** 原生編輯器同時顯示海報與完整封套，支援資料、圖片編輯，以及勾選影片後批次查詢、儲存。預設先預覽儲存變更，保留未編輯的 NFO 內容，寫入前檢查檔案衝突；常用設定會自動記住。
-
-從 [macOS 1.0.0](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) 下載 [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.0.0/JavMetaLite-macOS-arm64-Release-adhoc.zip)，解壓縮後開啟 `JavMetaLite.app`，無需安裝 .NET。
-
-macOS 1.0 套件採用 ad-hoc 簽章，沒有 Developer ID 或公證；Apple 未驗證發布者，也未公證此套件。核對 Release 提供的 ZIP SHA-256，解壓縮後將 `JavMetaLite.app` 移至「應用程式」。如果可信的 App 因「無法驗證開發者」或「Apple 無法檢查」而遭阻擋，先嘗試開啟，再到 **系統設定 → 隱私權與安全性 → 強制打開**，確認開啟此 App。請勿用此流程略過損毀或惡意軟體警告。[Apple 說明](https://support.apple.com/zh-tw/102445) · [首次啟動](macos/README.md#first-launch)。
-
-自行建置需安裝 [global.json](global.json) 指定的 SDK，以及含 macOS 15+ SDK 的 Xcode 或 Command Line Tools。在儲存庫根目錄執行：
+**macOS（需含 macOS 15+ SDK 的 Xcode 或 Command Line Tools）**
 
 ```sh
 ./scripts/macos/package.sh --arch arm64 --configuration Release --sign-mode adhoc
 ./scripts/macos/test.sh --arch arm64 --configuration Release
 ```
 
-產物位於 `artifacts/macos/`。CI 套件使用 ad-hoc 簽章，不公證；Intel 尚未驗證。[Mac 指南](macos/README.md) · [驗證狀態](docs/macos/STATUS.md)。
+首次建置會還原 NuGet 相依套件。輸出目錄：Windows 為 `release/`，macOS 為 `artifacts/macos/`。 [Windows](windows/README.md) · [macOS](macos/README.md)
 
-## 更多
+## 儲存庫導覽
 
-[macOS 版本說明](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) · [Windows 版本說明](docs/RELEASE-NOTES-v1.2.3.md) · [Docs](docs/README.md) · [更新歷史](CHANGELOG.md) · [開發與測試](TESTING.md)
+| 目錄 | 用途 |
+| --- | --- |
+| [windows/](windows/README.md) | Windows 應用程式與測試 |
+| [macos/](macos/README.md) | macOS 原生應用程式、Worker 與測試 |
+| [shared/](shared/README.md) | 共用 Core、可攜式影像處理與測試 |
+| [docs/](docs/README.md) | 使用指南、長期技術文件與歷史記錄 |
+| [scripts/](scripts/README.md) | 建置、測試與發佈工具 |
 
-Windows 記錄與偏好設定位於 `%LOCALAPPDATA%\JavMetaLite`。
-
-[MIT 授權條款](LICENSE) · © 2026 Noredge · [第三方聲明](THIRD_PARTY_NOTICES.md)。本專案與來源網站無隸屬關係，專案授權不包含網站資料的授權。
+[文件](docs/README.md) · [Changelog](CHANGELOG.md) · [MIT License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md)

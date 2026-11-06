@@ -25,7 +25,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="JavMetaLite.UiSmokeTests" />
-    <ProjectReference Include="..\JavMetaLite.Core\JavMetaLite.Core.csproj" />
+    <ProjectReference Include="..\..\shared\JavMetaLite.Core\JavMetaLite.Core.csproj" />
     <ProjectReference Include="..\JavMetaLite.Imaging.Windows\JavMetaLite.Imaging.Windows.csproj" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
   </ItemGroup>

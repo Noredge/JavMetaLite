@@ -7,11 +7,11 @@ parse_options "$@"
 check_environment
 check_signing_identity
 cd "$REPO_ROOT"
-"$DOTNET" restore JavMetaLite.Worker/JavMetaLite.Worker.csproj -r "osx-$ARCH" --locked-mode \
+"$DOTNET" restore macos/JavMetaLite.Worker/JavMetaLite.Worker.csproj -r "osx-$ARCH" --locked-mode \
   -p:NuGetLockFilePath="packages.osx-$ARCH.lock.json"
 rm -rf "$WORKER_PUBLISH"
 mkdir -p "$WORKER_PUBLISH"
-"$DOTNET" publish JavMetaLite.Worker/JavMetaLite.Worker.csproj -c "$CONFIGURATION" \
+"$DOTNET" publish macos/JavMetaLite.Worker/JavMetaLite.Worker.csproj -c "$CONFIGURATION" \
   -r "osx-$ARCH" --no-restore --self-contained true -p:ContinuousIntegrationBuild=true -p:Deterministic=true -p:PublishSingleFile=false \
   -p:PublishTrimmed=false -p:PublishAot=false -o "$WORKER_PUBLISH"
 /usr/bin/xcrun swift build --package-path "$REPO_ROOT/macos" -c "$SWIFT_CONFIGURATION" --arch "$SWIFT_ARCH"
