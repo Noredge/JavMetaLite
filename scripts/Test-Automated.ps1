@@ -12,9 +12,9 @@ $ErrorActionPreference = "Stop"
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $projects = @(
-    @{ Name = "Core smoke tests"; Path = "JavMetaLite.SmokeTests\JavMetaLite.SmokeTests.csproj" },
-    @{ Name = "File transaction regression tests"; Path = "JavMetaLite.RegressionTests\JavMetaLite.RegressionTests.csproj" },
-    @{ Name = "WPF UI smoke tests"; Path = "JavMetaLite.UiSmokeTests\JavMetaLite.UiSmokeTests.csproj" }
+    @{ Name = "Core smoke tests"; Path = "windows\JavMetaLite.SmokeTests\JavMetaLite.SmokeTests.csproj" },
+    @{ Name = "File transaction regression tests"; Path = "windows\JavMetaLite.RegressionTests\JavMetaLite.RegressionTests.csproj" },
+    @{ Name = "WPF UI smoke tests"; Path = "windows\JavMetaLite.UiSmokeTests\JavMetaLite.UiSmokeTests.csproj" }
 )
 
 Push-Location $repositoryRoot

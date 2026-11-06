@@ -15,7 +15,7 @@ printf 'project\texit_code\n' > "$RESULTS"
 for project in JavMetaLite.App JavMetaLite.SmokeTests JavMetaLite.RegressionTests JavMetaLite.UiSmokeTests; do
   printf 'Compile-only: %s (%s)\n' "$project" "$CONFIGURATION" | tee -a "$LOG"
   set +e
-  "$DOTNET" build "$project/$project.csproj" -c "$CONFIGURATION" -p:EnableWindowsTargeting=true 2>&1 | tee -a "$LOG"
+  "$DOTNET" build "windows/$project/$project.csproj" -c "$CONFIGURATION" -p:EnableWindowsTargeting=true 2>&1 | tee -a "$LOG"
   result=${PIPESTATUS[0]}
   set -e
   printf '%s\t%s\n' "$project" "$result" >> "$RESULTS"

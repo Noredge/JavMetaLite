@@ -6,7 +6,7 @@
 - Keep unrelated files without IDs unrecognized; do not infer their IDs from the parent folder.
 - Add parser and discovery-selection regression coverage, including U/UC suffixes and CD parts.
 
-[Release notes](docs/RELEASE-NOTES-v1.2.3.md)
+[Release notes](docs/archive/releases/windows/RELEASE-NOTES-v1.2.3.md)
 
 ## 1.2.2
 
@@ -17,7 +17,7 @@
 - Resolve duplicate batch targets explicitly: save one, confirm ordered CD parts, or skip.
 - Report incomplete temporary cleanup and preserve recovery errors after cancellation.
 
-[Release notes](docs/RELEASE-NOTES-v1.2.2.md)
+[Release notes](docs/archive/releases/windows/RELEASE-NOTES-v1.2.2.md)
 
 ## 1.2.1
 
@@ -27,7 +27,7 @@
 - Clean up empty source still-image folders after successful moves.
 - Use consistent still-image terminology across four UI languages.
 
-[Release notes](docs/RELEASE-NOTES-v1.2.1.md)
+[Release notes](docs/archive/releases/windows/RELEASE-NOTES-v1.2.1.md)
 
 ## 1.2.0
 
@@ -36,7 +36,7 @@
 - Faster queue/preview handling and improved four-language UI.
 - Verified portable packages built by Windows CI.
 
-[Release notes](docs/RELEASE-NOTES-v1.2.0.md)
+[Release notes](docs/archive/releases/windows/RELEASE-NOTES-v1.2.0.md)
 
 ## Earlier releases
 

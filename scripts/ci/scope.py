@@ -12,16 +12,16 @@ DOCS = frozenset(['README.md', 'README.zh-Hans.md', 'README.zh-Hant.md', 'README
                  'docs/macos/TESTING.md'])
 
 PRESSURE_SENSITIVE = frozenset([
-    'JavMetaLite.Worker/Retention.cs', 'JavMetaLite.Worker/ArtworkDiskCache.cs',
-    'JavMetaLite.Worker/Workspace.cs', 'JavMetaLite.Worker/Operations.cs',
-    'JavMetaLite.Worker/Discovery.cs', 'JavMetaLite.Worker/SavePlanning.cs',
-    *['JavMetaLite.Core/Services/' + name + '.cs' for name in
+    'macos/JavMetaLite.Worker/Retention.cs', 'macos/JavMetaLite.Worker/ArtworkDiskCache.cs',
+    'macos/JavMetaLite.Worker/Workspace.cs', 'macos/JavMetaLite.Worker/Operations.cs',
+    'macos/JavMetaLite.Worker/Discovery.cs', 'macos/JavMetaLite.Worker/SavePlanning.cs',
+    *['shared/JavMetaLite.Core/Services/' + name + '.cs' for name in
       ['LocalSidecarInventory', 'LocalSidecarLocator', 'MovieJobLoader',
        'MovieFileDiscovery', 'MovieInputDiscovery', 'FileSystemPathSemantics']]])
 CORE_SOURCE_ROOTS = (
-    'JavMetaLite.Core/', 'JavMetaLite.Worker/', 'JavMetaLite.Worker.RegressionHost/',
-    'JavMetaLite.PortableTests/', 'JavMetaLite.App/', 'JavMetaLite.SmokeTests/',
-    'JavMetaLite.RegressionTests/', 'JavMetaLite.UiSmokeTests/',
+    'shared/JavMetaLite.Core/', 'macos/JavMetaLite.Worker/', 'macos/JavMetaLite.Worker.RegressionHost/',
+    'shared/JavMetaLite.PortableTests/', 'windows/JavMetaLite.App/', 'windows/JavMetaLite.SmokeTests/',
+    'windows/JavMetaLite.RegressionTests/', 'windows/JavMetaLite.UiSmokeTests/',
     'macos/JavMetaLiteMac/', 'macos/WorkerKit/', 'macos/NativeBridgeKit/',
     'macos/WorkerKitTests/', 'macos/NativeBridgeKitTests/')
 

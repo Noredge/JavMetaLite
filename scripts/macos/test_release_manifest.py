@@ -152,6 +152,27 @@ class ReleaseManifestTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             source_inputs(source)
 
+    def test_source_export_tracks_each_platform_and_shared_sources(self):
+        source = self.root / 'organized-source'
+        files = {}
+        for directory in ('windows', 'macos', 'shared'):
+            file = source / directory / 'Synthetic/Source.cs'
+            file.parent.mkdir(parents=True)
+            file.write_text('// synthetic source')
+            files[file.relative_to(source).as_posix()] = {
+                'sha256': digest(file), 'mode': stat.S_IMODE(file.stat().st_mode)}
+        (source / 'SOURCE-MANIFEST.json').write_bytes(canonical_bytes({
+            'schemaVersion': 1, 'kind': 'source-export',
+            'source': {'gitCommit': 'a' * 40, 'dirtyWorkingTree': False}, 'files': files}))
+        self.assertEqual(source_inputs(source)['files'], files)
+        for directory in ('windows', 'macos', 'shared'):
+            with self.subTest(directory=directory):
+                new = source / directory / 'Synthetic/New.cs'
+                new.write_text('// unrecorded build input')
+                with self.assertRaisesRegex(ValueError, 'Source export changed'):
+                    source_inputs(source)
+                new.unlink()
+
     def test_unknown_or_unsigned_cli_modes_fail_before_build(self):
         cases = [('build.sh', '--sign-mode', 'unsigned'), ('package.sh', '--sign-mode', 'developer-id'),
                  ('package.sh', '--arch', 'invalid'), ('build.sh', '--sign-mode', 'adhoc', '--team-id', 'AAAAAAAAAA'),
@@ -186,7 +207,7 @@ class ReleaseManifestTests(unittest.TestCase):
         source = self.root / 'source'; scripts = source / 'scripts/macos'; scripts.mkdir(parents=True)
         for name in ('source-archive.py', 'release_manifest.py'):
             shutil.copy2(HERE / name, scripts / name)
-        source_file = source / 'JavMetaLite.Fixture/File.cs'; source_file.parent.mkdir()
+        source_file = source / 'shared/JavMetaLite.Fixture/File.cs'; source_file.parent.mkdir(parents=True)
         source_file.write_text('// synthetic source only')
         files = {p.relative_to(source).as_posix(): {'sha256': digest(p), 'mode': stat.S_IMODE(p.stat().st_mode)}
                  for p in source.rglob('*') if p.is_file()}
@@ -202,7 +223,7 @@ class ReleaseManifestTests(unittest.TestCase):
         subprocess.run(['/usr/bin/ditto', '-x', '-k', str(first), str(extracted)], check=True)
         checked = source_inputs(extracted / 'JavMetaLite')
         self.assertTrue(checked['verifiedExport'])
-        self.assertEqual(checked['files']['JavMetaLite.Fixture/File.cs']['sha256'], digest(source_file))
+        self.assertEqual(checked['files']['shared/JavMetaLite.Fixture/File.cs']['sha256'], digest(source_file))
 
 
 if __name__ == '__main__':

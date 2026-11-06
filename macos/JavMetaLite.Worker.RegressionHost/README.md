@@ -19,12 +19,12 @@ publishes only `JavMetaLite.Worker`. No credentials or live-provider access are
 needed for this suite.
 
 Use `scripts/macos/test.sh` for the complete gate. To run manually after building
-both projects with the pinned SDK:
+both projects with the pinned SDK, from the repository root:
 
 ```sh
-export JAVMETALITE_SEARCH_TEST_HOST="$PWD/JavMetaLite.Worker.RegressionHost/bin/Release/net10.0/JavMetaLite.Worker.RegressionHost"
+export JAVMETALITE_SEARCH_TEST_HOST="$PWD/macos/JavMetaLite.Worker.RegressionHost/bin/Release/net10.0/JavMetaLite.Worker.RegressionHost"
 python3 scripts/macos/test_worker.py \
-  "$PWD/JavMetaLite.Worker/bin/Release/net10.0/JavMetaLite.Worker" --require-search-host
+  "$PWD/macos/JavMetaLite.Worker/bin/Release/net10.0/JavMetaLite.Worker" --require-search-host
 ```
 
 A framework-dependent build also requires `DOTNET_ROOT` to point at that SDK.

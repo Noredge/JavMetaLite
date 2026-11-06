@@ -46,3 +46,7 @@ The image viewer offers side arrows, Close on the left, Fit and Actual Size. Mou
 [Release notes](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) · [Verified scope](../docs/macos/STATUS.md) · [Testing](../docs/macos/TESTING.md) · [Architecture](../docs/macos/ARCHITECTURE.md) · [Protocol](../docs/macos/PROTOCOL.md) · [Safety](../docs/macos/SAFETY-MATRIX.md) · [Releasing](../docs/macos/RELEASING.md)
 
 [MIT license](../LICENSE) · [Third-party notices](../THIRD_PARTY_NOTICES.md).
+
+## Source layout
+
+`JavMetaLiteMac/` contains the Swift app; `WorkerKit/` and `NativeBridgeKit/` provide native integration. `JavMetaLite.Worker/` contains the bundled .NET JSON-RPC engine and `JavMetaLite.Worker.RegressionHost/` is a nonpublishable test host. Shared Core and Skia code live in [shared/](../shared/README.md). SwiftPM and Xcode entry points remain here; run release scripts from the repository root. See the [script inventory](../scripts/README.md).

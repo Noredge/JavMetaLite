@@ -60,7 +60,7 @@ for source in (ROOT / 'macos/JavMetaLiteMac').rglob('*.swift'):
     for key in re.findall(r'\btr\("([^"\\]+)"\)', source.read_text()):
         assert key in entries, f'Missing used key {key} in {source.relative_to(ROOT)}'
 # Stable public error reasons must also have localized user-facing messages.
-reason_sources = list((ROOT / 'JavMetaLite.Worker').glob('*.cs')) + [ROOT / 'JavMetaLite.Core/Services/BrowserPageImporter.cs']
+reason_sources = list((ROOT / 'macos/JavMetaLite.Worker').glob('*.cs')) + [ROOT / 'shared/JavMetaLite.Core/Services/BrowserPageImporter.cs']
 for source in reason_sources:
     for reason in re.findall(r'"([A-Z][A-Z_]{3,})"', source.read_text()):
         assert 'error.' + reason in entries, f'Missing localized error reason: {reason}'

@@ -10,7 +10,7 @@
     <PublishSingleFile>false</PublishSingleFile>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../JavMetaLite.Core/JavMetaLite.Core.csproj" />
-    <ProjectReference Include="../JavMetaLite.Imaging.Skia/JavMetaLite.Imaging.Skia.csproj" />
+    <ProjectReference Include="../../shared/JavMetaLite.Core/JavMetaLite.Core.csproj" />
+    <ProjectReference Include="../../shared/JavMetaLite.Imaging.Skia/JavMetaLite.Imaging.Skia.csproj" />
   </ItemGroup>
 </Project>
