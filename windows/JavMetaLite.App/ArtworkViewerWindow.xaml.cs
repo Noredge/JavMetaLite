@@ -690,21 +690,25 @@ public partial class ArtworkViewerWindow : Window
         }
     }
 
-    private Task<ArtworkViewerLoadedImage> EnsureImageLoadedAsync(ArtworkViewerItem item)
+    private async Task<ArtworkViewerLoadedImage> EnsureImageLoadedAsync(ArtworkViewerItem item)
     {
-        if (item.Image is not null)
+        if (item.Image is { } image)
         {
-            return Task.FromResult(new ArtworkViewerLoadedImage(
-                item.Image,
-                item.PixelWidth,
-                item.PixelHeight));
+            return new ArtworkViewerLoadedImage(image, item.PixelWidth, item.PixelHeight);
         }
 
-        // A loader may fault before the async call returns. Assign its task
-        // here and discard a completed failure when the user revisits the image.
-        if (item.LoadTask is null || item.LoadTask.IsFaulted || item.LoadTask.IsCanceled)
-            item.LoadTask = LoadImageCoreAsync(item);
-        return item.LoadTask;
+        // Cache the task before handling a failure that may complete synchronously.
+        var load = item.LoadTask ??= LoadImageCoreAsync(item);
+        try
+        {
+            return await load;
+        }
+        catch
+        {
+            if (ReferenceEquals(item.LoadTask, load))
+                item.LoadTask = null;
+            throw;
+        }
     }
 
     private async Task<ArtworkViewerLoadedImage> LoadImageCoreAsync(ArtworkViewerItem item)

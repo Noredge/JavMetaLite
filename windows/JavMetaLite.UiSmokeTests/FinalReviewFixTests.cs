@@ -138,7 +138,8 @@ internal static partial class Program
         var viewer = new ArtworkViewerWindow([other, item], 0, loader);
         try
         {
-            CoverAssert(calls == 1 && item.Image is null, "The initial image preload did not fail as expected.");
+            CoverAssert(calls == 1 && item.Image is null && item.LoadTask is null,
+                "The initial image preload did not clear its failed load.");
             var retry = (Task<ArtworkViewerLoadedImage>)FinalReviewInvoke(viewer, "EnsureImageLoadedAsync", item)!;
             await retry.WaitAsync(TimeSpan.FromSeconds(5));
             CoverAssert(calls == 2 && item.Image is not null, "Revisiting the image did not retry its failed load.");
