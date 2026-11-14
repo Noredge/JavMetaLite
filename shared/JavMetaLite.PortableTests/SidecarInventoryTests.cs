@@ -35,12 +35,21 @@ internal static partial class Program
         var cd1 = temp.Write("parts/DEMO-773-CD1.mp4", "PART ONE");
         var cd2 = temp.Write("parts/DEMO-773-CD2.mp4", "PART TWO");
         var folderNfo = temp.Write("parts/movie.nfo", "<movie><title>parts owner</title></movie>");
+        var linkTarget = Path.Combine(temp.Path, "outside", "DEMO-799-CD1.mp4");
+        if (!OperatingSystem.IsWindows())
+            File.CreateSymbolicLink(Path.Combine(Path.GetDirectoryName(cd1)!, "DEMO-799-CD1.mp4"), linkTarget);
         foreach (var path in new[] { cd1, cd2 })
             Equal(FileSystemPathSemantics.CanonicalizePath(folderNfo), LocalSidecarLocator.Locate(path, "DEMO-773", true, scope, default).NfoPath);
         scope.ValidateReusedDirectories(default);
 
         if (!OperatingSystem.IsWindows())
         {
+            // The link entry is unchanged. Its new referent changes folder NFO ownership.
+            temp.Write("outside/DEMO-799-CD1.mp4", "ANOTHER MOVIE");
+            ThrowsSync<SidecarInventoryChangedException>(() => scope.ValidateReusedDirectories(default));
+            Equal(null, LocalSidecarLocator.Locate(cd1, "DEMO-773", true).NfoPath);
+            File.Delete(linkTarget);
+
             var firstPart = temp.Write("mixed-case-parts/DEMO-774-CD1.mp4", "PART ONE");
             var secondPart = temp.Write("mixed-case-parts/demo-774-CD2.mp4", "PART TWO");
             temp.Write("mixed-case-parts/movie.nfo", "<movie><title>ambiguous owner</title></movie>");

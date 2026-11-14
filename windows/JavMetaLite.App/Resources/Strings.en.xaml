@@ -300,4 +300,5 @@
     <sys:String x:Key="Duplicate.Skip">Skip this group</sys:String>
     <sys:String x:Key="Status.PreparingSavePreview">Checking files for the save preview…</sys:String>
     <sys:String x:Key="Error.SavePreviewChanged">The movie or its save settings changed. Open a new save preview.</sys:String>
+    <sys:String x:Key="Discovery.SkippedMovieFiles">Skipped {0} movie file(s) that could not be read.</sys:String>
 </ResourceDictionary>

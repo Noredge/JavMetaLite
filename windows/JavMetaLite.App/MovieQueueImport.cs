@@ -3,7 +3,8 @@ using JavMetaLite.Core.Services;
 
 namespace JavMetaLite.App;
 
-internal sealed record MovieQueueImportPlan(IReadOnlyList<MovieFileSet> FileSets, int DuplicatePathCount);
+internal sealed record MovieQueueImportPlan(
+    IReadOnlyList<MovieFileSet> FileSets, int DuplicatePathCount, IReadOnlyList<MovieFileDiscoveryDiagnostic> Diagnostics);
 internal sealed record MovieQueueLoadItem(MovieFileSet FileSet, MovieJob? Job, MovieJobLoadResult? Result, Exception? Error);
 
 internal static class MovieQueueImport
@@ -13,10 +14,12 @@ internal static class MovieQueueImport
         {
             token.ThrowIfCancellationRequested();
             var existing = existingPaths.Select(Path.GetFullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var sets = MovieFileSet.Group(paths);
+            var diagnostics = new Dictionary<string, MovieFileDiscoveryDiagnostic>(FileSystemPathSemantics.PathComparer);
+            var sets = MovieFileSet.Group(paths,
+                (path, error) => diagnostics.TryAdd(path, MovieFileDiscoveryDiagnostic.FromException(path, error)), token);
             token.ThrowIfCancellationRequested();
             var duplicates = sets.SelectMany(set => set.VideoPaths).Distinct(StringComparer.OrdinalIgnoreCase).Count(existing.Contains);
-            return new MovieQueueImportPlan(sets, duplicates);
+            return new MovieQueueImportPlan(sets, duplicates, diagnostics.Values.ToArray());
         }, token);
 
     // Only NEW, unattached jobs cross this boundary. No UI-bound job is mutated on a worker.

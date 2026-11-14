@@ -96,19 +96,17 @@ public sealed class MovieFileSet
 
         var directory = Path.GetDirectoryName(selected.Path)!;
         var groupKey = GetGroupKey(selected);
-        return CreateFromParts(DiscoverSiblings(directory)
+        return CreateFromParts(DiscoverParts(Directory.EnumerateFiles(directory), null, default)
             .Where(part => string.Equals(GetGroupKey(part), groupKey, FileSystemPathSemantics.PathComparison)));
     }
 
     public static IReadOnlyList<MovieFileSet> Group(IEnumerable<string> paths) => Group(paths, null, default);
 
-    internal static IReadOnlyList<MovieFileSet> Group(
-        IEnumerable<string> paths, Action<string, Exception>? onUnreadableSibling, CancellationToken cancellationToken)
+    public static IReadOnlyList<MovieFileSet> Group(
+        IEnumerable<string> paths, Action<string, Exception>? onUnreadableFile, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(paths);
-        var selectedParts = paths
-            .Where(VideoFileSupport.IsSupportedExistingFile)
-            .Select(Analyze)
+        var selectedParts = DiscoverParts(paths, onUnreadableFile, cancellationToken)
             .DistinctBy(part => part.Path, FileSystemPathSemantics.PathComparer)
             .ToArray();
         var selectedMultipartKeys = selectedParts
@@ -121,7 +119,7 @@ public sealed class MovieFileSet
                      .Select(part => Path.GetDirectoryName(part.Path)!)
                      .Distinct(FileSystemPathSemantics.PathComparer))
         {
-            expandedParts.AddRange(DiscoverSiblings(directory, onUnreadableSibling, cancellationToken)
+            expandedParts.AddRange(DiscoverParts(Directory.EnumerateFiles(directory), onUnreadableFile, cancellationToken)
                 .Where(part => selectedMultipartKeys.Contains(GetGroupKey(part))));
         }
 
@@ -132,28 +130,20 @@ public sealed class MovieFileSet
             .ToArray();
     }
 
-    private static IEnumerable<MovieFilePart> DiscoverSiblings(
-        string directory, Action<string, Exception>? onUnreadableSibling = null,
-        CancellationToken cancellationToken = default)
+    private static IEnumerable<MovieFilePart> DiscoverParts(
+        IEnumerable<string> paths, Action<string, Exception>? onUnreadableFile, CancellationToken cancellationToken)
     {
-        foreach (var path in Directory.EnumerateFiles(directory))
+        foreach (var path in paths)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!VideoFileSupport.HasSupportedExtension(path))
                 continue;
 
             MovieFilePart part;
-            try { part = Analyze(path); }
+            try { part = ReadExistingPart(path); }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                onUnreadableSibling?.Invoke(path, exception);
-                continue;
-            }
-
-            if (!File.Exists(part.Path))
-            {
-                onUnreadableSibling?.Invoke(path,
-                    new FileNotFoundException($"找不到解析后的影片文件：{part.Path}", part.Path));
+                onUnreadableFile?.Invoke(path, exception);
                 continue;
             }
 
@@ -162,6 +152,24 @@ public sealed class MovieFileSet
     }
 
     public static string GetGroupKey(string videoPath) => GetGroupKey(Analyze(videoPath));
+
+    internal static string? GetExistingGroupKey(string videoPath)
+    {
+        try { return GetGroupKey(ReadExistingPart(videoPath)); }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException) { return null; }
+    }
+
+    private static MovieFilePart ReadExistingPart(string path)
+    {
+        var part = Analyze(path);
+        var file = new FileInfo(part.Path);
+        // Windows keeps the link name for grouping and uses the resolved path to check existence.
+        var target = OperatingSystem.IsWindows() && file.Exists && (file.Attributes & FileAttributes.ReparsePoint) != 0
+            ? file.ResolveLinkTarget(returnFinalTarget: true) ?? file : file;
+        if (target is not FileInfo { Exists: true })
+            throw new FileNotFoundException($"找不到解析后的影片文件：{target.FullName}", target.FullName);
+        return part;
+    }
 
     private static MovieFilePart Analyze(string videoPath)
     {

@@ -22,6 +22,7 @@ internal static partial class Program
         ("Oversized NFO is rejected", LargeNfo),
         ("External NFO modification invalidates transaction", ExternalModification),
         ("Target appearing or changing during staging is not overwritten", TargetRace),
+        ("Target occupancy changes after the final check abort publication", TargetChangesAfterRecheck),
         ("Review revision rejects stale save and retains manual edits on retry", ReviewRevision),
         ("Video target is never overwritten", TargetVideoConflict),
         ("Canceled transaction preserves original files", Cancellation),
@@ -220,6 +221,45 @@ internal static partial class Program
             await Throws<IOException>(() => new FileOrganizationService(output).ExecuteAsync(plan, metadata, true, default, progress));
             Equal(external, File.ReadAllText(nfo));
             Equal("SYNTHETIC", File.ReadAllText(video));
+        }
+    }
+
+    private static async Task TargetChangesAfterRecheck()
+    {
+        foreach (var multipart in new[] { false, true })
+        foreach (var existed in new[] { false, true })
+        {
+            using var temp = new Temp();
+            string[] videos = multipart
+                ? [temp.Write("DEMO-052-cd1.mp4", "FIRST"), temp.Write("DEMO-052-cd2.mp4", "SECOND")]
+                : [temp.Write("DEMO-052.mp4", "FIRST")];
+            var metadata = new MovieMetadata { Id = "DEMO-052", Title = "Reviewed output" };
+            var initialPlan = FileOrganizationService.BuildPlan(videos, metadata, NfoOnly, InPlace);
+            var nfo = Path.Combine(initialPlan.TargetDirectory, initialPlan.OutputFileNames!.Nfo);
+            Directory.CreateDirectory(initialPlan.TargetDirectory);
+            if (existed) File.WriteAllText(nfo, "<movie><title>Reviewed original</title></movie>");
+            var plan = await FileOrganizationService.BindPreviewTargetsAsync(
+                FileOrganizationService.BuildPlan(videos, metadata, NfoOnly, InPlace), metadata);
+            Equal(existed, plan.PreviewTargetExpectations.Single().Exists);
+            const string external = "<movie><title>External file</title></movie>";
+            var changes = 0;
+            using var output = new OutputService(Images);
+            var service = new FileOrganizationService(output, TemporaryDirectoryCleanup.TryDeleteAsync,
+                afterTargetRecheck: target =>
+                {
+                    Equal(nfo, target);
+                    if (existed) File.Delete(target);
+                    else File.WriteAllText(target, external);
+                    changes++;
+                });
+            await Throws<IOException>(() => service.ExecuteAsync(plan, metadata, true));
+            Equal(1, changes);
+            if (existed) Check(!File.Exists(nfo), "Published a replacement after the reviewed NFO disappeared");
+            else Equal(external, File.ReadAllText(nfo));
+            Check(videos.Select(File.ReadAllText).SequenceEqual(multipart ? ["FIRST", "SECOND"] : ["FIRST"]),
+                "Target conflict changed the source videos");
+            Check(!Directory.EnumerateDirectories(temp.Path, ".JavMetaLite-*.tmp", SearchOption.AllDirectories).Any(),
+                "Target conflict left staging directories behind");
         }
     }
 

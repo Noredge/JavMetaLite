@@ -309,4 +309,5 @@
     <sys:String x:Key="Duplicate.Skip">本次略過此組</sys:String>
     <sys:String x:Key="Status.PreparingSavePreview">正在檢查儲存預覽所需的檔案…</sys:String>
     <sys:String x:Key="Error.SavePreviewChanged">影片或儲存設定已變更，請重新開啟儲存預覽。</sys:String>
+    <sys:String x:Key="Discovery.SkippedMovieFiles">已略過 {0} 個無法讀取的影片檔案。</sys:String>
 </ResourceDictionary>

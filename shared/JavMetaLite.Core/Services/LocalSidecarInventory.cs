@@ -70,8 +70,12 @@ internal sealed class LocalSidecarDirectoryInventory
         _extraExists = extraExists; _extraLink = extraLink; _extraCanonicalPath = extraCanonicalPath;
         Files = entries.ToDictionary(entry => Path.GetFileName(entry.Path), entry => entry.Path, StringComparer.OrdinalIgnoreCase)
             .ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        VideoGroupKeys = Files.Values.Where(VideoFileSupport.HasSupportedExtension)
-            .Select(MovieFileSet.GetGroupKey).ToFrozenSet(FileSystemPathSemantics.PathComparer);
+        VideoGroupKeys = entries.Where(entry => VideoFileSupport.HasSupportedExtension(entry.Path))
+            .Select(entry => entry.LinkTarget is null
+                ? MovieFileSet.GetGroupKey(entry.Path)
+                : MovieFileSet.GetExistingGroupKey(entry.Path))
+            .OfType<string>()
+            .ToFrozenSet(FileSystemPathSemantics.PathComparer);
         ExtrafanartPaths = Array.AsReadOnly(extraEntries.Select(entry => entry.Path)
             .Where(path => ArtworkExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
             .OrderBy(GetTrailingNumber).ThenBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase).ToArray());
@@ -123,7 +127,8 @@ internal sealed class LocalSidecarDirectoryInventory
     internal bool SameNamespace(LocalSidecarDirectoryInventory other) =>
         DirectoryPath == other.DirectoryPath && _extraExists == other._extraExists &&
         _extraLink == other._extraLink && _extraCanonicalPath == other._extraCanonicalPath &&
-        _entries.SequenceEqual(other._entries) && _extraEntries.SequenceEqual(other._extraEntries);
+        _entries.SequenceEqual(other._entries) && _extraEntries.SequenceEqual(other._extraEntries) &&
+        VideoGroupKeys.SetEquals(other.VideoGroupKeys);
 
     private static int GetTrailingNumber(string path)
     {

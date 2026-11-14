@@ -431,7 +431,7 @@ public partial class MainWindow : Window
         };
         if (discovery.ShowDialog() == true)
         {
-            await AddMovieFilesAsync(discovery.SelectedVideoPaths);
+            await ImportMovieFilesAsync(discovery.SelectedVideoPaths, showWarnings: false);
         }
     }
 
@@ -440,7 +440,7 @@ public partial class MainWindow : Window
         e.Effects = TryGetDroppedPaths(e.Data, out var paths) &&
                     paths.Length > 0 &&
                     paths.All(path =>
-                        VideoFileSupport.IsSupportedExistingFile(path) || Directory.Exists(path))
+                        VideoFileSupport.HasSupportedExtension(path) || Directory.Exists(path))
             ? DragDropEffects.Copy
             : DragDropEffects.None;
         e.Handled = true;
@@ -455,14 +455,7 @@ public partial class MainWindow : Window
 
         try
         {
-            if (paths.All(VideoFileSupport.IsSupportedExistingFile))
-            {
-                await AddMovieFilesAsync(paths);
-            }
-            else
-            {
-                await ImportDiscoveredPathsAsync(paths);
-            }
+            await ImportDroppedPathsAsync(paths);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -474,6 +467,11 @@ public partial class MainWindow : Window
             e.Handled = true;
         }
     }
+
+    private Task ImportDroppedPathsAsync(IReadOnlyList<string> paths) =>
+        paths.All(path => VideoFileSupport.HasSupportedExtension(path) && !Directory.Exists(path))
+            ? AddMovieFilesAsync(paths)
+            : ImportDiscoveredPathsAsync(paths);
 
     private async void Search_Click(object sender, RoutedEventArgs e)
     {
@@ -1377,9 +1375,12 @@ public partial class MainWindow : Window
     private Task SelectVideoAsync(string path) =>
         RunBusyAsync(LocalizationService.Get("Status.InspectingLocal"), () => SelectVideoCoreAsync(path));
 
-    private async Task AddMovieFilesAsync(IEnumerable<string> paths)
+    private Task AddMovieFilesAsync(IEnumerable<string> paths) => ImportMovieFilesAsync(paths, showWarnings: true);
+
+    private async Task ImportMovieFilesAsync(IEnumerable<string> paths, bool showWarnings)
     {
         var focusIdAfterImport = false;
+        IReadOnlyList<MovieFileDiscoveryDiagnostic> diagnostics = [];
         await RunBusyAsync(LocalizationService.Get("Status.InspectingLocal"), async () =>
         {
             var plan = await MovieQueueImport.PrepareAsync(paths.ToArray(),
@@ -1436,10 +1437,22 @@ public partial class MainWindow : Window
                                      string.IsNullOrWhiteSpace(firstAdded.Metadata.Id);
             }
 
-            SetStatus(
-                LocalizationService.Get("Status.AddedMovies", addedJobCount, duplicateCount),
-                failedCount == 0);
+            diagnostics = plan.Diagnostics;
+            var status = LocalizationService.Get("Status.AddedMovies", addedJobCount, duplicateCount);
+            if (diagnostics.Count > 0)
+                status += " " + LocalizationService.Get("Discovery.SkippedMovieFiles", diagnostics.Count);
+            SetStatus(status, failedCount == 0 && diagnostics.Count == 0);
         });
+
+        if (showWarnings && diagnostics.Count > 0 && !_closeRequested)
+        {
+            var details = string.Join(Environment.NewLine + Environment.NewLine,
+                diagnostics.Select(DiscoveryDiagnosticText.Format));
+            AppLog.Warning(details);
+            var summary = LocalizationService.Get("Discovery.SkippedMovieFiles", diagnostics.Count);
+            new DiscoveryDetailsWindow(summary + Environment.NewLine + Environment.NewLine + details)
+                { Owner = this }.ShowDialog();
+        }
 
         if (focusIdAfterImport)
         {
@@ -1822,7 +1835,7 @@ public partial class MainWindow : Window
         };
         if (discovery.ShowDialog() == true)
         {
-            await AddMovieFilesAsync(discovery.SelectedVideoPaths);
+            await ImportMovieFilesAsync(discovery.SelectedVideoPaths, showWarnings: false);
         }
     }
 

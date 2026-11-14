@@ -41,7 +41,52 @@ internal static partial class Program
         await TestUnreadableImportedNfoConflictAsync(Path.Combine(root, "batch-unreadable-nfo"));
         await TestSavePreflightCancellationAsync(Path.Combine(root, "save-preflight"));
         await TestSaveExecutionCancellationAsync(Path.Combine(root, "save-execution"));
-        Console.WriteLine("UI PASS viewerApplyBusy=True lateMainPreviewRejected=True retryComparisonCancelRecovers=True batchPathConflictsBlocked=True sharedExtrafanartNamespace=True unreadableNfoProtected=True saveRechecksCancelable=True");
+        await TestDirectImportWarningsAsync(Path.Combine(root, "direct-import"));
+        Console.WriteLine("UI PASS viewerApplyBusy=True lateMainPreviewRejected=True retryComparisonCancelRecovers=True batchPathConflictsBlocked=True sharedExtrafanartNamespace=True unreadableNfoProtected=True saveRechecksCancelable=True directImportLinkWarnings=True");
+    }
+
+    private static async Task TestDirectImportWarningsAsync(string root)
+    {
+        foreach (var fromDrop in new[] { false, true })
+        {
+            var source = Directory.CreateDirectory(Path.Combine(root, fromDrop ? "drop" : "picker")).FullName;
+            var first = Path.Combine(source, "RBD-183-cd1.mp4");
+            var second = Path.Combine(source, "RBD-183-cd2.mp4");
+            var broken = Path.Combine(source, "RBD-183-cd3.mp4");
+            File.WriteAllText(first, "first part");
+            File.WriteAllText(second, "second part");
+            File.WriteAllText(Path.Combine(source, "movie.nfo"), "<movie><title>Folder title</title></movie>");
+            File.CreateSymbolicLink(broken, Path.Combine(source, "missing", "RBD-184-cd1.mp4"));
+            var window = new MainWindow(new AppPreferencesStore(Path.Combine(source, "settings")))
+                { ShowActivated = false, ShowInTaskbar = false };
+            window.Show();
+            try
+            {
+                string[] paths = fromDrop ? [first, broken] : [first];
+                var method = fromDrop ? "ImportDroppedPathsAsync" : "AddMovieFilesAsync";
+                Task? import = null;
+                _ = window.Dispatcher.BeginInvoke(() => import = (Task)FinalReviewInvoke(window, method, (object)paths)!);
+                await UntilStableAsync(() => Application.Current.Windows.OfType<DiscoveryDetailsWindow>()
+                    .Any(dialog => dialog.Owner == window), "Direct import did not show an unreadable-link warning.");
+                var warning = Application.Current.Windows.OfType<DiscoveryDetailsWindow>().Single(dialog => dialog.Owner == window);
+                var details = ((TextBox)warning.FindName("DetailsText")).Text;
+                CoverAssert(details.Contains(broken) && details.Contains(LocalizationService.Get("Discovery.SkippedMovieFiles", 1)),
+                    "Direct import did not identify the skipped link exactly once.");
+                var job = ((IList)FinalReviewField(window, "_movieQueue")).Cast<MovieJob>().Single();
+                CoverAssert(job.VideoPaths.SequenceEqual([first, second]) && job.Metadata.Title == "Folder title" &&
+                    !job.LocalNfoSaveBlocked, "A dangling link was queued as a part or displaced the folder NFO.");
+                warning.Close();
+                await UntilStableAsync(() => import?.IsCompleted == true, "Direct import did not finish after the warning.");
+                await import!;
+            }
+            finally
+            {
+                foreach (var dialog in Application.Current.Windows.OfType<DiscoveryDetailsWindow>()
+                    .Where(dialog => dialog.Owner == window).ToArray())
+                    dialog.Close();
+                window.Close();
+            }
+        }
     }
 
     private static async Task TestUnreadableImportedNfoConflictAsync(string root)

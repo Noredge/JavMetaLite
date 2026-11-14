@@ -305,4 +305,5 @@
     <sys:String x:Key="Duplicate.Skip">このグループをスキップ</sys:String>
     <sys:String x:Key="Status.PreparingSavePreview">保存プレビューに必要なファイルを確認中…</sys:String>
     <sys:String x:Key="Error.SavePreviewChanged">動画または保存設定が変更されました。保存プレビューを開き直してください。</sys:String>
+    <sys:String x:Key="Discovery.SkippedMovieFiles">読み取れなかった動画ファイル {0} 件をスキップしました。</sys:String>
 </ResourceDictionary>

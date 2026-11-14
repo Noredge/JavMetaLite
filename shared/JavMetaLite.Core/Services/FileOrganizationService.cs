@@ -8,6 +8,7 @@ public sealed class FileOrganizationService
     private readonly OutputService _outputService;
     private readonly Func<string, Task<TemporaryCleanupIssue?>> _cleanupDirectory;
     private readonly Action<string, string>? _afterRollbackQuarantine;
+    private readonly Action<string>? _afterTargetRecheck;
 
     public FileOrganizationService(OutputService outputService)
         : this(outputService, TemporaryDirectoryCleanup.TryDeleteAsync)
@@ -16,11 +17,13 @@ public sealed class FileOrganizationService
 
     internal FileOrganizationService(OutputService outputService,
         Func<string, Task<TemporaryCleanupIssue?>> cleanupDirectory,
-        Action<string, string>? afterRollbackQuarantine = null)
+        Action<string, string>? afterRollbackQuarantine = null,
+        Action<string>? afterTargetRecheck = null)
     {
         _outputService = outputService;
         _cleanupDirectory = cleanupDirectory;
         _afterRollbackQuarantine = afterRollbackQuarantine;
+        _afterTargetRecheck = afterTargetRecheck;
     }
 
     public static SavePlan BuildPlan(
@@ -523,7 +526,6 @@ public sealed class FileOrganizationService
         var targetPayloadRoot = crossVolumeCopy
             ? Path.Combine(targetStagingRoot, "payload")
             : sourceStagingRoot;
-        var backupRoot = Path.Combine(targetStagingRoot, "backup");
         var sourceRetireRoot = Path.Combine(sourceStagingRoot, "retired");
         var committedOutputs = new List<TransactionFileOwnership>();
         var backups = new List<(string BackupPath, string OriginalPath)>();
@@ -697,26 +699,8 @@ public sealed class FileOrganizationService
             await ValidateSourceExpectationsAsync(plan.SourceFileExpectations, cancellationToken);
             foreach (var mapping in mappings)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                await ValidateTargetExpectationsAsync(
-                    plan.PreviewTargetExpectations.Where(expected => PathsEqual(expected.Path, mapping.FinalPath)), cancellationToken);
-                Directory.CreateDirectory(Path.GetDirectoryName(mapping.FinalPath)!);
-                if (File.Exists(mapping.FinalPath))
-                {
-                    var backupPath = Path.Combine(
-                        backupRoot,
-                        "existing",
-                        Path.GetRelativePath(plan.TargetDirectory, mapping.FinalPath));
-                    Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
-                    await FileSharingRetry.MoveAsync(mapping.FinalPath, backupPath, cancellationToken);
-                    backups.Add((backupPath, mapping.FinalPath));
-                    await ValidateBackedUpTargetAsync(plan.PreviewTargetExpectations, mapping.FinalPath, backupPath, cancellationToken);
-                }
-                var ownership = await FileSharingRetry.RunAsync(() => TransactionFileOwnership.Capture(
-                    mapping.StagedPath, mapping.FinalPath, targetStagingRoot, ComputeSha256(mapping.StagedPath)),
-                    "capture-ownership", mapping.StagedPath, cancellationToken);
-                await FileSharingRetry.MoveAsync(mapping.StagedPath, mapping.FinalPath, cancellationToken);
-                committedOutputs.Add(ownership);
+                committedOutputs.Add(await CommitOutputAsync(
+                    plan, mapping, targetStagingRoot, backups, allowOverwrite, cancellationToken));
             }
 
             if (crossVolumeCopy)
@@ -915,7 +899,6 @@ public sealed class FileOrganizationService
         var targetPayloadRoot = crossVolumeCopy
             ? Path.Combine(targetStagingRoot, "payload")
             : sourceStagingRoot;
-        var backupRoot = Path.Combine(targetStagingRoot, "backup");
         var sourceRetireRoot = Path.Combine(sourceStagingRoot, "retired");
         var committedOutputs = new List<TransactionFileOwnership>();
         var backups = new List<(string BackupPath, string OriginalPath)>();
@@ -1086,26 +1069,8 @@ public sealed class FileOrganizationService
             await ValidateSourceExpectationsAsync(plan.SourceFileExpectations, cancellationToken);
             foreach (var mapping in mappings)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                await ValidateTargetExpectationsAsync(
-                    plan.PreviewTargetExpectations.Where(expected => PathsEqual(expected.Path, mapping.FinalPath)), cancellationToken);
-                Directory.CreateDirectory(Path.GetDirectoryName(mapping.FinalPath)!);
-                if (File.Exists(mapping.FinalPath))
-                {
-                    var backupPath = Path.Combine(
-                        backupRoot,
-                        "existing",
-                        Path.GetRelativePath(plan.TargetDirectory, mapping.FinalPath));
-                    Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
-                    await FileSharingRetry.MoveAsync(mapping.FinalPath, backupPath, cancellationToken);
-                    backups.Add((backupPath, mapping.FinalPath));
-                    await ValidateBackedUpTargetAsync(plan.PreviewTargetExpectations, mapping.FinalPath, backupPath, cancellationToken);
-                }
-                var ownership = await FileSharingRetry.RunAsync(() => TransactionFileOwnership.Capture(
-                    mapping.StagedPath, mapping.FinalPath, targetStagingRoot, ComputeSha256(mapping.StagedPath)),
-                    "capture-ownership", mapping.StagedPath, cancellationToken);
-                await FileSharingRetry.MoveAsync(mapping.StagedPath, mapping.FinalPath, cancellationToken);
-                committedOutputs.Add(ownership);
+                committedOutputs.Add(await CommitOutputAsync(
+                    plan, mapping, targetStagingRoot, backups, allowOverwrite, cancellationToken));
             }
 
             foreach (var stagedVideo in stagedVideos)
@@ -1433,31 +1398,62 @@ public sealed class FileOrganizationService
     {
         foreach (var expectation in expectations)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            FileSystemPathSemantics.ValidateCanonicalPath(expectation.Path);
-            FileSystemPathSemantics.ValidateUnambiguousPath(expectation.Path);
-            var exists = File.Exists(expectation.Path);
-            if (Directory.Exists(expectation.Path) || exists != expectation.Exists ||
-                new FileInfo(expectation.Path).LinkTarget is not null)
-                throw new IOException($"Target occupancy changed after preview: {expectation.Path}");
-            if (exists && expectation.ExpectedSha256 is { } hash &&
-                !string.Equals(await ComputeSidecarSha256Async(expectation.Path, cancellationToken).ConfigureAwait(false),
-                    hash, StringComparison.OrdinalIgnoreCase))
-                throw new IOException($"Target contents changed after preview: {expectation.Path}");
+            await ValidateTargetExpectationAsync(expectation, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    private static async Task ValidateBackedUpTargetAsync(IEnumerable<TargetFileExpectation> expectations,
-        string originalPath, string backupPath, CancellationToken cancellationToken)
+    private static async Task ValidateTargetExpectationAsync(TargetFileExpectation expectation, CancellationToken cancellationToken)
     {
-        var expected = expectations.FirstOrDefault(item => PathsEqual(item.Path, originalPath));
-        if (expected is null) return;
-        // Validate the bytes actually moved, closing the check-to-backup window. The backup
-        // is registered first, so any unexpected external version is restored on failure.
-        if (!expected.Exists || expected.ExpectedSha256 is { } hash &&
-            !string.Equals(await ComputeSidecarSha256Async(backupPath, cancellationToken).ConfigureAwait(false),
+        cancellationToken.ThrowIfCancellationRequested();
+        FileSystemPathSemantics.ValidateCanonicalPath(expectation.Path);
+        FileSystemPathSemantics.ValidateUnambiguousPath(expectation.Path);
+        var exists = File.Exists(expectation.Path);
+        if (Directory.Exists(expectation.Path) || exists != expectation.Exists ||
+            new FileInfo(expectation.Path).LinkTarget is not null)
+            throw new IOException($"Target occupancy changed after preview: {expectation.Path}");
+        if (exists && expectation.ExpectedSha256 is { } hash &&
+            !string.Equals(await ComputeSidecarSha256Async(expectation.Path, cancellationToken).ConfigureAwait(false),
                 hash, StringComparison.OrdinalIgnoreCase))
-            throw new IOException($"Target changed while preparing its backup: {originalPath}");
+            throw new IOException($"Target contents changed after preview: {expectation.Path}");
+    }
+
+    private async Task<TransactionFileOwnership> CommitOutputAsync(SavePlan plan,
+        (string StagedPath, string FinalPath) mapping, string targetStagingRoot,
+        ICollection<(string BackupPath, string OriginalPath)> backups, bool allowOverwrite,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var finalPath = Path.GetFullPath(mapping.FinalPath);
+        var expected = plan.PreviewTargetExpectations.FirstOrDefault(item =>
+            FileSystemPathSemantics.PathComparer.Equals(Path.GetFullPath(item.Path), finalPath));
+        if (expected is not null)
+            await ValidateTargetExpectationAsync(expected, cancellationToken);
+        _afterTargetRecheck?.Invoke(mapping.FinalPath);
+
+        // A reviewed replacement requires a successful move of the original to backup.
+        // Publication uses a non-overwriting move for a target that was reviewed as absent.
+        if (expected?.Exists ?? File.Exists(mapping.FinalPath))
+        {
+            if (!allowOverwrite)
+                throw new IOException($"目标 metadata 文件已存在，未确认覆盖：{mapping.FinalPath}");
+            var backupPath = Path.Combine(targetStagingRoot, "backup", "existing",
+                Path.GetRelativePath(plan.TargetDirectory, mapping.FinalPath));
+            Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
+            await FileSharingRetry.MoveAsync(mapping.FinalPath, backupPath, cancellationToken);
+            backups.Add((backupPath, mapping.FinalPath));
+            // Register the moved bytes before checking them so rollback can restore an unexpected version.
+            if (expected?.ExpectedSha256 is { } hash &&
+                !string.Equals(await ComputeSidecarSha256Async(backupPath, cancellationToken),
+                    hash, StringComparison.OrdinalIgnoreCase))
+                throw new IOException($"Target changed while preparing its backup: {mapping.FinalPath}");
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(mapping.FinalPath)!);
+        var ownership = await FileSharingRetry.RunAsync(() => TransactionFileOwnership.Capture(
+            mapping.StagedPath, mapping.FinalPath, targetStagingRoot, ComputeSha256(mapping.StagedPath)),
+            "capture-ownership", mapping.StagedPath, cancellationToken);
+        await FileSharingRetry.MoveAsync(mapping.StagedPath, mapping.FinalPath, cancellationToken);
+        return ownership;
     }
 
     private static async Task ValidateRetiredSourceAsync(IEnumerable<SourceFileExpectation> expectations,
