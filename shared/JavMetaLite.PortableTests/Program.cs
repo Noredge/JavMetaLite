@@ -320,33 +320,44 @@ internal static partial class Program
         var invalidVideoLink = Path.Combine(temp.Path, "parts/DEMO-002-cd3.mp4");
         File.CreateSymbolicLink(invalidVideoLink, invalidVideoLink);
         var danglingPart = Path.Combine(temp.Path, "parts/DEMO-002-cd4.mp4");
-        File.CreateSymbolicLink(danglingPart, Path.Combine(temp.Path, "missing/DEMO-002-cd4.mp4"));
+        var missingTarget = Path.Combine(temp.Path, "missing/DEMO-002-cd4.mp4");
+        File.CreateSymbolicLink(danglingPart, missingTarget);
+        var unrelatedPart = Path.Combine(temp.Path, "parts/DEMO-0020-cd4.mp4");
+        File.CreateSymbolicLink(unrelatedPart, missingTarget);
         Check(!File.Exists(FileSystemPathSemantics.CanonicalizePath(danglingPart)),
             "The dangling link fixture must resolve to a missing file without throwing");
         using var token = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var found = await MovieInputDiscovery.DiscoverAsync([temp.Path, dotted], true, token.Token);
         Equal(3, found.VideoPaths.Count);
         Equal(2, found.MovieFileSets.Count);
+        Equal(3, found.Diagnostics.Count);
         Check(found.MovieFileSets.Any(x => x.VideoPaths.Count == 2), "CD pair was not grouped");
         Check(found.SkippedDirectoryCount >= 1, "Directory symlink not skipped");
-        Check(found.Diagnostics.Any(diagnostic => diagnostic.Path == invalidVideoLink &&
-            diagnostic.Kind == MovieFileDiscoveryDiagnosticKind.ReadFailed), "Unresolvable file link was not diagnosed");
         var expectedParts = new[] { firstPart, lastPart }.Select(FileSystemPathSemantics.CanonicalizePath).ToArray();
         Check(MovieFileSet.Discover(firstPart).VideoPaths.SequenceEqual(expectedParts),
             "The bad sibling discarded the CD group on single-file import");
         var selected = await MovieInputDiscovery.DiscoverAsync([firstPart], false, token.Token);
+        Equal(2, selected.Diagnostics.Count);
         Check(selected.MovieFileSets.Single().VideoPaths.SequenceEqual(expectedParts),
             "The bad sibling discarded the CD group when selecting one part");
         foreach (var badPart in new[] { invalidVideoLink, danglingPart })
         {
             var diagnosticPath = Path.Combine(Path.GetDirectoryName(expectedParts[0])!, Path.GetFileName(badPart));
-            Check(found.Diagnostics.Any(diagnostic => diagnostic.Path == diagnosticPath &&
+            Check(found.Diagnostics.Any(diagnostic => diagnostic.Path == badPart &&
                 diagnostic.Kind == MovieFileDiscoveryDiagnosticKind.ReadFailed),
                 $"Broken sibling was not diagnosed during folder discovery: {badPart}");
             Check(selected.Diagnostics.Any(diagnostic => diagnostic.Path == diagnosticPath &&
                 diagnostic.Kind == MovieFileDiscoveryDiagnosticKind.ReadFailed),
                 $"Broken sibling was not diagnosed when selecting one part: {badPart}");
         }
+        Check(found.Diagnostics.Any(diagnostic => diagnostic.Path == unrelatedPart &&
+            diagnostic.Kind == MovieFileDiscoveryDiagnosticKind.ReadFailed),
+            "A folder scan missed a dangling link outside the selected CD group");
+        var explicitlySelectedErrors = new List<string>();
+        var explicitSelection = MovieFileSet.Group([firstPart, lastPart, unrelatedPart],
+            (path, _) => explicitlySelectedErrors.Add(path), token.Token);
+        Check(explicitSelection.Single().VideoPaths.SequenceEqual(expectedParts), "A selected broken link displaced the CD group");
+        Check(explicitlySelectedErrors.Contains(unrelatedPart), "An explicitly selected broken link was not diagnosed");
         Equal("DEMO-001", MovieIdParser.TryExtract(dotted));
     }
 

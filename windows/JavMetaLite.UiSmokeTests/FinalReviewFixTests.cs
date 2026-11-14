@@ -42,40 +42,48 @@ internal static partial class Program
         await TestSavePreflightCancellationAsync(Path.Combine(root, "save-preflight"));
         await TestSaveExecutionCancellationAsync(Path.Combine(root, "save-execution"));
         await TestDirectImportWarningsAsync(Path.Combine(root, "direct-import"));
-        Console.WriteLine("UI PASS viewerApplyBusy=True lateMainPreviewRejected=True retryComparisonCancelRecovers=True batchPathConflictsBlocked=True sharedExtrafanartNamespace=True unreadableNfoProtected=True saveRechecksCancelable=True directImportLinkWarnings=True");
+        Console.WriteLine("UI PASS viewerApplyBusy=True lateMainPreviewRejected=True retryComparisonCancelRecovers=True batchPathConflictsBlocked=True sharedExtrafanartNamespace=True unreadableNfoProtected=True saveRechecksCancelable=True directImportLinkWarnings=True scopedLinkWarnings=True");
     }
 
     private static async Task TestDirectImportWarningsAsync(string root)
     {
         foreach (var fromDrop in new[] { false, true })
+        foreach (var scenario in new[] { "related-sibling", "unrelated-sibling", "explicit-selection" })
         {
-            var source = Directory.CreateDirectory(Path.Combine(root, fromDrop ? "drop" : "picker")).FullName;
+            var source = Directory.CreateDirectory(Path.Combine(root, fromDrop ? "drop" : "picker", scenario)).FullName;
             var first = Path.Combine(source, "RBD-183-cd1.mp4");
             var second = Path.Combine(source, "RBD-183-cd2.mp4");
-            var broken = Path.Combine(source, "RBD-183-cd3.mp4");
+            var related = scenario == "related-sibling";
+            var broken = Path.Combine(source, related ? "RBD-183-cd3.mp4" : "RBD-184.mp4");
             File.WriteAllText(first, "first part");
             File.WriteAllText(second, "second part");
             File.WriteAllText(Path.Combine(source, "movie.nfo"), "<movie><title>Folder title</title></movie>");
-            File.CreateSymbolicLink(broken, Path.Combine(source, "missing", "RBD-184-cd1.mp4"));
+            File.CreateSymbolicLink(broken, Path.Combine(source, "missing", "RBD-183-cd3.mp4"));
             var window = new MainWindow(new AppPreferencesStore(Path.Combine(source, "settings")))
                 { ShowActivated = false, ShowInTaskbar = false };
             window.Show();
             try
             {
-                string[] paths = fromDrop ? [first, broken] : [first];
+                string[] paths = scenario == "explicit-selection" ? [first, second, broken] : [first, second];
                 var method = fromDrop ? "ImportDroppedPathsAsync" : "AddMovieFilesAsync";
                 Task? import = null;
                 _ = window.Dispatcher.BeginInvoke(() => import = (Task)FinalReviewInvoke(window, method, (object)paths)!);
-                await UntilStableAsync(() => Application.Current.Windows.OfType<DiscoveryDetailsWindow>()
-                    .Any(dialog => dialog.Owner == window), "Direct import did not show an unreadable-link warning.");
-                var warning = Application.Current.Windows.OfType<DiscoveryDetailsWindow>().Single(dialog => dialog.Owner == window);
-                var details = ((TextBox)warning.FindName("DetailsText")).Text;
-                CoverAssert(details.Contains(broken) && details.Contains(LocalizationService.Get("Discovery.SkippedMovieFiles", 1)),
-                    "Direct import did not identify the skipped link exactly once.");
+                await UntilStableAsync(() => import?.IsCompleted == true || Application.Current.Windows
+                    .OfType<DiscoveryDetailsWindow>().Any(dialog => dialog.Owner == window), "Direct import did not respond.");
+                var warning = Application.Current.Windows.OfType<DiscoveryDetailsWindow>()
+                    .SingleOrDefault(dialog => dialog.Owner == window);
+                CoverAssert((warning is not null) == (scenario != "unrelated-sibling"),
+                    $"Unexpected warning behavior for {method} with {scenario}.");
+                if (warning is not null)
+                {
+                    var details = ((TextBox)warning.FindName("DetailsText")).Text;
+                    CoverAssert(details.Contains(broken) && details.Contains(LocalizationService.Get("Discovery.SkippedMovieFiles", 1)),
+                        "Direct import did not identify the skipped link exactly once.");
+                    warning.Close();
+                }
                 var job = ((IList)FinalReviewField(window, "_movieQueue")).Cast<MovieJob>().Single();
                 CoverAssert(job.VideoPaths.SequenceEqual([first, second]) && job.Metadata.Title == "Folder title" &&
                     !job.LocalNfoSaveBlocked, "A dangling link was queued as a part or displaced the folder NFO.");
-                warning.Close();
                 await UntilStableAsync(() => import?.IsCompleted == true, "Direct import did not finish after the warning.");
                 await import!;
             }

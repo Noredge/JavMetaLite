@@ -113,13 +113,19 @@ public sealed class MovieFileSet
             .Where(part => part.IsMultipart)
             .Select(GetGroupKey)
             .ToHashSet(FileSystemPathSemantics.PathComparer);
+        Action<string, Exception>? reportUnreadableSibling = onUnreadableFile is null ? null : (path, error) =>
+        {
+            // A broken link may have no usable resolved name. Match its directory entry instead.
+            if (selectedMultipartKeys.Contains(GetGroupKey(ParsePartName(path))))
+                onUnreadableFile(path, error);
+        };
         var expandedParts = new List<MovieFilePart>(selectedParts);
         foreach (var directory in selectedParts
                      .Where(part => part.IsMultipart)
                      .Select(part => Path.GetDirectoryName(part.Path)!)
                      .Distinct(FileSystemPathSemantics.PathComparer))
         {
-            expandedParts.AddRange(DiscoverParts(Directory.EnumerateFiles(directory), onUnreadableFile, cancellationToken)
+            expandedParts.AddRange(DiscoverParts(Directory.EnumerateFiles(directory), reportUnreadableSibling, cancellationToken)
                 .Where(part => selectedMultipartKeys.Contains(GetGroupKey(part))));
         }
 
@@ -174,7 +180,11 @@ public sealed class MovieFileSet
     private static MovieFilePart Analyze(string videoPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(videoPath);
-        var fullPath = FileSystemPathSemantics.CanonicalizePath(videoPath);
+        return ParsePartName(FileSystemPathSemantics.CanonicalizePath(videoPath));
+    }
+
+    private static MovieFilePart ParsePartName(string fullPath)
+    {
         var stem = Path.GetFileNameWithoutExtension(fullPath);
         var match = CdSuffixPattern.Match(stem);
         if (!match.Success || !int.TryParse(match.Groups["number"].Value, out var partNumber) || partNumber <= 0)

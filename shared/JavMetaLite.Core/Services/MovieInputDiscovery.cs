@@ -63,7 +63,7 @@ public static class MovieInputDiscovery
             {
                 pendingDirectories.Push(inputPath);
             }
-            else
+            else if (MarkUnreadable(inputPath))
             {
                 diagnostics.Add(new MovieFileDiscoveryDiagnostic(inputPath, "路径不存在或无法访问。")
                 { Kind = MovieFileDiscoveryDiagnosticKind.PathUnavailable });
@@ -163,12 +163,18 @@ public static class MovieInputDiscovery
                 ReportUnreadableFile(path, exception);
                 return;
             }
+            var isVideo = VideoFileSupport.HasSupportedExtension(fullPath);
+            if ((isVideo || VideoFileSupport.HasSupportedExtension(path)) && !File.Exists(fullPath))
+            {
+                ReportUnreadableFile(path, new FileNotFoundException($"找不到解析后的影片文件：{fullPath}", fullPath));
+                return;
+            }
             if (!seenFiles.Add(fullPath))
             {
                 return;
             }
 
-            if (VideoFileSupport.IsSupportedExistingFile(fullPath))
+            if (isVideo)
             {
                 if (MacFileIdentity.TryRead(fullPath, out var identity, out var identityError))
                 {
@@ -191,8 +197,21 @@ public static class MovieInputDiscovery
 
         void ReportUnreadableFile(string path, Exception exception)
         {
-            if (unreadableFiles.Add(path))
+            if (MarkUnreadable(path))
                 diagnostics.Add(MovieFileDiscoveryDiagnostic.FromException(path, exception));
+        }
+
+        bool MarkUnreadable(string path)
+        {
+            // A folder scan and a sibling scan can reach the same entry through different parent paths.
+            var key = path;
+            try
+            {
+                if (Path.GetDirectoryName(path) is { } parent)
+                    key = Path.Combine(FileSystemPathSemantics.CanonicalizePath(parent), Path.GetFileName(path));
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+            return unreadableFiles.Add(key);
         }
     }
 }
