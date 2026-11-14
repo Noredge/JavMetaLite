@@ -56,7 +56,7 @@ internal sealed partial class Workspace
                         throw new RpcError(-32010, "REVISION_CONFLICT", "The review changed while resolving the browser address.");
                     return new { source = resolved.SourceName, url = resolved.InitialUrl, jobId = entry.Id, reviewRevision = revision };
                 }
-            });
+            }, readOnly: true);
         }
     }
 

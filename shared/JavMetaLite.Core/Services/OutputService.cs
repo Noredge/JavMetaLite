@@ -102,7 +102,7 @@ public sealed class OutputService : IDisposable
 
         using var timing = new SaveTimingLog("metadata", metadata.Id);
         timing.Begin("coverRead");
-        DownloadedImage? cover = null;
+        byte[]? cover = null;
         if (options.DownloadPoster || options.DownloadFanart)
         {
             AppLog.Info($"读取封面 id={metadata.Id} source={metadata.SourceDisplayName}");
@@ -192,14 +192,14 @@ public sealed class OutputService : IDisposable
         timing.Complete();
         return new SaveResult(nfoPath, posterPath, fanartPath, extraPaths, options.DownloadFanart && cover is not null);
 
-        async Task ProcessAndWriteAsync(string path, DownloadedImage image, bool poster)
+        async Task ProcessAndWriteAsync(string path, byte[] image, bool poster)
         {
             timing.Begin("imageProcess");
             var png = Path.GetExtension(path).Equals(".png", StringComparison.OrdinalIgnoreCase);
             var bytes = poster
-                ? _imageProcessor.CreatePoster(image.Bytes, png)
-                : png ? _imageProcessor.CreateFanartPng(image.Bytes)
-                    : _imageProcessor.CreateFanartJpeg(image.Bytes);
+                ? _imageProcessor.CreatePoster(image, png)
+                : png ? _imageProcessor.CreateFanartPng(image)
+                    : _imageProcessor.CreateFanartJpeg(image);
             timing.Begin("imageWrite");
             await WriteImageAsync(path, bytes, options.OverwriteExisting, cancellationToken);
         }
@@ -263,7 +263,7 @@ public sealed class OutputService : IDisposable
             .ToArray();
     }
 
-    private async Task<DownloadedImage> DownloadBestCoverAsync(MovieMetadata metadata, CancellationToken cancellationToken)
+    private async Task<byte[]> DownloadBestCoverAsync(MovieMetadata metadata, CancellationToken cancellationToken)
     {
         var candidates = new[] { metadata.CoverUrl, metadata.FallbackCoverUrl, metadata.PosterUrl }
             .Where(ArtworkLocationHelper.IsSupported)
@@ -292,12 +292,12 @@ public sealed class OutputService : IDisposable
         throw new InvalidDataException("所有封面地址都下载失败，可能需要浏览器验证。", lastError);
     }
 
-    private async Task<List<DownloadedImage>> DownloadScreenshotsAsync(
+    private async Task<List<byte[]>> DownloadScreenshotsAsync(
         IReadOnlyList<string> urls,
         CancellationToken cancellationToken,
         bool requireCompleteSelection = false)
     {
-        var images = new List<DownloadedImage>();
+        var images = new List<byte[]>();
         var hashes = new HashSet<string>(StringComparer.Ordinal);
         var failures = 0;
         var locations = SelectScreenshotLocations(urls);
@@ -317,7 +317,7 @@ public sealed class OutputService : IDisposable
             {
                 if (image is null)
                     failures++;
-                else if (hashes.Add(image.Hash))
+                else if (hashes.Add(Convert.ToHexString(SHA256.HashData(image))))
                 {
                     images.Add(image);
                 }
@@ -333,7 +333,7 @@ public sealed class OutputService : IDisposable
         }
         return images;
 
-        async Task<DownloadedImage?> DownloadSampleAsync(string url)
+        async Task<byte[]?> DownloadSampleAsync(string url)
         {
             try
             {
@@ -372,18 +372,12 @@ public sealed class OutputService : IDisposable
         return selected;
     }
 
-    private async Task<DownloadedImage> DownloadImageAsync(string url, CancellationToken cancellationToken)
+    private async Task<byte[]> DownloadImageAsync(string url, CancellationToken cancellationToken)
     {
         if (ArtworkLocationHelper.TryGetLocalPath(url, out var localPath))
         {
-            var bytes = await ArtworkLocationHelper.ReadLocalImageAsync(localPath, _imageProcessor, cancellationToken);
-            var dimensions = _imageProcessor.GetDimensions(bytes);
-            return new DownloadedImage(
-                localPath,
-                bytes,
-                dimensions.Width,
-                dimensions.Height,
-                Convert.ToHexString(SHA256.HashData(bytes)));
+            // Reading the local image already validates it through the decoder.
+            return await ArtworkLocationHelper.ReadLocalImageAsync(localPath, _imageProcessor, cancellationToken);
         }
 
         Exception? lastError = null;
@@ -423,13 +417,8 @@ public sealed class OutputService : IDisposable
                     throw new InvalidDataException("下载到的图片太小，可能是网站错误页面。 ");
                 }
 
-                var dimensions = _imageProcessor.GetDimensions(bytes);
-                return new DownloadedImage(
-                    candidate,
-                    bytes,
-                    dimensions.Width,
-                    dimensions.Height,
-                    Convert.ToHexString(SHA256.HashData(bytes)));
+                _ = _imageProcessor.GetDimensions(bytes);
+                return bytes;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -488,8 +477,6 @@ public sealed class OutputService : IDisposable
             }
         }
     }
-
-    private sealed record DownloadedImage(string Url, byte[] Bytes, int Width, int Height, string Hash);
 
     public void Dispose()
     {

@@ -2,6 +2,7 @@
 """Export current source, with a verifiable manifest and stable ZIP entry metadata."""
 import argparse
 import datetime
+import hashlib
 from pathlib import Path
 import stat
 import subprocess
@@ -34,14 +35,14 @@ for relative in sorted(set(paths)):
     require(not path.is_symlink(), 'Source archive refuses symlinks: ' + relative)
     if path.resolve() == output:
         continue
-    files[relative] = {'sha256': digest(path), 'mode': stat.S_IMODE(path.stat().st_mode)}
-    contents[relative] = path.read_bytes()
+    data = path.read_bytes()
+    files[relative] = {'sha256': hashlib.sha256(data).hexdigest(), 'mode': stat.S_IMODE(path.stat().st_mode)}
+    contents[relative] = data
 snapshot = ('Working tree snapshot, including current uncommitted implementation changes.\n'
             f'Baseline HEAD: {source["gitCommit"]}\n'
             'SOURCE-MANIFEST.json records exact exported bytes and executable modes.\n'
             'No Git metadata, SDK, build products or user media are included.\n'
             'See docs/macos/STATUS.md for verified scope and limitations.\n').encode()
-import hashlib
 contents['SOURCE-SNAPSHOT.txt'] = snapshot
 files['SOURCE-SNAPSHOT.txt'] = {'sha256': hashlib.sha256(snapshot).hexdigest(), 'mode': 0o644}
 contents['SOURCE-MANIFEST.json'] = canonical_bytes({'schemaVersion': 1, 'kind': 'source-export', 'source': source, 'files': files})

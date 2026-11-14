@@ -32,6 +32,8 @@ internal static partial class Program
     private static async Task TestFinalReviewFixesAsync(string root)
     {
         Directory.CreateDirectory(root);
+        await TestArtworkDownloadDeadlineAsync(Path.Combine(root, "preview-deadline"));
+        await TestViewerRestartsFaultedImageAsync();
         await TestViewerApplyPreviewLifecycleAsync(Path.Combine(root, "viewer"));
         await TestRetryComparisonCancellationAsync(Path.Combine(root, "retry"));
         await TestBatchPathConflictPreviewAsync(Path.Combine(root, "batch"));
@@ -90,6 +92,58 @@ internal static partial class Program
         var pixel = new byte[4];
         converted.CopyPixels(new Int32Rect(converted.PixelWidth / 2, converted.PixelHeight / 2, 1, 1), pixel, 4, 0);
         return pixel[0] > 200 && pixel[2] < 20;
+    }
+
+    private static async Task TestArtworkDownloadDeadlineAsync(string root)
+    {
+        using var client = new HttpClient(new FinalReviewHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StalledPreviewContent() })))
+        {
+            Timeout = TimeSpan.FromMilliseconds(150)
+        };
+        var window = new MainWindow(new AppPreferencesStore(root));
+        ReplaceStabilityClient(window, "_previewHttpClient", client);
+        using var cleanup = new CancellationTokenSource();
+        try
+        {
+            var download = (Task<byte[]>)FinalReviewInvoke(window, "DownloadPreviewImageAsync",
+                "https://preview.invalid/cover.jpg", cleanup.Token)!;
+            try
+            {
+                await download.WaitAsync(TimeSpan.FromSeconds(5));
+                throw new InvalidOperationException("A stalled preview body returned successfully.");
+            }
+            catch (InvalidDataException error)
+            {
+                CoverAssert(error.InnerException is IOException { InnerException: OperationCanceledException },
+                    "The preview deadline did not cancel the response body.");
+            }
+        }
+        finally { cleanup.Cancel(); window.Close(); }
+    }
+
+    private static async Task TestViewerRestartsFaultedImageAsync()
+    {
+        var other = new ArtworkViewerItem("Initial fixture",
+            BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[4], 4));
+        var item = new ArtworkViewerItem("Fixture", null, "https://preview.invalid/retry.jpg");
+        var calls = 0;
+        Func<ArtworkViewerItem, CancellationToken, Task<ArtworkViewerLoadedImage>> loader = (_, _) =>
+        {
+            if (++calls == 1) throw new IOException("Synthetic synchronous image failure.");
+            return Task.FromResult(new ArtworkViewerLoadedImage(
+                BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[4], 4), 1, 1));
+        };
+        // The constructor's preload encounters the synchronous failure.
+        var viewer = new ArtworkViewerWindow([other, item], 0, loader);
+        try
+        {
+            CoverAssert(calls == 1 && item.Image is null, "The initial image preload did not fail as expected.");
+            var retry = (Task<ArtworkViewerLoadedImage>)FinalReviewInvoke(viewer, "EnsureImageLoadedAsync", item)!;
+            await retry.WaitAsync(TimeSpan.FromSeconds(5));
+            CoverAssert(calls == 2 && item.Image is not null, "Revisiting the image did not retry its failed load.");
+        }
+        finally { viewer.Close(); }
     }
 
     private static async Task TestViewerApplyPreviewLifecycleAsync(string root)
@@ -324,5 +378,14 @@ internal static partial class Program
     private sealed class FinalReviewHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> action) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => action(request, cancellationToken);
+    }
+
+    private sealed class StalledPreviewContent : HttpContent
+    {
+        protected override bool TryComputeLength(out long length) { length = 0; return false; }
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            SerializeToStreamAsync(stream, context, CancellationToken.None);
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken) =>
+            Task.Delay(Timeout.Infinite, cancellationToken);
     }
 }

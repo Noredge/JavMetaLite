@@ -208,10 +208,8 @@ internal static partial class Program
             var old = "<movie><title>Before preview</title></movie>";
             if (existed) File.WriteAllText(nfo, old);
             var metadata = new MovieMetadata { Id = "DEMO-051", Title = "Planned value" };
-            var plan = FileOrganizationService.BuildPlan(video, metadata, NfoOnly, InPlace) with
-            {
-                PreviewTargetExpectations = [new(FileSystemPathSemantics.CanonicalizePath(nfo), existed, existed ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(nfo))) : null)]
-            };
+            var plan = FileOrganizationService.BuildPlan(video, metadata, NfoOnly, InPlace);
+            plan = FileOrganizationService.BindPreviewTargets(plan, metadata);
             var external = "<movie><title>External write during commit</title></movie>";
             var progress = new ImmediateProgress<FileTransactionProgress>(p => { if (p.Stage == FileTransactionStage.Committing) File.WriteAllText(nfo, external); });
             using var output = new OutputService(Images);
@@ -275,12 +273,16 @@ internal static partial class Program
         temp.Write("parts/DEMO-002-cd1.mp4", "SYNTHETIC");
         temp.Write("parts/DEMO-002-cd2.mp4", "SYNTHETIC");
         Directory.CreateSymbolicLink(Path.Combine(temp.Path, "parts/loop"), temp.Path);
+        var invalidVideoLink = Path.Combine(temp.Path, "DEMO-003.mp4");
+        File.CreateSymbolicLink(invalidVideoLink, invalidVideoLink);
         using var token = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var found = await MovieInputDiscovery.DiscoverAsync([temp.Path, dotted], true, token.Token);
         Equal(3, found.VideoPaths.Count);
         Equal(2, found.MovieFileSets.Count);
         Check(found.MovieFileSets.Any(x => x.VideoPaths.Count == 2), "CD pair was not grouped");
         Check(found.SkippedDirectoryCount >= 1, "Directory symlink not skipped");
+        Check(found.Diagnostics.Any(diagnostic => diagnostic.Path == invalidVideoLink &&
+            diagnostic.Kind == MovieFileDiscoveryDiagnosticKind.ReadFailed), "Unresolvable file link was not diagnosed");
         Equal("DEMO-001", MovieIdParser.TryExtract(dotted));
     }
 

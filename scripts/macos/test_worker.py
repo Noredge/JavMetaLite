@@ -543,6 +543,25 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(-32600, worker.receive(None)['error']['code'])
             malformed = worker.request('jobs.applyEdits', {'jobId': job['jobId'], 'expectedReviewRevision': job['reviewRevision']})
             self.assertEqual(-32602, malformed['error']['code'])
+            for field in ('series', 'contentId'):
+                rejected = worker.request('jobs.applyEdits', {
+                    'jobId': job['jobId'], 'expectedReviewRevision': job['reviewRevision'],
+                    'edits': {'title': 'Must not apply', field: 'read-only field'}})
+                self.reason(rejected, 'INVALID_PARAMS')
+                self.assertEqual(current, worker.get_job(job['jobId']))
+
+    def test_preferences_update_failure_preserves_current_value_until_retry(self):
+        with Worker(self.temp.name) as worker:
+            original = worker.request('preferences.get')['result']['includeIdInTitle']
+            settings = worker.data / 'settings.json'
+            settings.mkdir()  # A directory at the final file path forces the atomic write to fail.
+            update = {'includeIdInTitle': not original}
+            self.assertIn('error', worker.request('preferences.update', update))
+            self.assertEqual(original, worker.request('preferences.get')['result']['includeIdInTitle'])
+            settings.rmdir()
+            self.assertEqual(not original, worker.request('preferences.update', update)['result']['includeIdInTitle'])
+        with Worker(self.temp.name) as restarted:
+            self.assertEqual(not original, restarted.request('preferences.get')['result']['includeIdInTitle'])
 
 
     def make_media(self, relative, movie_id=None, nfo=True, artwork=False):
@@ -581,7 +600,9 @@ class WorkerTests(unittest.TestCase):
                 imported = worker.import_paths([video])
                 job = worker.get_job(imported['importedJobIds'][0])
                 job = worker.edit(job, {'title': 'Organized safely'})
-                custom = Path(self.temp.name) / mode / '自定义 目标'
+                sibling = Path(self.temp.name) / mode / '自定义 目标'
+                sibling.mkdir()
+                custom = sibling.with_name(sibling.name + '. ')
                 custom.mkdir()
                 preview = worker.preview(job, targetMode=mode, renameVideo=mode != 'VideoDirectory', customRootDirectory=str(custom))
                 if mode != 'VideoDirectory':
@@ -600,6 +621,7 @@ class WorkerTests(unittest.TestCase):
                     self.assertEqual((parent / 'DEMO-301').resolve(), destination.parent.resolve())
                     self.assertEqual('DEMO-301.mp4', destination.name)
                     self.assertFalse(video.exists())
+                    self.assertEqual([], list(sibling.iterdir()))
                 nfo = Path(current['localNfoPath'])
                 xml = ET.parse(nfo).getroot()
                 self.assertEqual('KEEP UNKNOWN XML', xml.findtext('customNode/nested'))
@@ -615,6 +637,12 @@ class WorkerTests(unittest.TestCase):
             target.parent.mkdir(parents=True)
             target.write_bytes(b'EXISTING DIFFERENT VIDEO')
             before = video.read_bytes()
+            for mode in ('0', '1', '2', '3', ' VideoDirectory'):
+                invalid = worker.request('save.preview', {
+                    'jobId': job['jobId'], 'expectedReviewRevision': job['reviewRevision'],
+                    'options': {'targetMode': mode, 'customRootDirectory': str(custom)}})
+                self.reason(invalid, 'INVALID_PARAMS')
+                self.assertEqual(job, worker.get_job(job['jobId']))
             preview = worker.preview(job, targetMode='CustomRootNumberFolder', renameVideo=True, customRootDirectory=str(custom))
             self.assertFalse(preview['canExecute'], preview)
             self.reason(worker.request('save.execute', {'planId': preview['planId']}), 'PATH_CONFLICT')
@@ -2231,7 +2259,9 @@ class ProviderWorkerTests(unittest.TestCase):
                     'responseGateFile': str(gate)})], resetRequests=True, worker=worker)
                 response = worker.request('browser.resolveTarget', params); operation = response['result']['operationId']
                 self.wait_requests(kind='httpResponseHeld', worker=worker)
-                self.assertEqual('running', worker.request('operations.get', {'operationId': operation})['result']['status'])
+                active = worker.request('operations.get', {'operationId': operation})['result']
+                self.assertEqual('running', active['status'])
+                self.assertTrue(active['readOnly'])
                 changed = worker.edit(job, {'title': 'Newer edit stays'})
             finally:
                 gate.unlink(missing_ok=True)

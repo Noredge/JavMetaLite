@@ -235,7 +235,10 @@ internal sealed partial class Workspace
             if (option.Name is not ("writeNfo" or "downloadPoster" or "downloadFanart" or "downloadExtrafanart" or "replaceLocalExtrafanart" or "overwriteExisting" or "includeIdInTitle" or "targetMode" or "renameVideo" or "customRootDirectory"))
                 throw new RpcError(-32602, "INVALID_PARAMS", "Unknown save option: " + option.Name);
         var mode = options.TryGetProperty("targetMode", out _) ? Text(options, "targetMode") : "VideoDirectory";
-        if (!Enum.TryParse<OrganizationTargetMode>(mode, false, out var target) || !Enum.IsDefined(target)) throw new RpcError(-32602, "INVALID_PARAMS", "Unknown organization mode.");
+        if (mode is not (nameof(OrganizationTargetMode.VideoDirectory) or nameof(OrganizationTargetMode.SourceNumberFolder)
+            or nameof(OrganizationTargetMode.CustomRootNumberFolder)))
+            throw new RpcError(-32602, "INVALID_PARAMS", "Unknown organization mode.");
+        var target = Enum.Parse<OrganizationTargetMode>(mode);
         var root = options.TryGetProperty("customRootDirectory", out var rootValue) && rootValue.ValueKind != JsonValueKind.Null ? Text(options, "customRootDirectory") : null;
         if (target == OrganizationTargetMode.CustomRootNumberFolder && (string.IsNullOrWhiteSpace(root) || !Path.IsPathFullyQualified(root) || !Directory.Exists(root)))
             throw new RpcError(-32010, "VOLUME_UNAVAILABLE", "Choose an existing, available custom root directory.");

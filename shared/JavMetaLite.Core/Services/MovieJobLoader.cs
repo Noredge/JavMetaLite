@@ -64,6 +64,7 @@ public static class MovieJobLoader
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            job.BeginLocalNfoRead();
             return new MovieJobLoadResult(
                 LocalMetadataLoadStatus.SidecarInspectionFailed,
                 null,

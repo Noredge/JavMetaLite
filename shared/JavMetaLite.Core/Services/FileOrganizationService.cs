@@ -432,6 +432,25 @@ public sealed class FileOrganizationService
         };
     }
 
+    public static SavePlan BindPreviewTargets(SavePlan plan, MovieMetadata metadata)
+    {
+        if (plan.HasBlockingConflicts) return plan;
+
+        var existingTargets = plan.OverwriteConflicts.ToHashSet(FileSystemPathSemantics.PathComparer);
+        var expectations = new List<TargetFileExpectation>();
+        foreach (var path in GetPlannedWritePaths(plan, metadata))
+        {
+            FileSystemPathSemantics.ValidateCanonicalPath(path);
+            FileSystemPathSemantics.ValidateUnambiguousPath(path);
+            var existedAtPlanning = existingTargets.Contains(path);
+            if (Directory.Exists(path) || File.Exists(path) != existedAtPlanning)
+                throw new IOException($"目标文件在准备预览时发生变化，请重新生成预览：{path}");
+            expectations.Add(new TargetFileExpectation(path, existedAtPlanning,
+                existedAtPlanning ? ComputeSha256(path) : null));
+        }
+        return plan with { PreviewTargetExpectations = expectations };
+    }
+
     public async Task<OrganizedSaveResult> ExecuteAsync(
         SavePlan plan,
         MovieMetadata metadata,

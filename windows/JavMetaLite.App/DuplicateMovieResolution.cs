@@ -25,6 +25,6 @@ internal static class DuplicateMovieResolution
         var configuration = first.Job.SaveConfiguration!;
         var plan = FileOrganizationService.BuildConfirmedMultipartPlan(ordered.Select(item => item.Job.VideoPath!),
             first.Job.Metadata, configuration.SaveOptions, configuration.OrganizationOptions, first.Job.CreateLocalSaveContext());
-        return new(first.Job, plan, first.ReviewRevision);
+        return new(first.Job, FileOrganizationService.BindPreviewTargets(plan, first.Job.Metadata), first.ReviewRevision);
     }
 }

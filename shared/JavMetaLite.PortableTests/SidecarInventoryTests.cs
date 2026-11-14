@@ -38,6 +38,19 @@ internal static partial class Program
         foreach (var path in new[] { cd1, cd2 })
             Equal(FileSystemPathSemantics.CanonicalizePath(folderNfo), LocalSidecarLocator.Locate(path, "DEMO-773", true, scope, default).NfoPath);
         scope.ValidateReusedDirectories(default);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            var firstPart = temp.Write("mixed-case-parts/DEMO-774-CD1.mp4", "PART ONE");
+            var secondPart = temp.Write("mixed-case-parts/demo-774-CD2.mp4", "PART TWO");
+            temp.Write("mixed-case-parts/movie.nfo", "<movie><title>ambiguous owner</title></movie>");
+            foreach (var path in new[] { firstPart, secondPart })
+            {
+                Equal(1, MovieFileSet.Discover(path).Parts.Count);
+                Equal(null, LocalSidecarLocator.Locate(path, "DEMO-774", true, scope, default).NfoPath);
+            }
+            scope.ValidateReusedDirectories(default);
+        }
         return Task.CompletedTask;
     }
 

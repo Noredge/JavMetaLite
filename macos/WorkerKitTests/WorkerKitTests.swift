@@ -166,6 +166,13 @@ struct WorkerKitTests {
         let json = JSONValue.object(["releaseDate": .string("Unknown / 2026"), "runtimeMinutes": .string("90+"), "rating": .string("N/A"), "actors": .array([.object(["name": .string("合成角色"), "imageUrl": .string("https://example.invalid/actor.png")])]), "plot": .string("line one\nline two"), "unknownFutureField": .bool(true)])
         #expect(try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(json)) == json)
     }
+    @Test func testJSONIntegerAccessorHandlesUnrepresentableNumbers() throws {
+        let value = try JSONDecoder().decode(JSONValue.self, from: Data("1e100".utf8))
+        #expect(value.intValue == 0)
+        #expect(JSONValue.number(.infinity).intValue == 0)
+        #expect(JSONValue.number(.nan).intValue == 0)
+        #expect(JSONValue.number(-42.75).intValue == -42)
+    }
     @Test func testSharedProtocolGoldenFixture() throws {
         let source = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let data = try Data(contentsOf: source.appendingPathComponent("contracts/worker-v1/golden.json"))

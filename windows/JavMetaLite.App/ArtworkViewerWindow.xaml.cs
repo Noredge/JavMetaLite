@@ -700,24 +700,19 @@ public partial class ArtworkViewerWindow : Window
                 item.PixelHeight));
         }
 
-        item.LoadTask ??= LoadImageCoreAsync(item);
+        // A loader may fault before the async call returns. Assign its task
+        // here and discard a completed failure when the user revisits the image.
+        if (item.LoadTask is null || item.LoadTask.IsFaulted || item.LoadTask.IsCanceled)
+            item.LoadTask = LoadImageCoreAsync(item);
         return item.LoadTask;
     }
 
     private async Task<ArtworkViewerLoadedImage> LoadImageCoreAsync(ArtworkViewerItem item)
     {
-        try
-        {
-            var loaded = await _imageLoader!(item, _lifetimeCancellation.Token);
-            item.SetLoadedImage(loaded);
-            RefreshThumbnailImage(item);
-            return loaded;
-        }
-        catch
-        {
-            item.LoadTask = null;
-            throw;
-        }
+        var loaded = await _imageLoader!(item, _lifetimeCancellation.Token);
+        item.SetLoadedImage(loaded);
+        RefreshThumbnailImage(item);
+        return loaded;
     }
 
     private void StartPreloading()

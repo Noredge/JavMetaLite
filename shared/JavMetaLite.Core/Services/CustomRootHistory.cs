@@ -17,7 +17,7 @@ public static class CustomRootHistory
         foreach (var entry in entries ?? [])
         {
             if (!TryNormalizePath(entry, out var path) ||
-                normalized.Contains(path, StringComparer.OrdinalIgnoreCase))
+                normalized.Contains(path, FileSystemPathSemantics.PathComparer))
             {
                 continue;
             }
@@ -53,16 +53,19 @@ public static class CustomRootHistory
             throw new InvalidOperationException("请选择自定义目标根目录。");
         }
 
-        var trimmed = candidate.Trim();
-        if (!Path.IsPathFullyQualified(trimmed))
+        // Windows accepts typed input. On macOS a selected path can legally
+        // end in a space or period, and trimming it can select a different directory.
+        var path = OperatingSystem.IsWindows() ? candidate.Trim() : candidate;
+        if (!Path.IsPathFullyQualified(path))
         {
             throw new InvalidOperationException("自定义目标根目录必须是绝对路径。");
         }
 
         try
         {
-            var fullPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(trimmed));
-            ValidateDirectorySegments(fullPath);
+            var fullPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+            if (OperatingSystem.IsWindows())
+                ValidateDirectorySegments(fullPath);
             return fullPath;
         }
         catch (Exception exception) when (

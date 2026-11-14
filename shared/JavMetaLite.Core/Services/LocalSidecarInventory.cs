@@ -71,7 +71,7 @@ internal sealed class LocalSidecarDirectoryInventory
         Files = entries.ToDictionary(entry => Path.GetFileName(entry.Path), entry => entry.Path, StringComparer.OrdinalIgnoreCase)
             .ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         VideoGroupKeys = Files.Values.Where(VideoFileSupport.HasSupportedExtension)
-            .Select(MovieFileSet.GetGroupKey).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+            .Select(MovieFileSet.GetGroupKey).ToFrozenSet(FileSystemPathSemantics.PathComparer);
         ExtrafanartPaths = Array.AsReadOnly(extraEntries.Select(entry => entry.Path)
             .Where(path => ArtworkExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
             .OrderBy(GetTrailingNumber).ThenBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase).ToArray());

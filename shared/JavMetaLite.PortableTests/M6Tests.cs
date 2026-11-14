@@ -1,3 +1,4 @@
+using JavMetaLite.Core.Models;
 using JavMetaLite.Core.Services;
 using SkiaSharp;
 
@@ -21,6 +22,14 @@ internal static partial class Program
             var alias = Path.Combine(Path.GetDirectoryName(video)!, "same-nfo-alias.nfo");
             File.CreateSymbolicLink(alias, FileSystemPathSemantics.CanonicalizePath(nfo));
             await Throws<IOException>(() => Task.FromResult(LocalSidecarLocator.Locate(video)));
+            using (var job = new MovieJob())
+            {
+                var result = await MovieJobLoader.LoadAsync(job, video, Images);
+                Equal(LocalMetadataLoadStatus.SidecarInspectionFailed, result.MetadataStatus);
+                job.InitializeSaveConfiguration(new MovieSaveConfiguration(NfoOnly, InPlace));
+                Check(job.LocalNfoSaveBlocked, "An unreadable sidecar directory must block saving.");
+                await Throws<InvalidOperationException>(() => { job.BeginSave(job.ReviewRevision); return Task.CompletedTask; });
+            }
             File.Delete(alias);
             var outside = temp.Write("outside.nfo", "<movie><title>DO NOT MODIFY</title></movie>");
             File.Delete(nfo); File.CreateSymbolicLink(nfo, outside);

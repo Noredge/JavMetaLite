@@ -77,7 +77,3 @@ swift scripts/macos/compare-image-output.swift --source reference.jpg --output p
 ```
 
 Measurement/live tools accept explicit inputs; inspect their `--help` before running. They may access real providers when opted in and are not release-pass evidence by themselves. The synthetic UI demo generator remains in [fixtures/macos](../fixtures/macos/README.md).
-
-## Removal decision
-
-All 46 existing files under `scripts/` are retained. No script is confirmed obsolete: build/release helpers have callers, optional measurements and live checks have documented uses, and the image comparison tool supplies a distinct manual check. No script has been moved merely to reduce the top-level file count, avoiding wrapper duplication and changes to release entry points.

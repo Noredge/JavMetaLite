@@ -10,7 +10,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 case "$TEST_PROFILE" in core|full) ;; *) fail 'Test profile must be core or full.' ;; esac
-parse_options "${BUILD_OPTIONS[@]}"
+# Bash 3.2 treats an empty array as unset under nounset.
+parse_options ${BUILD_OPTIONS[@]+"${BUILD_OPTIONS[@]}"}
 check_environment
 cd "$REPO_ROOT"
 LOG_DIR="$REPO_ROOT/artifacts/test-results/macos-$ARCH"
@@ -54,8 +55,6 @@ run_logged swift "${SWIFT_TEST_COMMAND[@]}"
 XCODE_ARGUMENTS=(--arch "$SWIFT_ARCH")
 if [ "$TEST_PROFILE" = core ]; then XCODE_ARGUMENTS+=(--check-only); fi
 run_logged xcode-sources python3 "$SCRIPT_DIR/test_xcode_sources.py" "${XCODE_ARGUMENTS[@]}"
-if [ -f "$SCRIPT_DIR/test_worker.py" ]; then
-  python3 "$SCRIPT_DIR/run_worker_suites.py" --mode development --profile "$TEST_PROFILE" --worker "$WORKER" --log-dir "$LOG_DIR" --jobs 2
-fi
+python3 "$SCRIPT_DIR/run_worker_suites.py" --mode development --profile "$TEST_PROFILE" --worker "$WORKER" --log-dir "$LOG_DIR" --jobs 2
 printf 'Automated test logs: %s\n' "$LOG_DIR"
 echo 'Interactive native UI, IME/VoiceOver, real removable volumes, SMB, live providers and notarization require separate recorded checks.'

@@ -842,6 +842,7 @@ public partial class MainWindow : Window
                 options,
                 organizationOptions,
                 _activeJob.CreateLocalSaveContext());
+            plan = FileOrganizationService.BindPreviewTargets(plan, _activeJob.Metadata);
         }
         catch (Exception exception)
         {
@@ -1166,6 +1167,7 @@ public partial class MainWindow : Window
                     continue;
                 }
 
+                plan = FileOrganizationService.BindPreviewTargets(plan, job.Metadata);
                 previewItems.Add(new BatchSavePreviewItem(job, plan, job.ReviewRevision));
             }
             catch (Exception exception)
@@ -3992,6 +3994,10 @@ public partial class MainWindow : Window
         {
             try
             {
+                // ResponseHeadersRead ends HttpClient's timeout when the headers arrive.
+                using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token, _lifetimeCancellation.Token);
+                deadline.CancelAfter(_previewHttpClient.Timeout == Timeout.InfiniteTimeSpan
+                    ? TimeSpan.FromSeconds(30) : _previewHttpClient.Timeout);
                 using var request = new HttpRequestMessage(HttpMethod.Get, candidate);
                 if (Uri.TryCreate(candidate, UriKind.Absolute, out var uri) &&
                     (uri.Host.EndsWith(".dmm.co.jp", StringComparison.OrdinalIgnoreCase) ||
@@ -4003,9 +4009,10 @@ public partial class MainWindow : Window
                 using var response = await _previewHttpClient.SendAsync(
                     request,
                     HttpCompletionOption.ResponseHeadersRead,
-                    token);
+                    deadline.Token);
                 response.EnsureSuccessStatusCode();
-                var bytes = await response.Content.ReadAsByteArrayAsync(token);
+                await response.Content.LoadIntoBufferAsync(ArtworkLocationHelper.MaximumLocalImageBytes, deadline.Token);
+                var bytes = await response.Content.ReadAsByteArrayAsync(deadline.Token);
                 if (bytes.Length < 128)
                 {
                     throw new InvalidDataException(LocalizationService.Get("Error.ImageTooSmall"));
@@ -4016,9 +4023,13 @@ public partial class MainWindow : Window
                 CachePreviewImage(cacheKey, bytes);
                 return bytes;
             }
-            catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
+            catch (OperationCanceledException) when (token.IsCancellationRequested || _lifetimeCancellation.IsCancellationRequested)
             {
                 throw;
+            }
+            catch (OperationCanceledException exception)
+            {
+                lastError = new IOException("Image preview exceeded the download deadline.", exception);
             }
             catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidDataException or NotSupportedException or FormatException)
             {

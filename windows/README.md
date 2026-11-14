@@ -18,7 +18,6 @@ Windows 10/11 x64. No separate .NET Runtime installation; the embedded browser r
 - Back up important media. Saves stop on failure or cancellation; keep recovery folders if restoration fails.
 - Sources may contain adult material. Respect their terms and applicable age/legal requirements.
 
-
 ## Build and run
 
 From the repository root, in PowerShell:

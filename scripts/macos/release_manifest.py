@@ -104,17 +104,28 @@ def inventory(root):
 
 def source_selected(relative):
     exact = {'global.json', 'NuGet.Config', 'LICENSE', 'THIRD_PARTY_NOTICES.md', '.gitignore',
-             '.github/workflows/macos.yml', 'docs/macos/THIRD_PARTY_NOTICES.md', 'docs/macos/PACKAGE.md'}
-    return relative in exact or relative.startswith(('windows/', 'shared/', 'macos/', 'scripts/macos/',
-                                                      'scripts/ci/', '.github/workflows/',
+             'docs/macos/THIRD_PARTY_NOTICES.md', 'docs/macos/PACKAGE.md'}
+    return relative in exact or relative.startswith(('windows/', 'shared/', 'macos/', 'scripts/',
+                                                      'packaging/', '.github/workflows/',
                                                       'contracts/', 'fixtures/', 'docs/macos/licenses/'))
 
 
 def export_paths(root):
-    ignored = {'bin', 'obj', '.git', '.build', '.swiftpm', '__pycache__', 'artifacts', 'TestResults', 'xcuserdata'}
-    return sorted(path.relative_to(root).as_posix() for path in root.rglob('*')
-                  if path.is_file() and not ignored.intersection(path.relative_to(root).parts)
-                  and path.name != '.DS_Store' and path.suffix != '.pyc')
+    # Exports lack Git's ignore handling. Prune generated trees before descending.
+    ignored_dirs = {'bin', 'obj', '.git', '.build', '.swiftpm', '.vs', '__pycache__',
+                    'artifacts', 'TestResults', 'xcuserdata', 'release', 'publish',
+                    '.dotnet-sdk', '.dotnet-home', 'EBWebView'}
+    ignored_files = {'.DS_Store', 'Thumbs.db', 'Desktop.ini', '.dotnet-sdk.zip'}
+    paths = []
+    for directory, directories, files in os.walk(root):
+        directories[:] = [name for name in directories if name not in ignored_dirs
+                          and not name.startswith('publish-')
+                          and not name.endswith(('.WebView2', '.xcresult'))]
+        for name in files:
+            path = Path(directory) / name
+            if name not in ignored_files and path.suffix not in ('.pyc', '.exe', '.pdb') and path.is_file():
+                paths.append(path.relative_to(root).as_posix())
+    return sorted(paths)
 
 
 def exported_source(root, allow_modified=False):

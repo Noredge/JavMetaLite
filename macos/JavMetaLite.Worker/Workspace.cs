@@ -123,11 +123,12 @@ internal sealed partial class Workspace : IAsyncDisposable
             case "preferences.update":
                 lock (_gate) EnsureNoTrash();
                 if (!_preferences.CanOverwrite) throw new RpcError(-32010, "PREFERENCES_VERSION_UNSUPPORTED", "A newer settings schema cannot be overwritten.");
-                _preferences = _preferences with { Preferences = _preferences.Preferences with
+                var updatedPreferences = _preferences.Preferences with
                 { IncludeIdInTitle = Bool(p, "includeIdInTitle", _preferences.Preferences.IncludeIdInTitle), RememberSavePreferences = true,
                   SkipSavePreview = false, SkipBatchSavePreview = false, DownloadPoster = false, DownloadFanart = false, DownloadExtrafanart = false, RenameVideo = false,
-                  TargetMode = OrganizationTargetMode.VideoDirectory } };
-                _preferencesStore.Save(_preferences.Preferences);
+                  TargetMode = OrganizationTargetMode.VideoDirectory };
+                _preferencesStore.Save(updatedPreferences);
+                _preferences = _preferences with { Preferences = updatedPreferences };
                 return PreferencesSnapshot();
             case "shutdown": ShuttingDown = true; await Stop(); return new { stopped = true };
             default: throw new RpcError(-32601, "METHOD_NOT_FOUND", "Unknown method.");
@@ -232,8 +233,6 @@ internal sealed partial class Workspace : IAsyncDisposable
                 else switch (edit.Name)
                 {
                     case "id": e.Job.ChangeReviewedId(value); break;
-                    case "series": e.Job.Metadata.Series = value; break;
-                    case "contentId": e.Job.Metadata.ContentId = value; break;
                     case "sourceUrl": e.Job.Metadata.SourceUrl = value; break;
                 }
             }

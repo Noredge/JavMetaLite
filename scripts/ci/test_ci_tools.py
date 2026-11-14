@@ -74,6 +74,16 @@ class ScopeTests(unittest.TestCase):
             self.assertTrue(classify(changes_for_event('pull_request', {'pull_request': {'base': {'sha': base}}}, root)[0]))
             self.assertFalse(classify(changes_for_event('push', {'before': 'f' * 40}, root)[0]))
 
+    @unittest.skipUnless(os.name == 'posix', 'requires POSIX byte paths')
+    def test_unknown_non_utf8_path_requires_full(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with mock.patch('scope.subprocess.check_output', return_value=b'M\x00unknown-\xff.txt\x00'):
+                event = {'before': 'a' * 40}
+                changes, _ = changes_for_event('push', event, root)
+            self.assertEqual('full', validation_level(changes, 'push', event))
+            self.assertEqual(b'unknown-\xff.txt', os.fsencode(changes[0][1]))
+
     def test_document_links_decode_unicode_and_fail_on_missing_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -87,6 +97,17 @@ class ScopeTests(unittest.TestCase):
 
 
 class RunnerTests(unittest.TestCase):
+    def test_macos_test_accepts_default_build_options(self):
+        for options in ([], ['--profile', 'core']):
+            with self.subTest(options=options):
+                # Fail at toolchain preflight without starting the platform tests.
+                result = subprocess.run(
+                    ['/bin/bash', str(ROOT / 'scripts/macos/test.sh'), *options],
+                    env={**os.environ, 'DOTNET': '/unavailable-test-sdk'},
+                    capture_output=True, text=True)
+                self.assertNotEqual(0, result.returncode)
+                self.assertRegex(result.stderr, 'exact SDK|macOS is required')
+
     def test_explicit_full_overrides_parent_core_environment(self):
         with tempfile.TemporaryDirectory() as tmp:
             report = runner.run_suites([('profile', [sys.executable, '-c',
@@ -133,7 +154,7 @@ class RunnerTests(unittest.TestCase):
                     for name in unittest.defaultTestLoader.getTestCaseNames(case):
                         qualified = cls + '.' + name; names.add(qualified)
                         if getattr(getattr(case, name), '__unittest_skip__', False): skipped.add(qualified)
-                self.assertEqual(103, len(names))
+                self.assertEqual(104, len(names))
                 self.assertEqual(expected if profile == 'core' else set(), skipped)
         finally:
             sys.path.remove(worker_dir)

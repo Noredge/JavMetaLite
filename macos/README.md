@@ -28,7 +28,7 @@ Removing movies from the queue does not delete their files. The queue and unsent
 
 ## Build and test
 
-Use the SDK pinned by [global.json](../global.json) and Xcode or Command Line Tools with a macOS 15+ SDK, then run from the repository root:
+Install Python 3.9 or later, the SDK pinned by [global.json](../global.json), and Xcode or Command Line Tools with a macOS 15+ SDK. Run from the repository root:
 
 ```sh
 ./scripts/macos/test.sh --arch arm64 --configuration Release

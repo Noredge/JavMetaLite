@@ -112,8 +112,9 @@ internal sealed partial class Workspace
             PruneDiscoveries();
             EnsureDiscoveryAvailable();
             if (!_discoveries.TryGetValue(id, out var discovery)) throw StaleDiscovery();
-            var items = selected.Select(itemId => discovery.Items.FirstOrDefault(item => item.Id == itemId)
-                ?? throw new RpcError(-32602, "INVALID_PARAMS", "An item does not belong to this discovery.")).ToArray();
+            var byId = discovery.Items.ToDictionary(item => item.Id, StringComparer.Ordinal);
+            var items = selected.Select(itemId => byId.TryGetValue(itemId, out var item) ? item
+                : throw new RpcError(-32602, "INVALID_PARAMS", "An item does not belong to this discovery.")).ToArray();
             if (items.Any(item => item.Stamps is null))
                 throw new RpcError(-32010, "SOURCE_CHANGED", "A selected input could not be verified; discover it again.");
             var existingJobs = DiscoveryQueueIndex();
@@ -167,7 +168,11 @@ internal sealed partial class Workspace
                         EnsureSnapshotCapacity(additionalBytes: admitted.Sum(entry => (long)JsonSerializer.SerializeToUtf8Bytes(Snapshot(entry), JsonDefaults.Options).Length));
                         foreach (var entry in admitted) _jobs.Add(entry.Id, entry);
                         if (admitted.Count > 0) QueueChanged();
-                        foreach (var (_, entry) in staged.Where(x => !admitted.Contains(x.Entry))) entry.Job.Dispose();
+                        if (admitted.Count != staged.Count)
+                        {
+                            var admittedEntries = admitted.ToHashSet();
+                            foreach (var (_, entry) in staged.Where(x => !admittedEntries.Contains(x.Entry))) entry.Job.Dispose();
+                        }
                         committed = true;
                         return new { discoveryId = discovery.Id, importedJobIds = admitted.Select(e => e.Id).ToArray(), duplicateJobIds = duplicates.ToArray(),
                             warnings = discovery.Diagnostics.Select(x => $"{x.Path}: {x.Message}").ToArray(),

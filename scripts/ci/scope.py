@@ -64,7 +64,7 @@ def changes_for_event(event_name, event, root):
                                        base, 'HEAD', '--'], cwd=root, stderr=subprocess.PIPE)
     except subprocess.CalledProcessError:
         return [], 'Comparison commit unavailable; full validation required'
-    fields = raw.decode().strip('\0').split('\0') if raw else []
+    fields = os.fsdecode(raw).strip('\0').split('\0') if raw else []
     if len(fields) % 2:
         return [], 'Unrecognized change list requires full validation'
     return list(zip(fields[::2], fields[1::2])), 'Changed-file classification'

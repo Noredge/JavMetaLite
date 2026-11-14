@@ -155,7 +155,13 @@ public static class MovieInputDiscovery
 
         void AddFile(string path)
         {
-            var fullPath = FileSystemPathSemantics.CanonicalizePath(path);
+            string fullPath;
+            try { fullPath = FileSystemPathSemantics.CanonicalizePath(path); }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                diagnostics.Add(MovieFileDiscoveryDiagnostic.FromException(path, exception));
+                return;
+            }
             if (!seenFiles.Add(fullPath))
             {
                 return;

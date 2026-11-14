@@ -155,11 +155,14 @@ class ReleaseManifestTests(unittest.TestCase):
     def test_source_export_tracks_each_platform_and_shared_sources(self):
         source = self.root / 'organized-source'
         files = {}
-        for directory in ('windows', 'macos', 'shared'):
-            file = source / directory / 'Synthetic/Source.cs'
+        build_inputs = ('windows/Synthetic/Source.cs', 'macos/Synthetic/Source.cs',
+                        'shared/Synthetic/Source.cs', 'scripts/New-ReleasePackage.ps1',
+                        'packaging/README.txt')
+        for relative in build_inputs:
+            file = source / relative
             file.parent.mkdir(parents=True)
             file.write_text('// synthetic source')
-            files[file.relative_to(source).as_posix()] = {
+            files[relative] = {
                 'sha256': digest(file), 'mode': stat.S_IMODE(file.stat().st_mode)}
         (source / 'SOURCE-MANIFEST.json').write_bytes(canonical_bytes({
             'schemaVersion': 1, 'kind': 'source-export',
@@ -214,6 +217,11 @@ class ReleaseManifestTests(unittest.TestCase):
         (source / 'SOURCE-MANIFEST.json').write_bytes(canonical_bytes({'schemaVersion': 1, 'kind': 'source-export',
             'source': {'gitCommit': 'a' * 40, 'dirtyWorkingTree': True}, 'files': files}))
         first, second = self.root / 'first.zip', self.root / 'second.zip'
+        (source / 'README.md').write_text('New unlisted text')
+        for relative in ('release/portable.zip', '.dotnet-sdk/tool', 'macos/.build/app'):
+            output = source / relative
+            output.parent.mkdir(parents=True)
+            output.write_bytes(b'local build output')
         for output in (first, second):
             subprocess.run([sys.executable, str(scripts / 'source-archive.py'), str(output)], check=True, capture_output=True)
         self.assertEqual(digest(first), digest(second))
@@ -224,6 +232,9 @@ class ReleaseManifestTests(unittest.TestCase):
         checked = source_inputs(extracted / 'JavMetaLite')
         self.assertTrue(checked['verifiedExport'])
         self.assertEqual(checked['files']['shared/JavMetaLite.Fixture/File.cs']['sha256'], digest(source_file))
+        for relative in ('release/portable.zip', '.dotnet-sdk/tool', 'macos/.build/app'):
+            self.assertFalse((extracted / 'JavMetaLite' / relative).exists(), relative)
+        self.assertTrue((extracted / 'JavMetaLite/README.md').is_file())
 
 
 if __name__ == '__main__':
