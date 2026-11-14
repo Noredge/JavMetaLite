@@ -303,4 +303,6 @@
     <sys:String x:Key="Duplicate.SaveOne">選択した 1 本を保存</sys:String>
     <sys:String x:Key="Duplicate.SaveParts">分割として保存</sys:String>
     <sys:String x:Key="Duplicate.Skip">このグループをスキップ</sys:String>
+    <sys:String x:Key="Status.PreparingSavePreview">保存プレビューに必要なファイルを確認中…</sys:String>
+    <sys:String x:Key="Error.SavePreviewChanged">動画または保存設定が変更されました。保存プレビューを開き直してください。</sys:String>
 </ResourceDictionary>

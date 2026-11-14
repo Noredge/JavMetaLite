@@ -48,6 +48,7 @@ public static class MovieInputDiscovery
         var visitedDirectories = new HashSet<string>(FileSystemPathSemantics.PathComparer);
         var pendingDirectories = new Stack<string>();
         var diagnostics = new List<MovieFileDiscoveryDiagnostic>();
+        var unreadableFiles = new HashSet<string>(FileSystemPathSemantics.PathComparer);
         var ignoredFileCount = 0;
         var skippedDirectoryCount = 0;
 
@@ -139,7 +140,7 @@ public static class MovieInputDiscovery
         foreach (var group in videoPaths.GroupBy(MovieFileSet.GetGroupKey, FileSystemPathSemantics.PathComparer))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            try { fileSets.AddRange(MovieFileSet.Group(group)); }
+            try { fileSets.AddRange(MovieFileSet.Group(group, ReportUnreadableFile, cancellationToken)); }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
                 diagnostics.Add(MovieFileDiscoveryDiagnostic.FromException(group.First(), exception));
@@ -159,7 +160,7 @@ public static class MovieInputDiscovery
             try { fullPath = FileSystemPathSemantics.CanonicalizePath(path); }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                diagnostics.Add(MovieFileDiscoveryDiagnostic.FromException(path, exception));
+                ReportUnreadableFile(path, exception);
                 return;
             }
             if (!seenFiles.Add(fullPath))
@@ -186,6 +187,12 @@ public static class MovieInputDiscovery
             {
                 ignoredFileCount++;
             }
+        }
+
+        void ReportUnreadableFile(string path, Exception exception)
+        {
+            if (unreadableFiles.Add(path))
+                diagnostics.Add(MovieFileDiscoveryDiagnostic.FromException(path, exception));
         }
     }
 }

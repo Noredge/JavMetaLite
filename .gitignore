@@ -1,8 +1,8 @@
 # .NET build output
-**/bin/
-**/obj/
-artifacts/
-TestResults/
+/*/JavMetaLite.*/bin/
+/*/JavMetaLite.*/obj/
+/artifacts/
+/TestResults/
 
 # Optional project-local SDK used by Codex validation runs
 .dotnet-sdk/
@@ -17,9 +17,9 @@ TestResults/
 *.sln.docstates
 
 # Published executables stay outside version control
-publish/
-publish-*/
-release/
+/publish/
+/publish-*/
+/release/
 *.exe
 *.pdb
 

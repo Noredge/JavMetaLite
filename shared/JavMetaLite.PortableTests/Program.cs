@@ -209,7 +209,11 @@ internal static partial class Program
             if (existed) File.WriteAllText(nfo, old);
             var metadata = new MovieMetadata { Id = "DEMO-051", Title = "Planned value" };
             var plan = FileOrganizationService.BuildPlan(video, metadata, NfoOnly, InPlace);
-            plan = FileOrganizationService.BindPreviewTargets(plan, metadata);
+            using var canceled = new CancellationTokenSource();
+            canceled.Cancel();
+            await Throws<OperationCanceledException>(
+                () => FileOrganizationService.BindPreviewTargetsAsync(plan, metadata, canceled.Token));
+            plan = await FileOrganizationService.BindPreviewTargetsAsync(plan, metadata);
             var external = "<movie><title>External write during commit</title></movie>";
             var progress = new ImmediateProgress<FileTransactionProgress>(p => { if (p.Stage == FileTransactionStage.Committing) File.WriteAllText(nfo, external); });
             using var output = new OutputService(Images);
@@ -270,10 +274,10 @@ internal static partial class Program
     {
         using var temp = new Temp();
         var dotted = temp.Write("www.example.invalid@DEMO-001.mp4", "SYNTHETIC");
-        temp.Write("parts/DEMO-002-cd1.mp4", "SYNTHETIC");
-        temp.Write("parts/DEMO-002-cd2.mp4", "SYNTHETIC");
+        var firstPart = temp.Write("parts/DEMO-002-cd1.mp4", "SYNTHETIC");
+        var lastPart = temp.Write("parts/DEMO-002-cd2.mp4", "SYNTHETIC");
         Directory.CreateSymbolicLink(Path.Combine(temp.Path, "parts/loop"), temp.Path);
-        var invalidVideoLink = Path.Combine(temp.Path, "DEMO-003.mp4");
+        var invalidVideoLink = Path.Combine(temp.Path, "parts/DEMO-002-cd3.mp4");
         File.CreateSymbolicLink(invalidVideoLink, invalidVideoLink);
         using var token = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var found = await MovieInputDiscovery.DiscoverAsync([temp.Path, dotted], true, token.Token);
@@ -283,6 +287,15 @@ internal static partial class Program
         Check(found.SkippedDirectoryCount >= 1, "Directory symlink not skipped");
         Check(found.Diagnostics.Any(diagnostic => diagnostic.Path == invalidVideoLink &&
             diagnostic.Kind == MovieFileDiscoveryDiagnosticKind.ReadFailed), "Unresolvable file link was not diagnosed");
+        var expectedParts = new[] { firstPart, lastPart }.Select(FileSystemPathSemantics.CanonicalizePath).ToArray();
+        Check(MovieFileSet.Discover(firstPart).VideoPaths.SequenceEqual(expectedParts),
+            "The bad sibling discarded the CD group on single-file import");
+        var selected = await MovieInputDiscovery.DiscoverAsync([firstPart], false, token.Token);
+        Check(selected.MovieFileSets.Single().VideoPaths.SequenceEqual(expectedParts),
+            "The bad sibling discarded the CD group when selecting one part");
+        Check(selected.Diagnostics.Any(diagnostic => diagnostic.Path ==
+            Path.Combine(Path.GetDirectoryName(expectedParts[0])!, Path.GetFileName(invalidVideoLink))),
+            "An unreadable sibling was not diagnosed when selecting a single part");
         Equal("DEMO-001", MovieIdParser.TryExtract(dotted));
     }
 

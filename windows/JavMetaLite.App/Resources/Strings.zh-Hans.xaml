@@ -515,4 +515,6 @@
     <sys:String x:Key="Duplicate.SaveOne">保存选中一条</sys:String>
     <sys:String x:Key="Duplicate.SaveParts">作为分段保存</sys:String>
     <sys:String x:Key="Duplicate.Skip">本次跳过此组</sys:String>
+    <sys:String x:Key="Status.PreparingSavePreview">正在检查保存预览所需的文件…</sys:String>
+    <sys:String x:Key="Error.SavePreviewChanged">影片或保存设置已更改，请重新打开保存预览。</sys:String>
 </ResourceDictionary>

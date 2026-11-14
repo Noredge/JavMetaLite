@@ -1,5 +1,4 @@
 using System.IO;
-using JavMetaLite.Core.Services;
 
 namespace JavMetaLite.App;
 
@@ -17,14 +16,4 @@ internal static class DuplicateMovieResolution
             string.Equals(item.Job.Metadata.Id, items[0].Job.Metadata.Id, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(Path.GetDirectoryName(item.Job.VideoPath), Path.GetDirectoryName(items[0].Job.VideoPath), StringComparison.OrdinalIgnoreCase)) &&
         items.Select(item => item.Job.VideoPath).Distinct(StringComparer.OrdinalIgnoreCase).Count() == items.Count;
-
-    internal static BatchSavePreviewItem Combine(IReadOnlyList<BatchSavePreviewItem> ordered)
-    {
-        if (!CanCombine(ordered)) throw new InvalidOperationException(LocalizationService.Get("Duplicate.Restriction"));
-        var first = ordered[0];
-        var configuration = first.Job.SaveConfiguration!;
-        var plan = FileOrganizationService.BuildConfirmedMultipartPlan(ordered.Select(item => item.Job.VideoPath!),
-            first.Job.Metadata, configuration.SaveOptions, configuration.OrganizationOptions, first.Job.CreateLocalSaveContext());
-        return new(first.Job, FileOrganizationService.BindPreviewTargets(plan, first.Job.Metadata), first.ReviewRevision);
-    }
 }

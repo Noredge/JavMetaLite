@@ -815,41 +815,26 @@ public partial class MainWindow : Window
 
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
-        if (_activeJob.VideoPath is null)
+        if (_busy || _closeRequested) return;
+
+        var job = _activeJob;
+        if (job.VideoPath is null)
         {
             ShowError(LocalizationService.Get("Error.SelectVideo"));
             return;
         }
 
-        if (_activeJob.LocalNfoSaveBlocked)
+        if (job.LocalNfoSaveBlocked)
         {
             ShowError(LocalizationService.Get("Error.LocalNfoBlocked"));
             return;
         }
 
         SyncActiveSaveConfiguration();
-        _activeJob.InitializeSaveConfiguration(CaptureCurrentSaveConfiguration());
-        var saveConfiguration = _activeJob.SaveConfiguration!;
-        var options = saveConfiguration.SaveOptions;
-        var organizationOptions = saveConfiguration.OrganizationOptions;
-
-        SavePlan plan;
-        try
-        {
-            plan = FileOrganizationService.BuildPlan(
-                _activeJob.VideoPaths,
-                _activeJob.Metadata,
-                options,
-                organizationOptions,
-                _activeJob.CreateLocalSaveContext());
-            plan = FileOrganizationService.BindPreviewTargets(plan, _activeJob.Metadata);
-        }
-        catch (Exception exception)
-        {
-            AppLog.Error("无法生成保存预览", exception);
-            ShowError(exception.Message);
-            return;
-        }
+        job.InitializeSaveConfiguration(CaptureCurrentSaveConfiguration());
+        var input = SavePreviewInput.Capture(job);
+        var plan = await RunSavePreflightAsync(token => input.PrepareAsync(token));
+        if (plan is null || !SavePreviewIsCurrent([input], job)) return;
 
         var allowOverwrite = false;
         if (ShouldShowSavePreview(SkipSavePreviewCheckBox.IsChecked == true, plan))
@@ -879,20 +864,21 @@ public partial class MainWindow : Window
             AppLog.Info("用户选择跳过单片保存预览；当前计划无冲突");
         }
 
+        if (!SavePreviewIsCurrent([input], job)) return;
         await RunBusyAsync(LocalizationService.Get("Status.Saving"), async () =>
         {
             var transactionProgress = new Progress<FileTransactionProgress>(update =>
                 SetStatus(GetLocalizedTransactionProgress(update), null));
             var result = await _fileOrganizationService.ExecuteAsync(
                 plan,
-                _activeJob.Metadata,
+                input.Metadata,
                 allowOverwrite,
                 CurrentOperationToken,
                 transactionProgress);
             CancelOperationButton.IsEnabled = false;
             if (result.CleanupIssues.Count > 0)
                 ShowCleanupDetails(result.CleanupIssues, committed: true);
-            _activeJob.UpdateVideoPaths(result.VideoPaths);
+            job.UpdateVideoPaths(result.VideoPaths);
             var outputs = new[] { result.Outputs.NfoPath, result.Outputs.PosterPath, result.Outputs.FanartPath }
                 .Where(path => path is not null)
                 .Select(Path.GetFileName)
@@ -912,7 +898,7 @@ public partial class MainWindow : Window
             {
                 // Saving has already committed; canceled preview loading is not a canceled save.
             }
-            _activeJob.MarkSaveCompleted();
+            job.MarkSaveCompleted();
             RemoveCompletedActiveJobFromQueue();
             var outputSummary = outputs.Count == 0
                 ? plan.HasActualChanges
@@ -1109,6 +1095,8 @@ public partial class MainWindow : Window
 
     private async void SaveSelected_Click(object sender, RoutedEventArgs e)
     {
+        if (_busy || _closeRequested) return;
+
         var selectedJobs = _movieQueue.Where(job => job.IsSelectedForBatch).ToArray();
         if (selectedJobs.Length == 0)
         {
@@ -1122,62 +1110,24 @@ public partial class MainWindow : Window
             _activeJob.InitializeSaveConfiguration(CaptureCurrentSaveConfiguration());
         }
 
-        var previewItems = new List<BatchSavePreviewItem>();
-        var previewIssues = new List<BatchSavePreviewIssue>();
-        foreach (var job in selectedJobs)
+        var inputs = selectedJobs.Select(SavePreviewInput.Capture).ToDictionary(input => input.Job);
+        var prepared = await RunSavePreflightAsync(async token =>
         {
-            if (job.VideoPath is null)
+            var items = new List<BatchSavePreviewItem>();
+            var issues = new List<BatchSavePreviewIssue>();
+            foreach (var input in inputs.Values)
             {
-                previewIssues.Add(new BatchSavePreviewIssue(
-                    job,
-                    LocalizationService.Get("Error.SelectVideo")));
-                continue;
+                token.ThrowIfCancellationRequested();
+                var item = await input.PrepareForBatchAsync(token);
+                if (item.Plan is { } plan) items.Add(new(input.Job, plan, input.ReviewRevision));
+                else issues.Add(new(input.Job, item.Issue!));
             }
 
-            if (job.LocalNfoSaveBlocked)
-            {
-                previewIssues.Add(new BatchSavePreviewIssue(
-                    job,
-                    LocalizationService.Get("Error.LocalNfoBlocked")));
-                continue;
-            }
+            return new PreparedBatchPreview(items, issues);
+        });
+        if (prepared is null || !SavePreviewIsCurrent(inputs.Values)) return;
 
-            if (job.SaveConfiguration is null)
-            {
-                previewIssues.Add(new BatchSavePreviewIssue(
-                    job,
-                    LocalizationService.Get("Error.MissingJobSaveConfiguration")));
-                continue;
-            }
-
-            try
-            {
-                var configuration = job.SaveConfiguration;
-                var plan = FileOrganizationService.BuildPlan(
-                    job.VideoPaths,
-                    job.Metadata,
-                    configuration.SaveOptions,
-                    configuration.OrganizationOptions,
-                    job.CreateLocalSaveContext());
-                if (plan.HasBlockingConflicts)
-                {
-                    previewIssues.Add(new BatchSavePreviewIssue(
-                        job,
-                        string.Join(Environment.NewLine, plan.BlockingConflicts)));
-                    continue;
-                }
-
-                plan = FileOrganizationService.BindPreviewTargets(plan, job.Metadata);
-                previewItems.Add(new BatchSavePreviewItem(job, plan, job.ReviewRevision));
-            }
-            catch (Exception exception)
-            {
-                AppLog.Warning($"批量保存预检失败 id={job.Metadata.Id} path={job.VideoPath}", exception);
-                previewIssues.Add(new BatchSavePreviewIssue(job, exception.Message));
-            }
-        }
-
-        var originalPreviewItems = previewItems.ToArray();
+        var (previewItems, previewIssues) = prepared;
         var combinedGroups = new Dictionary<MovieJob, IReadOnlyList<BatchSavePreviewItem>>();
         var duplicateGroups = DuplicateMovieResolution.Groups(previewItems);
         foreach (var group in duplicateGroups)
@@ -1191,31 +1141,37 @@ public partial class MainWindow : Window
                 SetStatus(LocalizationService.Get("Status.CanceledNoChanges"), false);
                 return;
             }
+            if (!SavePreviewIsCurrent(inputs.Values)) return;
             foreach (var item in group) previewItems.Remove(item);
             if (!chooser.AsParts) previewItems.AddRange(chooser.ChosenItems);
             else
             {
-                try
+                var chosen = chooser.ChosenItems;
+                var first = chosen[0];
+                var orderedParts = chosen.Select(item => inputs[item.Job].VideoPaths[0]).ToArray();
+                var combined = await RunSavePreflightAsync(token => inputs[first.Job].PrepareForBatchAsync(token, orderedParts));
+                if (combined is null || !SavePreviewIsCurrent(inputs.Values)) return;
+                if (combined.Plan is { } plan)
                 {
-                    var combined = DuplicateMovieResolution.Combine(chooser.ChosenItems);
-                    if (combined.Plan.HasBlockingConflicts)
-                        throw new IOException(string.Join(Environment.NewLine, combined.Plan.BlockingConflicts));
-                    previewItems.Add(combined);
-                    combinedGroups[combined.Job] = chooser.ChosenItems;
+                    previewItems.Add(first with { Plan = plan });
+                    combinedGroups[first.Job] = chosen;
                 }
-                catch (Exception exception)
+                else
                 {
-                    foreach (var item in group) previewIssues.Add(new(item.Job, exception.Message));
+                    foreach (var item in group) previewIssues.Add(new(item.Job, combined.Issue!));
                 }
             }
         }
-        var participatingJobs = previewItems.Select(item => item.Job)
-            .Concat(combinedGroups.Values.SelectMany(group => group).Select(item => item.Job)).ToHashSet();
-        var protectedItems = originalPreviewItems.Where(item => !participatingJobs.Contains(item.Job)).ToArray();
 
-        // Individually safe plans may still overwrite or retire another movie's files.
-        // Remove every affected plan before the user can accept or skip the preview.
-        var batchConflicts = BatchSavePathConflicts.Find(previewItems, protectedItems);
+        // Every selected movie contributes its source paths, including failed or skipped plans.
+        // Confirmed parts are one movie for conflict checking.
+        var combinedOwners = combinedGroups
+            .SelectMany(group => group.Value.Select(part => (part.Job, Owner: group.Key)))
+            .ToDictionary(part => part.Job, part => part.Owner);
+        var registeredSources = inputs.Values
+            .GroupBy(input => combinedOwners.GetValueOrDefault(input.Job, input.Job))
+            .ToDictionary(group => group.Key, group => (IReadOnlyList<string>)group.SelectMany(input => input.SourcePaths()).ToArray());
+        var batchConflicts = BatchSavePathConflicts.Find(previewItems, registeredSources: registeredSources);
         foreach (var conflict in batchConflicts)
         {
             previewIssues.Add(new BatchSavePreviewIssue(conflict.Key,
@@ -1255,6 +1211,7 @@ public partial class MainWindow : Window
             AppLog.Info($"用户选择跳过批量保存预览；当前批次无冲突 count={previewItems.Count}");
         }
 
+        if (!SavePreviewIsCurrent(inputs.Values)) return;
         var preparedItems = itemsToSave.Select(item => new PreparedMovieSave(
             item.Job,
             item.Plan,
@@ -1281,7 +1238,7 @@ public partial class MainWindow : Window
                             null));
                     return await _fileOrganizationService.ExecuteAsync(
                         item.Plan,
-                        item.Job.Metadata,
+                        inputs[item.Job].Metadata,
                         item.AllowOverwrite,
                         cancellationToken,
                         progress);
@@ -1347,6 +1304,40 @@ public partial class MainWindow : Window
             if (cleanupIssues.Length > 0)
                 SetStatus(LocalizationService.Get("Cleanup.Committed"), false);
         });
+    }
+
+    private sealed record PreparedBatchPreview(List<BatchSavePreviewItem> Items, List<BatchSavePreviewIssue> Issues);
+
+    internal async Task<T?> RunSavePreflightAsync<T>(Func<CancellationToken, Task<T>> prepare) where T : class
+    {
+        T? result = null;
+        await RunBusyAsync(LocalizationService.Get("Status.PreparingSavePreview"), async () =>
+        {
+            var token = CurrentOperationToken;
+            try
+            {
+                var prepared = await Task.Run(() => prepare(token), token);
+                token.ThrowIfCancellationRequested();
+                result = prepared;
+            }
+            catch (Exception) when (token.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(token);
+            }
+        });
+        return _closeRequested ? null : result;
+    }
+
+    private bool SavePreviewIsCurrent(IEnumerable<SavePreviewInput> inputs, MovieJob? expectedActiveJob = null)
+    {
+        if ((expectedActiveJob is null || _activeJob == expectedActiveJob) &&
+            inputs.All(input => input.Job.ReviewRevision == input.ReviewRevision))
+        {
+            return true;
+        }
+
+        SetStatus(LocalizationService.Get("Error.SavePreviewChanged"), false);
+        return false;
     }
 
     private static bool ShouldShowSavePreview(bool skipRequested, SavePlan plan) =>

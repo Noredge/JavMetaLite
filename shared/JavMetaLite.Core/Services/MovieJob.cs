@@ -780,6 +780,8 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
         return true;
     }
 
+    public MovieMetadata CaptureMetadata() => CloneMetadata(Metadata);
+
     public LocalSaveContext CreateLocalSaveContext() => new(
         LocalMetadataBundle,
         LocalArtworkCandidate,

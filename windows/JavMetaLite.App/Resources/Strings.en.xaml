@@ -298,4 +298,6 @@
     <sys:String x:Key="Duplicate.SaveOne">Save selected one</sys:String>
     <sys:String x:Key="Duplicate.SaveParts">Save as parts</sys:String>
     <sys:String x:Key="Duplicate.Skip">Skip this group</sys:String>
+    <sys:String x:Key="Status.PreparingSavePreview">Checking files for the save preview…</sys:String>
+    <sys:String x:Key="Error.SavePreviewChanged">The movie or its save settings changed. Open a new save preview.</sys:String>
 </ResourceDictionary>

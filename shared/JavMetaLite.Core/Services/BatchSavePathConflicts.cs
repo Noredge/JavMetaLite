@@ -11,7 +11,8 @@ public static class BatchSavePathConflicts
 {
     public static IReadOnlyDictionary<MovieJob, IReadOnlyList<string>> Find(
         IReadOnlyList<BatchSavePlanItem> items,
-        IReadOnlyList<BatchSavePlanItem>? protectedItems = null)
+        IReadOnlyList<BatchSavePlanItem>? protectedItems = null,
+        IReadOnlyDictionary<MovieJob, IReadOnlyList<string>>? registeredSources = null)
     {
         var uses = new Dictionary<string, Dictionary<MovieJob, bool>>(ConflictComparer.Instance);
         foreach (var item in items)
@@ -48,6 +49,11 @@ public static class BatchSavePathConflicts
             foreach (var expectation in item.Plan.SourceFileExpectations) Add(item.Job, expectation.Path, false);
             foreach (var path in item.Plan.SourcePathsToRetire) Add(item.Job, path, false);
         }
+        // A skipped job can supply its inputs even if preparing its plan failed.
+        if (registeredSources is not null)
+            foreach (var (job, paths) in registeredSources)
+                foreach (var path in paths) Add(job, path, false);
+
         var activeJobs = items.Select(item => item.Job).ToHashSet();
         var conflicts = new Dictionary<MovieJob, List<string>>();
         foreach (var (path, owners) in uses.Where(pair => pair.Value.Count > 1 && pair.Value.Values.Any(writes => writes)))

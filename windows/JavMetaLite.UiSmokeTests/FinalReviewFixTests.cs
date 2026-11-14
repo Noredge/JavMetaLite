@@ -37,7 +37,101 @@ internal static partial class Program
         await TestViewerApplyPreviewLifecycleAsync(Path.Combine(root, "viewer"));
         await TestRetryComparisonCancellationAsync(Path.Combine(root, "retry"));
         await TestBatchPathConflictPreviewAsync(Path.Combine(root, "batch"));
+        await TestSkippedBatchInputConflictAsync(Path.Combine(root, "batch-unavailable-target"));
+        await TestSavePreflightCancellationAsync(Path.Combine(root, "save-preflight"));
         Console.WriteLine("UI PASS viewerApplyBusy=True lateMainPreviewRejected=True retryComparisonCancelRecovers=True batchPathConflictsBlocked=True sharedExtrafanartNamespace=True");
+    }
+
+    private static async Task TestSkippedBatchInputConflictAsync(string root)
+    {
+        foreach (var locked in new[] { false, true })
+        {
+            var source = Directory.CreateDirectory(Path.Combine(root, locked ? "locked" : "directory")).FullName;
+            var sharedArtwork = Path.Combine(Directory.CreateDirectory(Path.Combine(source, "extrafanart")).FullName, "local.jpg");
+            File.WriteAllText(sharedArtwork, "shared fixture artwork");
+            var window = new MainWindow(new AppPreferencesStore(Path.Combine(source, "settings")))
+                { ShowActivated = false, ShowInTaskbar = false };
+            window.Show();
+            try
+            {
+                ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var organization = new OrganizationOptions(OrganizationTargetMode.VideoDirectory, false);
+                var metadataOnly = new SaveOptions(true, false, false, false, false, false);
+                MovieJob Add(string directory, string id, SaveOptions options, int samples = 0)
+                {
+                    var path = Path.Combine(directory, id + ".mp4");
+                    File.WriteAllText(path, id);
+                    var job = FinalReviewAddJob(window, id, path, FinalReviewMetadata(id, "libredmm", "blue", samples));
+                    job.InitializeSaveConfiguration(new(options, organization));
+                    job.IsSelectedForBatch = true;
+                    return job;
+                }
+
+                var writer = Add(source, "ONE-011", metadataOnly with
+                {
+                    DownloadExtrafanart = true, ReplaceLocalExtrafanart = true
+                }, samples: 1);
+                var skipped = Add(source, "TWO-012", metadataOnly);
+                var independent = Add(Directory.CreateDirectory(Path.Combine(source, "separate")).FullName,
+                    "THR-013", metadataOnly);
+                writer.SetLocalExtrafanart([sharedArtwork]);
+                skipped.SetLocalExtrafanart([sharedArtwork]);
+                await FinalReviewActivate(window, writer, false);
+
+                var badTarget = Path.ChangeExtension(skipped.VideoPath!, ".nfo");
+                if (locked) File.WriteAllText(badTarget, "locked NFO");
+                else Directory.CreateDirectory(badTarget);
+                using var targetLock = locked ? File.Open(badTarget, FileMode.Open, FileAccess.ReadWrite, FileShare.None) : null;
+
+                _ = window.Dispatcher.BeginInvoke(() => ((Button)window.FindName("SaveSelectedButton"))
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
+                await UntilStableAsync(() => Application.Current.Windows.OfType<BatchSavePreviewWindow>().Any(),
+                    "Unavailable target did not produce a batch preview.");
+                var preview = Application.Current.Windows.OfType<BatchSavePreviewWindow>().Single();
+                CoverAssert(preview.Items.Count == 1 && preview.Items[0].Job == independent,
+                    "A failed preflight exposed shared artwork to another save or blocked an independent save.");
+                CoverAssert(preview.Issues.Single(issue => issue.Job == skipped).Message.Contains(badTarget) &&
+                    preview.Issues.Single(issue => issue.Job == writer).Message.Contains(sharedArtwork),
+                    "Preview did not explain both the preflight and shared input conflicts.");
+                preview.DialogResult = false;
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                CoverAssert(File.ReadAllText(sharedArtwork) == "shared fixture artwork",
+                    "Batch preview changed shared artwork.");
+            }
+            finally
+            {
+                foreach (var dialog in Application.Current.Windows.OfType<BatchSavePreviewWindow>()
+                    .Where(dialog => dialog.Owner == window).ToArray())
+                    dialog.Close();
+                window.Close();
+            }
+        }
+    }
+
+    private static async Task TestSavePreflightCancellationAsync(string root)
+    {
+        var window = new MainWindow(new AppPreferencesStore(root)) { ShowActivated = false, ShowInTaskbar = false };
+        window.Show();
+        try
+        {
+            var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var preflight = window.RunSavePreflightAsync(async token =>
+            {
+                started.SetResult(window.Dispatcher.CheckAccess());
+                await Task.Delay(Timeout.Infinite, token);
+                return "unexpected preview";
+            });
+
+            CoverAssert(!await started.Task.WaitAsync(TimeSpan.FromSeconds(10)), "Save preflight ran on the dispatcher.");
+            var cancel = (Button)window.FindName("CancelOperationButton");
+            CoverAssert(IsWindowBusy(window) && cancel.IsVisible && cancel.IsEnabled, "Preflight cannot be canceled.");
+            cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CoverAssert(await preflight.WaitAsync(TimeSpan.FromSeconds(10)) is null && !IsWindowBusy(window),
+                "Canceled preflight returned a preview or kept the window busy.");
+            CoverAssert(await window.RunSavePreflightAsync(_ => Task.FromResult("retry")) == "retry",
+                "Save preflight could not be retried.");
+        }
+        finally { window.Close(); }
     }
 
     private static object FinalReviewField(object target, string name) =>

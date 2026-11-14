@@ -36,21 +36,24 @@ public sealed class FileOrganizationService
         MovieMetadata metadata,
         SaveOptions saveOptions,
         OrganizationOptions organizationOptions,
-        LocalSaveContext? localContext = null)
-        => BuildPlan(MovieFileSet.Create(videoPaths), metadata, saveOptions, organizationOptions, localContext);
+        LocalSaveContext? localContext = null,
+        CancellationToken cancellationToken = default)
+        => BuildPlan(MovieFileSet.Create(videoPaths), metadata, saveOptions, organizationOptions, localContext, cancellationToken);
 
     public static SavePlan BuildConfirmedMultipartPlan(IEnumerable<string> orderedPaths,
         MovieMetadata metadata, SaveOptions saveOptions, OrganizationOptions organizationOptions,
-        LocalSaveContext? localContext = null)
+        LocalSaveContext? localContext = null, CancellationToken cancellationToken = default)
         => BuildPlan(MovieFileSet.CreateConfirmedParts(orderedPaths, metadata.Id), metadata, saveOptions,
             new OrganizationOptions(organizationOptions.TargetMode, true,
-                organizationOptions.CustomRootDirectory, organizationOptions.CrossVolumeVerification), localContext);
+                organizationOptions.CustomRootDirectory, organizationOptions.CrossVolumeVerification), localContext, cancellationToken);
 
     private static SavePlan BuildPlan(MovieFileSet fileSet, MovieMetadata metadata,
-        SaveOptions saveOptions, OrganizationOptions organizationOptions, LocalSaveContext? localContext)
+        SaveOptions saveOptions, OrganizationOptions organizationOptions, LocalSaveContext? localContext,
+        CancellationToken cancellationToken)
     {
         foreach (var sourcePath in fileSet.VideoPaths)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             FileSystemPathSemantics.ValidateUnambiguousPath(sourcePath);
             if (!File.Exists(sourcePath))
             {
@@ -207,12 +210,12 @@ public sealed class FileOrganizationService
         {
             throw new InvalidOperationException("本地 extrafanart 上下文不属于当前影片，请重新选择影片。");
         }
-        AddExpectation(localNfoPath, localBundle?.OriginalNfoSha256, "已载入的本地 NFO", expectations, blockingConflicts);
-        AddExpectation(localPosterPath, null, "已载入的本地 poster", expectations, blockingConflicts);
-        AddExpectation(localFanartPath, null, "已载入的本地 fanart", expectations, blockingConflicts);
+        AddExpectation(localNfoPath, localBundle?.OriginalNfoSha256, "已载入的本地 NFO", expectations, blockingConflicts, cancellationToken);
+        AddExpectation(localPosterPath, null, "已载入的本地 poster", expectations, blockingConflicts, cancellationToken);
+        AddExpectation(localFanartPath, null, "已载入的本地 fanart", expectations, blockingConflicts, cancellationToken);
         foreach (var path in localExtrafanartPaths)
         {
-            AddExpectation(path, null, "已载入的本地 extrafanart", expectations, blockingConflicts);
+            AddExpectation(path, null, "已载入的本地 extrafanart", expectations, blockingConflicts, cancellationToken);
         }
 
         var selectedLocalPair = localContext?.SelectedArtwork?.IsSidecarPair == true;
@@ -432,22 +435,27 @@ public sealed class FileOrganizationService
         };
     }
 
-    public static SavePlan BindPreviewTargets(SavePlan plan, MovieMetadata metadata)
+    public static async Task<SavePlan> BindPreviewTargetsAsync(
+        SavePlan plan, MovieMetadata metadata, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (plan.HasBlockingConflicts) return plan;
 
         var existingTargets = plan.OverwriteConflicts.ToHashSet(FileSystemPathSemantics.PathComparer);
         var expectations = new List<TargetFileExpectation>();
         foreach (var path in GetPlannedWritePaths(plan, metadata))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             FileSystemPathSemantics.ValidateCanonicalPath(path);
             FileSystemPathSemantics.ValidateUnambiguousPath(path);
             var existedAtPlanning = existingTargets.Contains(path);
             if (Directory.Exists(path) || File.Exists(path) != existedAtPlanning)
                 throw new IOException($"目标文件在准备预览时发生变化，请重新生成预览：{path}");
-            expectations.Add(new TargetFileExpectation(path, existedAtPlanning,
-                existedAtPlanning ? ComputeSha256(path) : null));
+            var hash = existedAtPlanning
+                ? await HashPreviewFileAsync(path, cancellationToken).ConfigureAwait(false) : null;
+            expectations.Add(new TargetFileExpectation(path, existedAtPlanning, hash));
         }
+        cancellationToken.ThrowIfCancellationRequested();
         return plan with { PreviewTargetExpectations = expectations };
     }
 
@@ -1370,8 +1378,10 @@ public sealed class FileOrganizationService
         string? expectedHash,
         string description,
         ICollection<SourceFileExpectation> expectations,
-        ICollection<string> blockingConflicts)
+        ICollection<string> blockingConflicts,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (path is null)
         {
             return;
@@ -1381,7 +1391,9 @@ public sealed class FileOrganizationService
             blockingConflicts.Add($"{description} 已不存在，请重新选择影片：{path}");
             return;
         }
-        var currentHash = ComputeSha256(path);
+        var currentHash = cancellationToken.CanBeCanceled
+            ? HashPreviewFileAsync(path, cancellationToken).GetAwaiter().GetResult()
+            : ComputeSha256(path);
         if (!string.IsNullOrWhiteSpace(expectedHash) &&
             !string.Equals(currentHash, expectedHash, StringComparison.OrdinalIgnoreCase))
         {
@@ -1480,6 +1492,13 @@ public sealed class FileOrganizationService
     {
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(SHA256.HashData(stream));
+    }
+
+    private static async Task<string> HashPreviewFileAsync(string path, CancellationToken cancellationToken)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+            bufferSize: 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        return Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
     }
 
     private static async Task ValidateCopiedSourceAsync(string sourcePath, string? copiedSha256,

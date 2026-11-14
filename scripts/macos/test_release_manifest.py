@@ -156,17 +156,21 @@ class ReleaseManifestTests(unittest.TestCase):
         source = self.root / 'organized-source'
         files = {}
         build_inputs = ('windows/Synthetic/Source.cs', 'macos/Synthetic/Source.cs',
-                        'shared/Synthetic/Source.cs', 'scripts/New-ReleasePackage.ps1',
+                        'shared/Synthetic/Source.cs', 'shared/Synthetic/Synthetic.csproj', 'scripts/New-ReleasePackage.ps1',
                         'packaging/README.txt')
         for relative in build_inputs:
             file = source / relative
-            file.parent.mkdir(parents=True)
+            file.parent.mkdir(parents=True, exist_ok=True)
             file.write_text('// synthetic source')
             files[relative] = {
                 'sha256': digest(file), 'mode': stat.S_IMODE(file.stat().st_mode)}
         (source / 'SOURCE-MANIFEST.json').write_bytes(canonical_bytes({
             'schemaVersion': 1, 'kind': 'source-export',
             'source': {'gitCommit': 'a' * 40, 'dirtyWorkingTree': False}, 'files': files}))
+        for relative in ('release/Generated.cs', 'shared/Synthetic/obj/Generated.cs', 'shared/Synthetic/bin/Generated.cs'):
+            generated = source / relative
+            generated.parent.mkdir(parents=True, exist_ok=True)
+            generated.write_text('// generated file')
         self.assertEqual(source_inputs(source)['files'], files)
         for directory in ('windows', 'macos', 'shared'):
             with self.subTest(directory=directory):
@@ -174,6 +178,19 @@ class ReleaseManifestTests(unittest.TestCase):
                 new.write_text('// unrecorded build input')
                 with self.assertRaisesRegex(ValueError, 'Source export changed'):
                     source_inputs(source)
+                new.unlink()
+        for directory in ('release', 'Diagnostics/bin', 'artifacts', 'publish-local'):
+            relative = f'shared/Synthetic/{directory}/Diagnostics.cs'
+            with self.subTest(relative=relative):
+                new = source / relative
+                new.parent.mkdir(parents=True)
+                new.write_text('// unrecorded build input')
+                with self.assertRaisesRegex(ValueError, relative):
+                    source_inputs(source)
+                modified = source_inputs(source, allow_modified_export=True)
+                self.assertFalse(modified['verifiedExport'])
+                self.assertEqual(modified['intentionalExportChanges'], [relative])
+                self.assertEqual(modified['files'][relative]['sha256'], digest(new))
                 new.unlink()
 
     def test_unknown_or_unsigned_cli_modes_fail_before_build(self):
@@ -210,7 +227,9 @@ class ReleaseManifestTests(unittest.TestCase):
         source = self.root / 'source'; scripts = source / 'scripts/macos'; scripts.mkdir(parents=True)
         for name in ('source-archive.py', 'release_manifest.py'):
             shutil.copy2(HERE / name, scripts / name)
-        source_file = source / 'shared/JavMetaLite.Fixture/File.cs'; source_file.parent.mkdir(parents=True)
+        source_relative = 'shared/JavMetaLite.Fixture/release/File.cs'
+        source_file = source / source_relative
+        source_file.parent.mkdir(parents=True)
         source_file.write_text('// synthetic source only')
         files = {p.relative_to(source).as_posix(): {'sha256': digest(p), 'mode': stat.S_IMODE(p.stat().st_mode)}
                  for p in source.rglob('*') if p.is_file()}
@@ -231,7 +250,7 @@ class ReleaseManifestTests(unittest.TestCase):
         subprocess.run(['/usr/bin/ditto', '-x', '-k', str(first), str(extracted)], check=True)
         checked = source_inputs(extracted / 'JavMetaLite')
         self.assertTrue(checked['verifiedExport'])
-        self.assertEqual(checked['files']['shared/JavMetaLite.Fixture/File.cs']['sha256'], digest(source_file))
+        self.assertEqual(checked['files'][source_relative]['sha256'], digest(source_file))
         for relative in ('release/portable.zip', '.dotnet-sdk/tool', 'macos/.build/app'):
             self.assertFalse((extracted / 'JavMetaLite' / relative).exists(), relative)
         self.assertTrue((extracted / 'JavMetaLite/README.md').is_file())

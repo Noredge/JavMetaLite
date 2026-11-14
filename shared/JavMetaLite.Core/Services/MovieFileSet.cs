@@ -51,13 +51,17 @@ public sealed class MovieFileSet
     public static MovieFileSet Create(IEnumerable<string> paths)
     {
         ArgumentNullException.ThrowIfNull(paths);
-        var parts = paths
-            .Select(Analyze)
+        return CreateFromParts(paths.Select(Analyze));
+    }
+
+    private static MovieFileSet CreateFromParts(IEnumerable<MovieFilePart> candidates)
+    {
+        var parts = candidates
             .DistinctBy(part => part.Path, FileSystemPathSemantics.PathComparer)
             .ToArray();
         if (parts.Length == 0)
         {
-            throw new ArgumentException("至少需要一个影片文件。", nameof(paths));
+            throw new ArgumentException("至少需要一个影片文件。", "paths");
         }
 
         var groupKey = GetGroupKey(parts[0]);
@@ -87,21 +91,19 @@ public sealed class MovieFileSet
         var selected = Analyze(videoPath);
         if (!selected.IsMultipart)
         {
-            return Create([selected.Path]);
+            return CreateFromParts([selected]);
         }
 
         var directory = Path.GetDirectoryName(selected.Path)!;
         var groupKey = GetGroupKey(selected);
-        var siblings = Directory.EnumerateFiles(directory)
-            .Where(VideoFileSupport.IsSupportedExistingFile)
-            .Select(Analyze)
-            .Where(part => string.Equals(GetGroupKey(part), groupKey, FileSystemPathSemantics.PathComparison))
-            .Select(part => part.Path)
-            .ToArray();
-        return Create(siblings);
+        return CreateFromParts(DiscoverSiblings(directory)
+            .Where(part => string.Equals(GetGroupKey(part), groupKey, FileSystemPathSemantics.PathComparison)));
     }
 
-    public static IReadOnlyList<MovieFileSet> Group(IEnumerable<string> paths)
+    public static IReadOnlyList<MovieFileSet> Group(IEnumerable<string> paths) => Group(paths, null, default);
+
+    internal static IReadOnlyList<MovieFileSet> Group(
+        IEnumerable<string> paths, Action<string, Exception>? onUnreadableSibling, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(paths);
         var selectedParts = paths
@@ -119,18 +121,38 @@ public sealed class MovieFileSet
                      .Select(part => Path.GetDirectoryName(part.Path)!)
                      .Distinct(FileSystemPathSemantics.PathComparer))
         {
-            expandedParts.AddRange(Directory.EnumerateFiles(directory)
-                .Where(VideoFileSupport.IsSupportedExistingFile)
-                .Select(Analyze)
+            expandedParts.AddRange(DiscoverSiblings(directory, onUnreadableSibling, cancellationToken)
                 .Where(part => selectedMultipartKeys.Contains(GetGroupKey(part))));
         }
 
         return expandedParts
-            .DistinctBy(part => part.Path, FileSystemPathSemantics.PathComparer)
             .GroupBy(GetGroupKey, FileSystemPathSemantics.PathComparer)
-            .Select(group => Create(group.Select(part => part.Path)))
+            .Select(CreateFromParts)
             .OrderBy(set => set.PrimaryPath, FileSystemPathSemantics.PathComparer)
             .ToArray();
+    }
+
+    private static IEnumerable<MovieFilePart> DiscoverSiblings(
+        string directory, Action<string, Exception>? onUnreadableSibling = null,
+        CancellationToken cancellationToken = default)
+    {
+        foreach (var path in Directory.EnumerateFiles(directory))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!VideoFileSupport.HasSupportedExtension(path))
+                continue;
+
+            MovieFilePart part;
+            try { part = Analyze(path); }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                onUnreadableSibling?.Invoke(path, exception);
+                continue;
+            }
+
+            if (File.Exists(part.Path))
+                yield return part;
+        }
     }
 
     public static string GetGroupKey(string videoPath) => GetGroupKey(Analyze(videoPath));
