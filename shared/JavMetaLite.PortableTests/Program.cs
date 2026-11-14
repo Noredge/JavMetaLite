@@ -279,6 +279,10 @@ internal static partial class Program
         Directory.CreateSymbolicLink(Path.Combine(temp.Path, "parts/loop"), temp.Path);
         var invalidVideoLink = Path.Combine(temp.Path, "parts/DEMO-002-cd3.mp4");
         File.CreateSymbolicLink(invalidVideoLink, invalidVideoLink);
+        var danglingPart = Path.Combine(temp.Path, "parts/DEMO-002-cd4.mp4");
+        File.CreateSymbolicLink(danglingPart, Path.Combine(temp.Path, "missing/DEMO-002-cd4.mp4"));
+        Check(!File.Exists(FileSystemPathSemantics.CanonicalizePath(danglingPart)),
+            "The dangling link fixture must resolve to a missing file without throwing");
         using var token = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var found = await MovieInputDiscovery.DiscoverAsync([temp.Path, dotted], true, token.Token);
         Equal(3, found.VideoPaths.Count);
@@ -293,9 +297,16 @@ internal static partial class Program
         var selected = await MovieInputDiscovery.DiscoverAsync([firstPart], false, token.Token);
         Check(selected.MovieFileSets.Single().VideoPaths.SequenceEqual(expectedParts),
             "The bad sibling discarded the CD group when selecting one part");
-        Check(selected.Diagnostics.Any(diagnostic => diagnostic.Path ==
-            Path.Combine(Path.GetDirectoryName(expectedParts[0])!, Path.GetFileName(invalidVideoLink))),
-            "An unreadable sibling was not diagnosed when selecting a single part");
+        foreach (var badPart in new[] { invalidVideoLink, danglingPart })
+        {
+            var diagnosticPath = Path.Combine(Path.GetDirectoryName(expectedParts[0])!, Path.GetFileName(badPart));
+            Check(found.Diagnostics.Any(diagnostic => diagnostic.Path == diagnosticPath &&
+                diagnostic.Kind == MovieFileDiscoveryDiagnosticKind.ReadFailed),
+                $"Broken sibling was not diagnosed during folder discovery: {badPart}");
+            Check(selected.Diagnostics.Any(diagnostic => diagnostic.Path == diagnosticPath &&
+                diagnostic.Kind == MovieFileDiscoveryDiagnosticKind.ReadFailed),
+                $"Broken sibling was not diagnosed when selecting one part: {badPart}");
+        }
         Equal("DEMO-001", MovieIdParser.TryExtract(dotted));
     }
 

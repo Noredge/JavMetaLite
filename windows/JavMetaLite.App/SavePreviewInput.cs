@@ -11,25 +11,30 @@ internal sealed record SavePreviewInput(
     MovieMetadata Metadata,
     MovieSaveConfiguration? Configuration,
     LocalSaveContext Context,
+    LocalSidecarPaths? Sidecars,
     string? Issue)
 {
-    internal static SavePreviewInput Capture(MovieJob job)
+    internal static SavePreviewInput Capture(MovieJob job, LocalSidecarPaths? discoveredSidecars = null)
     {
         var issue = job.VideoPath is null ? LocalizationService.Get("Error.SelectVideo")
             : job.LocalNfoSaveBlocked ? LocalizationService.Get("Error.LocalNfoBlocked")
             : job.SaveConfiguration is null ? LocalizationService.Get("Error.MissingJobSaveConfiguration")
             : null;
+        var context = job.CreateLocalSaveContext() with { LocalExtrafanartPaths = job.LocalExtrafanartPaths.ToArray() };
+        // Import can discover these paths even when it cannot read their contents.
+        var sidecars = context.MetadataBundle?.Sidecars;
+        if (discoveredSidecars is not null && job.VideoPaths.Contains(discoveredSidecars.VideoPath, FileSystemPathSemantics.PathComparer))
+            sidecars ??= discoveredSidecars;
         return new(job, job.ReviewRevision, job.VideoPaths.ToArray(), job.CaptureMetadata(), job.SaveConfiguration,
-            job.CreateLocalSaveContext() with { LocalExtrafanartPaths = job.LocalExtrafanartPaths.ToArray() }, issue);
+            context, sidecars, issue);
     }
 
     internal IEnumerable<string> SourcePaths()
     {
-        var sidecars = Context.MetadataBundle?.Sidecars;
         return VideoPaths
-            .Concat(new[] { sidecars?.NfoPath, sidecars?.PosterPath, sidecars?.FanartPath,
+            .Concat(new[] { Sidecars?.NfoPath, Sidecars?.PosterPath, Sidecars?.FanartPath,
                 Context.LocalArtwork?.LocalPosterPath, Context.LocalArtwork?.LocalFanartPath }.OfType<string>())
-            .Concat(sidecars?.ExtrafanartPaths ?? [])
+            .Concat(Sidecars?.ExtrafanartPaths ?? [])
             .Concat(Context.LocalExtrafanartPaths)
             .Where(Path.IsPathFullyQualified);
     }

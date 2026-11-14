@@ -38,8 +38,135 @@ internal static partial class Program
         await TestRetryComparisonCancellationAsync(Path.Combine(root, "retry"));
         await TestBatchPathConflictPreviewAsync(Path.Combine(root, "batch"));
         await TestSkippedBatchInputConflictAsync(Path.Combine(root, "batch-unavailable-target"));
+        await TestUnreadableImportedNfoConflictAsync(Path.Combine(root, "batch-unreadable-nfo"));
         await TestSavePreflightCancellationAsync(Path.Combine(root, "save-preflight"));
-        Console.WriteLine("UI PASS viewerApplyBusy=True lateMainPreviewRejected=True retryComparisonCancelRecovers=True batchPathConflictsBlocked=True sharedExtrafanartNamespace=True");
+        await TestSaveExecutionCancellationAsync(Path.Combine(root, "save-execution"));
+        Console.WriteLine("UI PASS viewerApplyBusy=True lateMainPreviewRejected=True retryComparisonCancelRecovers=True batchPathConflictsBlocked=True sharedExtrafanartNamespace=True unreadableNfoProtected=True saveRechecksCancelable=True");
+    }
+
+    private static async Task TestUnreadableImportedNfoConflictAsync(string root)
+    {
+        var library = Directory.CreateDirectory(Path.Combine(root, "library")).FullName;
+        var destination = Directory.CreateDirectory(Path.Combine(library, "RBD-143")).FullName;
+        var video = Path.Combine(destination, "RBD-143.mp4");
+        var nfo = Path.Combine(destination, "movie.nfo");
+        const string originalNfo = "<movie><title>Original metadata</title></movie>";
+        File.WriteAllText(video, "original movie");
+        File.WriteAllText(nfo, originalNfo);
+        var incoming = Directory.CreateDirectory(Path.Combine(root, "incoming")).FullName;
+        var firstPart = Path.Combine(incoming, "RBD-143-cd1.mp4");
+        var secondPart = Path.Combine(incoming, "RBD-143-cd2.mp4");
+        File.WriteAllText(firstPart, "first part");
+        File.WriteAllText(secondPart, "second part");
+
+        var window = new MainWindow(new AppPreferencesStore(Path.Combine(root, "settings")))
+            { ShowActivated = false, ShowInTaskbar = false };
+        window.Show();
+        try
+        {
+            ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Task ImportAsync(string path) =>
+                (Task)FinalReviewInvoke(window, "AddMovieFilesAsync", (object)new[] { path })!;
+
+            using (File.Open(nfo, FileMode.Open, FileAccess.Read, FileShare.None))
+                await ImportAsync(video);
+            var queue = (IList)FinalReviewField(window, "_movieQueue");
+            var skipped = queue.Cast<MovieJob>().Single();
+            var loadResults = (IReadOnlyDictionary<MovieJob, MovieJobLoadResult>)FinalReviewField(window, "_jobLoadResults");
+            CoverAssert(skipped.LocalNfoSaveBlocked && skipped.LocalMetadataBundle is null &&
+                loadResults[skipped].MetadataStatus == LocalMetadataLoadStatus.NfoReadFailed &&
+                loadResults[skipped].Sidecars?.NfoPath == nfo, "Import did not retain the unreadable NFO path.");
+
+            await ImportAsync(firstPart);
+            var writer = queue.Cast<MovieJob>().Single(job => job != skipped);
+            var configuration = new MovieSaveConfiguration(
+                new SaveOptions(true, false, false, false, false, false),
+                new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, true, library));
+            writer.UpdateSaveConfiguration(configuration);
+            await FinalReviewActivate(window, writer, false);
+            skipped.IsSelectedForBatch = writer.IsSelectedForBatch = true;
+            var plan = FileOrganizationService.BuildPlan(writer.VideoPaths, writer.Metadata, configuration.SaveOptions,
+                configuration.OrganizationOptions, writer.CreateLocalSaveContext());
+            CoverAssert(!plan.HasBlockingConflicts && plan.OverwriteConflicts.Contains(nfo),
+                "The second movie must target the existing folder NFO after the import lock is released.");
+
+            _ = window.Dispatcher.BeginInvoke(() => ((Button)window.FindName("SaveSelectedButton"))
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
+            await UntilStableAsync(() => Application.Current.Windows.OfType<BatchSavePreviewWindow>().Any(),
+                "Batch with an unreadable imported NFO did not preview.");
+            var preview = Application.Current.Windows.OfType<BatchSavePreviewWindow>().Single();
+            ((CheckBox)preview.FindName("OverwriteConfirmCheckBox")).IsChecked = true;
+            CoverAssert(preview.Items.Count == 0 && preview.Issues.Count == 2 &&
+                preview.Issues.Single(issue => issue.Job == writer).Message.Contains(nfo) &&
+                !((Button)preview.FindName("ConfirmButton")).IsEnabled,
+                "Overwrite consent allowed another movie to replace the skipped movie's NFO.");
+            preview.DialogResult = false;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            CoverAssert(File.ReadAllText(nfo) == originalNfo, "Batch preflight modified the skipped movie's NFO.");
+        }
+        finally
+        {
+            foreach (var dialog in Application.Current.Windows.OfType<BatchSavePreviewWindow>()
+                .Where(dialog => dialog.Owner == window).ToArray())
+                dialog.Close();
+            window.Close();
+        }
+    }
+
+    private static async Task TestSaveExecutionCancellationAsync(string root)
+    {
+        Directory.CreateDirectory(root);
+        var video = Path.Combine(root, "RBD-144.mp4");
+        var nfo = Path.ChangeExtension(video, ".nfo");
+        const string originalNfo = "<movie><title>Before save</title></movie>";
+        File.WriteAllText(video, "original movie");
+        File.WriteAllText(nfo, originalNfo);
+        var metadata = new MovieMetadata { Id = "RBD-144", Title = "Replacement" };
+        var plan = await FileOrganizationService.BindPreviewTargetsAsync(FileOrganizationService.BuildPlan(video, metadata,
+            new SaveOptions(true, false, false, false, false, false),
+            new OrganizationOptions(OrganizationTargetMode.VideoDirectory, false)), metadata);
+        var window = new MainWindow(new AppPreferencesStore(Path.Combine(root, "settings")))
+            { ShowActivated = false, ShowInTaskbar = false };
+        window.Show();
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var progress = new SaveProgressProbe(update =>
+        {
+            if (update.Stage != FileTransactionStage.Preparing) return;
+            var onDispatcher = window.Dispatcher.CheckAccess();
+            if (started.TrySetResult(onDispatcher) && !onDispatcher)
+                release.Task.GetAwaiter().GetResult();
+        });
+        try
+        {
+            var returned = false;
+            var operation = (Task)FinalReviewInvoke(window, "RunBusyAsync", "Synthetic confirmed save",
+                (Func<Task>)(async () =>
+                {
+                    var cancellation = (CancellationTokenSource)FinalReviewField(window, "_activeOperationCancellation");
+                    await window.ExecuteSaveAsync(plan, metadata, true, cancellation.Token, progress);
+                    returned = true;
+                }))!;
+            CoverAssert(!await started.Task.WaitAsync(TimeSpan.FromSeconds(10)), "Confirmed save rechecks ran on the dispatcher.");
+            var cancel = (Button)window.FindName("CancelOperationButton");
+            CoverAssert(IsWindowBusy(window) && cancel.IsVisible && cancel.IsEnabled, "Confirmed save cannot be canceled.");
+            cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            release.TrySetResult();
+            await operation.WaitAsync(TimeSpan.FromSeconds(10));
+            CoverAssert(!returned && !IsWindowBusy(window) && File.ReadAllText(nfo) == originalNfo &&
+                File.ReadAllText(video) == "original movie" && !Directory.EnumerateDirectories(root, ".JavMetaLite-*.tmp").Any(),
+                "Canceling the recheck began or committed a save.");
+        }
+        finally
+        {
+            release.TrySetResult();
+            window.Close();
+        }
+    }
+
+    private sealed class SaveProgressProbe(Action<FileTransactionProgress> report) : IProgress<FileTransactionProgress>
+    {
+        public void Report(FileTransactionProgress value) => report(value);
     }
 
     private static async Task TestSkippedBatchInputConflictAsync(string root)

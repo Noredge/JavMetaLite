@@ -150,8 +150,14 @@ public sealed class MovieFileSet
                 continue;
             }
 
-            if (File.Exists(part.Path))
-                yield return part;
+            if (!File.Exists(part.Path))
+            {
+                onUnreadableSibling?.Invoke(path,
+                    new FileNotFoundException($"找不到解析后的影片文件：{part.Path}", part.Path));
+                continue;
+            }
+
+            yield return part;
         }
     }
 

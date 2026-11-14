@@ -869,7 +869,7 @@ public partial class MainWindow : Window
         {
             var transactionProgress = new Progress<FileTransactionProgress>(update =>
                 SetStatus(GetLocalizedTransactionProgress(update), null));
-            var result = await _fileOrganizationService.ExecuteAsync(
+            var result = await ExecuteSaveAsync(
                 plan,
                 input.Metadata,
                 allowOverwrite,
@@ -1110,7 +1110,9 @@ public partial class MainWindow : Window
             _activeJob.InitializeSaveConfiguration(CaptureCurrentSaveConfiguration());
         }
 
-        var inputs = selectedJobs.Select(SavePreviewInput.Capture).ToDictionary(input => input.Job);
+        var inputs = selectedJobs
+            .Select(job => SavePreviewInput.Capture(job, _jobLoadResults.GetValueOrDefault(job)?.Sidecars))
+            .ToDictionary(input => input.Job);
         var prepared = await RunSavePreflightAsync(async token =>
         {
             var items = new List<BatchSavePreviewItem>();
@@ -1236,7 +1238,7 @@ public partial class MainWindow : Window
                                 item.Job.Metadata.Id,
                                 GetLocalizedTransactionProgress(update)),
                             null));
-                    return await _fileOrganizationService.ExecuteAsync(
+                    return await ExecuteSaveAsync(
                         item.Plan,
                         inputs[item.Job].Metadata,
                         item.AllowOverwrite,
@@ -1307,6 +1309,11 @@ public partial class MainWindow : Window
     }
 
     private sealed record PreparedBatchPreview(List<BatchSavePreviewItem> Items, List<BatchSavePreviewIssue> Issues);
+
+    internal Task<OrganizedSaveResult> ExecuteSaveAsync(
+        SavePlan plan, MovieMetadata metadata, bool allowOverwrite, CancellationToken token,
+        IProgress<FileTransactionProgress> progress) =>
+        Task.Run(() => _fileOrganizationService.ExecuteAsync(plan, metadata, allowOverwrite, token, progress), token);
 
     internal async Task<T?> RunSavePreflightAsync<T>(Func<CancellationToken, Task<T>> prepare) where T : class
     {

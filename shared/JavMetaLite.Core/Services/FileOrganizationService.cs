@@ -452,7 +452,7 @@ public sealed class FileOrganizationService
             if (Directory.Exists(path) || File.Exists(path) != existedAtPlanning)
                 throw new IOException($"目标文件在准备预览时发生变化，请重新生成预览：{path}");
             var hash = existedAtPlanning
-                ? await HashPreviewFileAsync(path, cancellationToken).ConfigureAwait(false) : null;
+                ? await ComputeSidecarSha256Async(path, cancellationToken).ConfigureAwait(false) : null;
             expectations.Add(new TargetFileExpectation(path, existedAtPlanning, hash));
         }
         cancellationToken.ThrowIfCancellationRequested();
@@ -466,6 +466,7 @@ public sealed class FileOrganizationService
         CancellationToken cancellationToken = default,
         IProgress<FileTransactionProgress>? progress = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ValidatePlanPathSafety(plan);
         if (plan.VideoTransfers.Count > 1)
         {
@@ -488,8 +489,8 @@ public sealed class FileOrganizationService
         {
             throw new FileNotFoundException("执行前找不到原影片，未进行任何更改。", plan.SourceVideoPath);
         }
-        ValidateSourceExpectations(plan.SourceFileExpectations);
-        ValidateTargetExpectations(plan.PreviewTargetExpectations);
+        await ValidateSourceExpectationsAsync(plan.SourceFileExpectations, cancellationToken);
+        await ValidateTargetExpectationsAsync(plan.PreviewTargetExpectations, cancellationToken);
         if (plan.VideoWillMove && (File.Exists(plan.TargetVideoPath) || Directory.Exists(plan.TargetVideoPath)))
         {
             throw new IOException($"目标影片已经存在，未进行任何更改：{plan.TargetVideoPath}");
@@ -570,8 +571,8 @@ public sealed class FileOrganizationService
                 : new SaveResult(null, null, null, [], false);
 
             timing.Begin("stageAndVerify");
-            ValidateSourceExpectations(plan.SourceFileExpectations);
-            ValidateTargetExpectations(plan.PreviewTargetExpectations);
+            await ValidateSourceExpectationsAsync(plan.SourceFileExpectations, cancellationToken);
+            await ValidateTargetExpectationsAsync(plan.PreviewTargetExpectations, cancellationToken);
             var stagedPaths = new[] { stagedResult.NfoPath, stagedResult.PosterPath, stagedResult.FanartPath }
                 .Where(path => path is not null)
                 .Select(path => path!)
@@ -592,7 +593,8 @@ public sealed class FileOrganizationService
                 var stagedPath = Path.Combine(sourceStagingRoot, relativePath);
                 Directory.CreateDirectory(Path.GetDirectoryName(stagedPath)!);
                 File.Copy(transfer.SourcePath, stagedPath, overwrite: false);
-                if (!string.Equals(ComputeSha256(stagedPath), transfer.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(await ComputeSidecarSha256Async(stagedPath, cancellationToken),
+                        transfer.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
                     throw new IOException($"本地 sidecar 在复制过程中发生变化，原文件保持不变：{transfer.SourcePath}");
                 stagedPaths.Add(stagedPath);
             }
@@ -692,11 +694,12 @@ public sealed class FileOrganizationService
             progress?.Report(new FileTransactionProgress(
                 FileTransactionStage.Committing,
                 "正在提交目标影片与 metadata…"));
-            ValidateSourceExpectations(plan.SourceFileExpectations);
+            await ValidateSourceExpectationsAsync(plan.SourceFileExpectations, cancellationToken);
             foreach (var mapping in mappings)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                ValidateTargetExpectations(plan.PreviewTargetExpectations.Where(expected => PathsEqual(expected.Path, mapping.FinalPath)));
+                await ValidateTargetExpectationsAsync(
+                    plan.PreviewTargetExpectations.Where(expected => PathsEqual(expected.Path, mapping.FinalPath)), cancellationToken);
                 Directory.CreateDirectory(Path.GetDirectoryName(mapping.FinalPath)!);
                 if (File.Exists(mapping.FinalPath))
                 {
@@ -707,7 +710,7 @@ public sealed class FileOrganizationService
                     Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
                     await FileSharingRetry.MoveAsync(mapping.FinalPath, backupPath, cancellationToken);
                     backups.Add((backupPath, mapping.FinalPath));
-                    ValidateBackedUpTarget(plan.PreviewTargetExpectations, mapping.FinalPath, backupPath);
+                    await ValidateBackedUpTargetAsync(plan.PreviewTargetExpectations, mapping.FinalPath, backupPath, cancellationToken);
                 }
                 var ownership = await FileSharingRetry.RunAsync(() => TransactionFileOwnership.Capture(
                     mapping.StagedPath, mapping.FinalPath, targetStagingRoot, ComputeSha256(mapping.StagedPath)),
@@ -735,12 +738,13 @@ public sealed class FileOrganizationService
                 {
                     continue;
                 }
-                ValidateSourceExpectations(plan.SourceFileExpectations.Where(expected => PathsEqual(expected.Path, sourcePath)));
+                await ValidateSourceExpectationsAsync(
+                    plan.SourceFileExpectations.Where(expected => PathsEqual(expected.Path, sourcePath)), cancellationToken);
                 var backupPath = Path.Combine(sourceRetireRoot, $"{index:D2}-{Path.GetFileName(sourcePath)}");
                 Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
                 await FileSharingRetry.MoveAsync(sourcePath, backupPath, cancellationToken);
                 backups.Add((backupPath, sourcePath));
-                ValidateRetiredSource(plan.SourceFileExpectations, sourcePath, backupPath);
+                await ValidateRetiredSourceAsync(plan.SourceFileExpectations, sourcePath, backupPath, cancellationToken);
             }
 
             if (plan.VideoWillMove)
@@ -881,8 +885,8 @@ public sealed class FileOrganizationService
             }
         }
 
-        ValidateSourceExpectations(plan.SourceFileExpectations);
-        ValidateTargetExpectations(plan.PreviewTargetExpectations);
+        await ValidateSourceExpectationsAsync(plan.SourceFileExpectations, cancellationToken);
+        await ValidateTargetExpectationsAsync(plan.PreviewTargetExpectations, cancellationToken);
         var currentConflicts = GetPlannedWritePaths(plan, metadata).Where(File.Exists).ToArray();
         if (currentConflicts.Length > 0 && !allowOverwrite)
         {
@@ -958,8 +962,8 @@ public sealed class FileOrganizationService
                 : new SaveResult(null, null, null, [], false);
 
             timing.Begin("stageAndVerify");
-            ValidateSourceExpectations(plan.SourceFileExpectations);
-            ValidateTargetExpectations(plan.PreviewTargetExpectations);
+            await ValidateSourceExpectationsAsync(plan.SourceFileExpectations, cancellationToken);
+            await ValidateTargetExpectationsAsync(plan.PreviewTargetExpectations, cancellationToken);
             var stagedPaths = new[] { stagedResult.NfoPath, stagedResult.PosterPath, stagedResult.FanartPath }
                 .Where(path => path is not null)
                 .Select(path => path!)
@@ -980,7 +984,8 @@ public sealed class FileOrganizationService
                 var stagedPath = Path.Combine(sourceStagingRoot, relativePath);
                 Directory.CreateDirectory(Path.GetDirectoryName(stagedPath)!);
                 File.Copy(transfer.SourcePath, stagedPath, overwrite: false);
-                if (!string.Equals(ComputeSha256(stagedPath), transfer.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(await ComputeSidecarSha256Async(stagedPath, cancellationToken),
+                        transfer.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
                     throw new IOException($"本地 sidecar 在复制过程中发生变化，原文件保持不变：{transfer.SourcePath}");
                 stagedPaths.Add(stagedPath);
             }
@@ -1078,11 +1083,12 @@ public sealed class FileOrganizationService
             progress?.Report(new FileTransactionProgress(
                 FileTransactionStage.Committing,
                 "正在提交多分段影片与 metadata…"));
-            ValidateSourceExpectations(plan.SourceFileExpectations);
+            await ValidateSourceExpectationsAsync(plan.SourceFileExpectations, cancellationToken);
             foreach (var mapping in mappings)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                ValidateTargetExpectations(plan.PreviewTargetExpectations.Where(expected => PathsEqual(expected.Path, mapping.FinalPath)));
+                await ValidateTargetExpectationsAsync(
+                    plan.PreviewTargetExpectations.Where(expected => PathsEqual(expected.Path, mapping.FinalPath)), cancellationToken);
                 Directory.CreateDirectory(Path.GetDirectoryName(mapping.FinalPath)!);
                 if (File.Exists(mapping.FinalPath))
                 {
@@ -1093,7 +1099,7 @@ public sealed class FileOrganizationService
                     Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
                     await FileSharingRetry.MoveAsync(mapping.FinalPath, backupPath, cancellationToken);
                     backups.Add((backupPath, mapping.FinalPath));
-                    ValidateBackedUpTarget(plan.PreviewTargetExpectations, mapping.FinalPath, backupPath);
+                    await ValidateBackedUpTargetAsync(plan.PreviewTargetExpectations, mapping.FinalPath, backupPath, cancellationToken);
                 }
                 var ownership = await FileSharingRetry.RunAsync(() => TransactionFileOwnership.Capture(
                     mapping.StagedPath, mapping.FinalPath, targetStagingRoot, ComputeSha256(mapping.StagedPath)),
@@ -1121,12 +1127,13 @@ public sealed class FileOrganizationService
                 {
                     continue;
                 }
-                ValidateSourceExpectations(plan.SourceFileExpectations.Where(expected => PathsEqual(expected.Path, sourcePath)));
+                await ValidateSourceExpectationsAsync(
+                    plan.SourceFileExpectations.Where(expected => PathsEqual(expected.Path, sourcePath)), cancellationToken);
                 var backupPath = Path.Combine(sourceRetireRoot, $"sidecar-{index:D2}-{Path.GetFileName(sourcePath)}");
                 Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
                 await FileSharingRetry.MoveAsync(sourcePath, backupPath, cancellationToken);
                 backups.Add((backupPath, sourcePath));
-                ValidateRetiredSource(plan.SourceFileExpectations, sourcePath, backupPath);
+                await ValidateRetiredSourceAsync(plan.SourceFileExpectations, sourcePath, backupPath, cancellationToken);
             }
 
             var movingVideoTransfers = plan.VideoTransfers.Where(transfer => transfer.WillMove).ToArray();
@@ -1392,7 +1399,7 @@ public sealed class FileOrganizationService
             return;
         }
         var currentHash = cancellationToken.CanBeCanceled
-            ? HashPreviewFileAsync(path, cancellationToken).GetAwaiter().GetResult()
+            ? ComputeSidecarSha256Async(path, cancellationToken).GetAwaiter().GetResult()
             : ComputeSha256(path);
         if (!string.IsNullOrWhiteSpace(expectedHash) &&
             !string.Equals(currentHash, expectedHash, StringComparison.OrdinalIgnoreCase))
@@ -1402,26 +1409,31 @@ public sealed class FileOrganizationService
         expectations.Add(new SourceFileExpectation(path, expectedHash ?? currentHash, description));
     }
 
-    private static void ValidateSourceExpectations(IEnumerable<SourceFileExpectation> expectations)
+    private static async Task ValidateSourceExpectationsAsync(
+        IEnumerable<SourceFileExpectation> expectations, CancellationToken cancellationToken)
     {
         foreach (var expectation in expectations)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             FileSystemPathSemantics.ValidateCanonicalPath(expectation.Path);
             if (!File.Exists(expectation.Path))
             {
                 throw new IOException($"{expectation.Description} 在预览后消失，未执行保存：{expectation.Path}");
             }
-            if (!string.Equals(ComputeSha256(expectation.Path), expectation.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+            var hash = await ComputeSidecarSha256Async(expectation.Path, cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(hash, expectation.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
             {
                 throw new IOException($"{expectation.Description} 在预览后发生变化，未执行保存：{expectation.Path}");
             }
         }
     }
 
-    private static void ValidateTargetExpectations(IEnumerable<TargetFileExpectation> expectations)
+    private static async Task ValidateTargetExpectationsAsync(
+        IEnumerable<TargetFileExpectation> expectations, CancellationToken cancellationToken)
     {
         foreach (var expectation in expectations)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             FileSystemPathSemantics.ValidateCanonicalPath(expectation.Path);
             FileSystemPathSemantics.ValidateUnambiguousPath(expectation.Path);
             var exists = File.Exists(expectation.Path);
@@ -1429,29 +1441,32 @@ public sealed class FileOrganizationService
                 new FileInfo(expectation.Path).LinkTarget is not null)
                 throw new IOException($"Target occupancy changed after preview: {expectation.Path}");
             if (exists && expectation.ExpectedSha256 is { } hash &&
-                !string.Equals(ComputeSha256(expectation.Path), hash, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(await ComputeSidecarSha256Async(expectation.Path, cancellationToken).ConfigureAwait(false),
+                    hash, StringComparison.OrdinalIgnoreCase))
                 throw new IOException($"Target contents changed after preview: {expectation.Path}");
         }
     }
 
-    private static void ValidateBackedUpTarget(IEnumerable<TargetFileExpectation> expectations,
-        string originalPath, string backupPath)
+    private static async Task ValidateBackedUpTargetAsync(IEnumerable<TargetFileExpectation> expectations,
+        string originalPath, string backupPath, CancellationToken cancellationToken)
     {
         var expected = expectations.FirstOrDefault(item => PathsEqual(item.Path, originalPath));
         if (expected is null) return;
         // Validate the bytes actually moved, closing the check-to-backup window. The backup
         // is registered first, so any unexpected external version is restored on failure.
         if (!expected.Exists || expected.ExpectedSha256 is { } hash &&
-            !string.Equals(ComputeSha256(backupPath), hash, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(await ComputeSidecarSha256Async(backupPath, cancellationToken).ConfigureAwait(false),
+                hash, StringComparison.OrdinalIgnoreCase))
             throw new IOException($"Target changed while preparing its backup: {originalPath}");
     }
 
-    private static void ValidateRetiredSource(IEnumerable<SourceFileExpectation> expectations,
-        string originalPath, string backupPath)
+    private static async Task ValidateRetiredSourceAsync(IEnumerable<SourceFileExpectation> expectations,
+        string originalPath, string backupPath, CancellationToken cancellationToken)
     {
         var expected = expectations.FirstOrDefault(item => PathsEqual(item.Path, originalPath));
         if (expected is not null &&
-            !string.Equals(ComputeSha256(backupPath), expected.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(await ComputeSidecarSha256Async(backupPath, cancellationToken).ConfigureAwait(false),
+                expected.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
             throw new IOException($"Source changed while preparing its retirement backup: {originalPath}");
     }
 
@@ -1494,8 +1509,9 @@ public sealed class FileOrganizationService
         return Convert.ToHexString(SHA256.HashData(stream));
     }
 
-    private static async Task<string> HashPreviewFileAsync(string path, CancellationToken cancellationToken)
+    private static async Task<string> ComputeSidecarSha256Async(string path, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
             bufferSize: 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
         return Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
