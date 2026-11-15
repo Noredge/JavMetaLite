@@ -301,4 +301,5 @@
     <sys:String x:Key="Status.PreparingSavePreview">Checking files for the save preview…</sys:String>
     <sys:String x:Key="Error.SavePreviewChanged">The movie or its save settings changed. Open a new save preview.</sys:String>
     <sys:String x:Key="Discovery.SkippedMovieFiles">Skipped {0} movie file(s) that could not be read.</sys:String>
+    <sys:String x:Key="Error.FolderNfoOwnershipChanged">The folder NFO is no longer assigned to this movie. Reimport the movie before saving.&#10;{0}</sys:String>
 </ResourceDictionary>

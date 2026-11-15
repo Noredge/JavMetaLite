@@ -518,4 +518,5 @@
     <sys:String x:Key="Status.PreparingSavePreview">正在检查保存预览所需的文件…</sys:String>
     <sys:String x:Key="Error.SavePreviewChanged">影片或保存设置已更改，请重新打开保存预览。</sys:String>
     <sys:String x:Key="Discovery.SkippedMovieFiles">已跳过 {0} 个无法读取的影片文件。</sys:String>
+    <sys:String x:Key="Error.FolderNfoOwnershipChanged">此影片已无法使用文件夹级 NFO。请重新导入影片后再保存。&#10;{0}</sys:String>
 </ResourceDictionary>

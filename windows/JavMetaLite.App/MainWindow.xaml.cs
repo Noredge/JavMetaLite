@@ -4400,14 +4400,16 @@ public partial class MainWindow : Window
     }
 
     private static string GetLocalizedExceptionMessage(Exception exception) =>
-        exception is MetadataSourceTimeoutException timeout
-            ? LocalizationService.Get(
+        exception switch
+        {
+            MetadataSourceTimeoutException timeout => LocalizationService.Get(
                 "Error.SourceTimeout",
                 timeout.SourceDisplayName,
-                Math.Ceiling(timeout.Timeout.TotalSeconds))
-            : exception is MetadataSourceRateLimitException
-                ? LocalizationService.Get("Error.SourceRateLimited")
-                : exception.Message;
+                Math.Ceiling(timeout.Timeout.TotalSeconds)),
+            MetadataSourceRateLimitException => LocalizationService.Get("Error.SourceRateLimited"),
+            FolderNfoOwnershipChangedException ownership => LocalizationService.Get("Error.FolderNfoOwnershipChanged", ownership.NfoPath),
+            _ => exception.Message
+        };
 
     private void OpenLogs_Click(object sender, RoutedEventArgs e)
     {

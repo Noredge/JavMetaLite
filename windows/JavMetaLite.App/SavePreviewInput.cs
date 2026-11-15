@@ -14,6 +14,8 @@ internal sealed record SavePreviewInput(
     LocalSidecarPaths? Sidecars,
     string? Issue)
 {
+    private string? FolderNfoOwnershipChangedMessage { get; init; }
+
     internal static SavePreviewInput Capture(MovieJob job, LocalSidecarPaths? discoveredSidecars = null)
     {
         var issue = job.VideoPath is null ? LocalizationService.Get("Error.SelectVideo")
@@ -26,7 +28,11 @@ internal sealed record SavePreviewInput(
         if (discoveredSidecars is not null && job.VideoPaths.Contains(discoveredSidecars.VideoPath, FileSystemPathSemantics.PathComparer))
             sidecars ??= discoveredSidecars;
         return new(job, job.ReviewRevision, job.VideoPaths.ToArray(), job.CaptureMetadata(), job.SaveConfiguration,
-            context, sidecars, issue);
+            context, sidecars, issue)
+        {
+            FolderNfoOwnershipChangedMessage = context.MetadataBundle?.Sidecars.NfoPath is { } path
+                ? LocalizationService.Get("Error.FolderNfoOwnershipChanged", path) : null
+        };
     }
 
     internal IEnumerable<string> SourcePaths()
@@ -65,7 +71,8 @@ internal sealed record SavePreviewInput(
         catch (Exception exception) when (!token.IsCancellationRequested)
         {
             AppLog.Warning($"批量保存预检失败 id={Metadata.Id} path={VideoPaths.FirstOrDefault()}", exception);
-            return new(null, exception.Message);
+            return new(null, exception is FolderNfoOwnershipChangedException
+                ? FolderNfoOwnershipChangedMessage ?? exception.Message : exception.Message);
         }
     }
 }
