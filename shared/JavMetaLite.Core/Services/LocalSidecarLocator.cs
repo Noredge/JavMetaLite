@@ -2,9 +2,17 @@ using JavMetaLite.Core.Models;
 
 namespace JavMetaLite.Core.Services;
 
+public sealed class FolderSidecarOwnershipChangedException(string sidecarPath)
+    : IOException($"The folder sidecar is no longer assigned to this movie. Reimport the movie before saving.{Environment.NewLine}{sidecarPath}")
+{
+    public string SidecarPath { get; } = sidecarPath;
+}
+
 public static class LocalSidecarLocator
 {
     private static readonly string[] ArtworkExtensions = [".jpg", ".jpeg", ".png", ".webp"];
+    private static readonly string[] FolderPosterNames = ["poster", "cover", "folder", "movie", "default"];
+    private static readonly string[] FolderFanartNames = ["fanart", "backdrop", "background", "art"];
 
     public static LocalSidecarPaths Locate(
         string videoPath,
@@ -60,14 +68,14 @@ public static class LocalSidecarLocator
             files.TryGetValue("movie.nfo", out nfoPath);
 
         var posterPath = (preferFolderSidecars
-                             ? FindStandaloneArtwork(files, ["poster", "cover", "folder", "movie", "default"])
+                             ? FindStandaloneArtwork(files, FolderPosterNames)
                              : null) ??
                          FindArtwork(files, baseName, "-poster") ??
                          (!baseName.Equals(videoBaseName, StringComparison.OrdinalIgnoreCase)
                              ? FindArtwork(files, videoBaseName, "-poster")
                              : null);
         var fanartPath = (preferFolderSidecars
-                             ? FindStandaloneArtwork(files, ["fanart", "backdrop", "background", "art"])
+                             ? FindStandaloneArtwork(files, FolderFanartNames)
                              : null) ??
                          FindArtwork(files, baseName, "-fanart") ??
                          (!baseName.Equals(videoBaseName, StringComparison.OrdinalIgnoreCase)
@@ -87,6 +95,35 @@ public static class LocalSidecarLocator
         {
             ExtrafanartPaths = inventory.ExtrafanartPaths
         };
+    }
+
+    internal static void ValidateWindowsFolderSidecarOwnership(
+        string sourceVideoPath, LocalSaveContext? context, CancellationToken token)
+    {
+        if (!OperatingSystem.IsWindows() || context is null) return;
+
+        var imported = context.MetadataBundle?.Sidecars;
+        var nfo = imported?.NfoPath;
+        var poster = context.LocalArtwork?.LocalPosterPath;
+        var fanart = context.LocalArtwork?.LocalFanartPath;
+        var folderNfo = string.Equals(Path.GetFileName(nfo), "movie.nfo", StringComparison.OrdinalIgnoreCase) ? nfo : null;
+        var folderPoster = FolderPosterNames.Contains(Path.GetFileNameWithoutExtension(poster), StringComparer.OrdinalIgnoreCase)
+            ? poster : null;
+        var folderFanart = FolderFanartNames.Contains(Path.GetFileNameWithoutExtension(fanart), StringComparer.OrdinalIgnoreCase)
+            ? fanart : null;
+        if (folderNfo is null && folderPoster is null && folderFanart is null) return;
+
+        // Check the original source name before applying any save-time multipart naming.
+        var original = MovieFileSet.Create([imported?.VideoPath ?? sourceVideoPath]);
+        var fresh = Locate(original.PrimaryPath, original.MovieBaseName, original.UsesMultipartNaming, scope: null, token: token);
+        foreach (var (expected, actual) in new[]
+                 {
+                     (folderNfo, fresh.NfoPath), (folderPoster, fresh.PosterPath), (folderFanart, fresh.FanartPath)
+                 })
+        {
+            if (expected is not null && (actual is null || !FileSystemPathSemantics.PathsEqual(expected, actual)))
+                throw new FolderSidecarOwnershipChangedException(expected);
+        }
     }
 
     private static string? FindArtwork(

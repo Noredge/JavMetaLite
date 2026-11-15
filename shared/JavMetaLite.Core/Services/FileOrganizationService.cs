@@ -3,12 +3,6 @@ using JavMetaLite.Core.Models;
 
 namespace JavMetaLite.Core.Services;
 
-public sealed class FolderNfoOwnershipChangedException(string nfoPath)
-    : IOException($"The folder NFO is no longer assigned to this movie. Reimport the movie before saving.{Environment.NewLine}{nfoPath}")
-{
-    public string NfoPath { get; } = nfoPath;
-}
-
 public sealed class FileOrganizationService
 {
     private readonly OutputService _outputService;
@@ -189,7 +183,7 @@ public sealed class FileOrganizationService
         {
             throw new InvalidOperationException("本地 NFO 上下文不属于当前影片，请重新选择影片。");
         }
-        ValidateWindowsFolderNfoOwnership(localBundle, cancellationToken);
+        LocalSidecarLocator.ValidateWindowsFolderSidecarOwnership(sourceVideoPath, localContext, cancellationToken);
 
         // Reject a newly introduced direct link before canonicalization can hide it.
         foreach (var path in new[] { localContext?.LocalArtwork?.LocalPosterPath, localContext?.LocalArtwork?.LocalFanartPath }
@@ -478,7 +472,7 @@ public sealed class FileOrganizationService
     {
         cancellationToken.ThrowIfCancellationRequested();
         ValidatePlanPathSafety(plan);
-        ValidateWindowsFolderNfoOwnership(plan.LocalContext?.MetadataBundle, cancellationToken);
+        LocalSidecarLocator.ValidateWindowsFolderSidecarOwnership(plan.SourceVideoPath, plan.LocalContext, cancellationToken);
         if (plan.VideoTransfers.Count > 1)
         {
             return await ExecuteMultipartAsync(
@@ -705,7 +699,7 @@ public sealed class FileOrganizationService
                 FileTransactionStage.Committing,
                 "正在提交目标影片与 metadata…"));
             await ValidateSourceExpectationsAsync(plan.SourceFileExpectations, cancellationToken);
-            ValidateWindowsFolderNfoOwnership(plan.LocalContext?.MetadataBundle, cancellationToken);
+            LocalSidecarLocator.ValidateWindowsFolderSidecarOwnership(plan.SourceVideoPath, plan.LocalContext, cancellationToken);
             foreach (var mapping in mappings)
             {
                 committedOutputs.Add(await CommitOutputAsync(
@@ -1076,7 +1070,7 @@ public sealed class FileOrganizationService
                 FileTransactionStage.Committing,
                 "正在提交多分段影片与 metadata…"));
             await ValidateSourceExpectationsAsync(plan.SourceFileExpectations, cancellationToken);
-            ValidateWindowsFolderNfoOwnership(plan.LocalContext?.MetadataBundle, cancellationToken);
+            LocalSidecarLocator.ValidateWindowsFolderSidecarOwnership(plan.SourceVideoPath, plan.LocalContext, cancellationToken);
             foreach (var mapping in mappings)
             {
                 committedOutputs.Add(await CommitOutputAsync(
@@ -1382,21 +1376,6 @@ public sealed class FileOrganizationService
             blockingConflicts.Add($"{description} 在载入后已被外部修改，请重新选择影片：{path}");
         }
         expectations.Add(new SourceFileExpectation(path, expectedHash ?? currentHash, description));
-    }
-
-    private static void ValidateWindowsFolderNfoOwnership(LocalMetadataBundle? bundle, CancellationToken cancellationToken)
-    {
-        // The macOS Worker validates the import baseline in its preview and save protocol.
-        if (!OperatingSystem.IsWindows() || bundle?.Sidecars is not { NfoPath: { } expectedPath } sidecars ||
-            !string.Equals(Path.GetFileName(expectedPath), "movie.nfo", StringComparison.OrdinalIgnoreCase))
-            return;
-
-        // Use the original video name even if the save plan combines manually confirmed parts.
-        var original = MovieFileSet.Create([sidecars.VideoPath]);
-        var current = LocalSidecarLocator.Locate(original.PrimaryPath, original.MovieBaseName, original.UsesMultipartNaming,
-            scope: null, token: cancellationToken);
-        if (current.NfoPath is null || !PathsEqual(expectedPath, current.NfoPath))
-            throw new FolderNfoOwnershipChangedException(expectedPath);
     }
 
     private static async Task ValidateSourceExpectationsAsync(

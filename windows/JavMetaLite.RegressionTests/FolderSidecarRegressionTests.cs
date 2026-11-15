@@ -17,6 +17,7 @@ internal static class FolderSidecarRegressionTests
         new("folder-sidecar", "An unrelated video link cycle does not block a CD save", TestCyclicVideoLink),
         new("folder-sidecar", "An access-denied video link still blocks saving", TestDeniedVideoLink),
         new("folder-sidecar", "Folder NFO ownership is rechecked during preview and save", TestFolderNfoOwnershipChanges),
+        new("folder-sidecar", "Folder artwork ownership is rechecked without an NFO", TestFolderArtworkOwnershipChanges),
         new("folder-sidecar", "In-place folder update preserves names and unknown XML", TestInPlace),
         new("folder-sidecar", "New directory retains standard output naming", TestNewDirectory),
         new("folder-sidecar", "Artwork replacement uses original PNG name and encoding", TestReplacement),
@@ -181,38 +182,99 @@ internal static class FolderSidecarRegressionTests
             SavePlan Build() => FileOrganizationService.BuildPlan(job.VideoPaths, job.Metadata, options, organization, context);
             void MakeLinkResolve() => workspace.WriteFile("other/OTHER-456.mp4", [3]);
 
-            FolderNfoOwnershipChangedException error;
-            if (phase == "preview")
-            {
-                MakeLinkResolve();
-                error = AssertEx.Throws<FolderNfoOwnershipChangedException>(() => Build(),
-                    "A stale folder NFO reached the save preview.");
-            }
-            else
-            {
-                var plan = await FileOrganizationService.BindPreviewTargetsAsync(Build(), job.Metadata);
-                AssertEx.True(plan.OverwriteConflicts.Contains(nfo), "The control plan must propose replacing the NFO.");
-                if (phase == "execute") MakeLinkResolve();
-                var staged = false;
-                var progress = new InlineProgress<FileTransactionProgress>(update =>
-                {
-                    staged |= update.TemporaryPath is not null;
-                    if (phase == "commit" && update.Stage == FileTransactionStage.Committing)
-                        MakeLinkResolve();
-                });
-                using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
-                error = await AssertEx.ThrowsAsync<FolderNfoOwnershipChangedException>(
-                    () => new FileOrganizationService(output).ExecuteAsync(plan, job.Metadata, true, progress: progress),
-                    $"A stale folder NFO reached publication after a change at {phase}.");
-                AssertEx.Equal(phase == "commit", staged, "An ownership change before execution should abort before staging.");
-            }
-
-            AssertEx.Equal(nfo, error.NfoPath);
+            await AssertFolderOwnershipCheckAsync(phase, nfo, job.Metadata, Build, MakeLinkResolve,
+                plan => AssertEx.True(plan.OverwriteConflicts.Contains(nfo), "The control plan must propose replacing the NFO."));
             AssertEx.Equal(originalNfo, await File.ReadAllTextAsync(nfo));
             AssertEx.FileExists(otherVideo);
             AssertEx.True(job.VideoPaths.All(File.Exists), "The blocked save moved a source video.");
             workspace.AssertNoTemporaryArtifacts();
         }
+    }
+
+    private static async Task TestFolderArtworkOwnershipChanges()
+    {
+        foreach (var move in new[] { false, true })
+        foreach (var poster in new[] { false, true })
+        foreach (var phase in new[] { "preview", "execute", "commit" })
+        {
+            using var workspace = new TestWorkspace("folder-artwork-ownership");
+            var first = workspace.WriteFile(move ? "source/TEST-123-cd1.mp4" : "source/TEST-123.mp4", [1]);
+            if (move) workspace.WriteFile("source/TEST-123-cd2.mp4", [2]);
+
+            // Multipart imports also recognize standalone names such as cover and backdrop.
+            var artworkName = poster ? (move ? "cover.jpg" : "poster.jpg") : (move ? "backdrop.jpg" : "fanart.jpg");
+            var artworkPath = workspace.WriteFile($"source/{artworkName}", TestImageFactory.CreateJpeg(poster ? 40 : 80, 60));
+            var originalHash = AssertEx.Sha256(artworkPath);
+            var otherVideo = workspace.PathOf("other", "OTHER-456.mp4");
+            File.CreateSymbolicLink(workspace.PathOf("source", "OTHER-456.mp4"), otherVideo);
+
+            using var job = new MovieJob();
+            var loaded = await MovieJobLoader.LoadAsync(job, first, WindowsArtworkImageProcessor.Instance);
+            AssertEx.Equal(LocalMetadataLoadStatus.NoNfo, loaded.MetadataStatus);
+            var context = job.CreateLocalSaveContext();
+            AssertEx.Equal(artworkPath, poster ? context.LocalArtwork?.LocalPosterPath : context.LocalArtwork?.LocalFanartPath);
+            job.Metadata.Title = "Reviewed update";
+            var options = new SaveOptions(move, !move && poster, !move && !poster, false, false, false);
+            var organization = move
+                ? new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, false, workspace.CreateDirectory("library"))
+                : new OrganizationOptions(OrganizationTargetMode.VideoDirectory, false);
+            if (!move)
+            {
+                var replacement = workspace.WriteFile("replacement.jpg", TestImageFactory.CreateJpeg(120, 80));
+                job.Metadata.CoverUrl = replacement;
+                context = context with
+                {
+                    SelectedArtwork = ArtworkCoverCandidate.CreateCompleteCover(new("manual", "Manual", replacement), replacement)
+                };
+            }
+            SavePlan Build() => FileOrganizationService.BuildPlan(job.VideoPaths, job.Metadata, options, organization, context);
+            void MakeLinkResolve() => workspace.WriteFile("other/OTHER-456.mp4", [3]);
+            void AssertPlan(SavePlan plan)
+            {
+                if (move)
+                    AssertEx.True(plan.SidecarTransfers.Any(transfer => transfer.SourcePath == artworkPath) &&
+                        plan.SourcePathsToRetire.Contains(artworkPath), "The control plan must migrate and retire the source artwork.");
+                else
+                    AssertEx.True(plan.OverwriteConflicts.Contains(artworkPath), "The control plan must replace the folder artwork.");
+            }
+
+            await AssertFolderOwnershipCheckAsync(phase, artworkPath, job.Metadata, Build, MakeLinkResolve, AssertPlan);
+            AssertEx.Equal(originalHash, AssertEx.Sha256(artworkPath));
+            AssertEx.FileExists(otherVideo);
+            AssertEx.True(job.VideoPaths.All(File.Exists), "The blocked save moved a source video.");
+            workspace.AssertNoTemporaryArtifacts();
+        }
+    }
+
+    private static async Task AssertFolderOwnershipCheckAsync(string phase, string path, MovieMetadata metadata,
+        Func<SavePlan> build, Action makeLinkResolve, Action<SavePlan> assertPlan)
+    {
+        FolderSidecarOwnershipChangedException error;
+        if (phase == "preview")
+        {
+            makeLinkResolve();
+            error = AssertEx.Throws<FolderSidecarOwnershipChangedException>(() => build(),
+                "A stale folder sidecar reached the save preview.");
+        }
+        else
+        {
+            var plan = await FileOrganizationService.BindPreviewTargetsAsync(build(), metadata);
+            assertPlan(plan);
+            if (phase == "execute") makeLinkResolve();
+            var staged = false;
+            var progress = new InlineProgress<FileTransactionProgress>(update =>
+            {
+                staged |= update.TemporaryPath is not null;
+                if (phase == "commit" && update.Stage == FileTransactionStage.Committing)
+                    makeLinkResolve();
+            });
+            using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
+            error = await AssertEx.ThrowsAsync<FolderSidecarOwnershipChangedException>(
+                () => new FileOrganizationService(output).ExecuteAsync(plan, metadata, true, progress: progress),
+                $"A stale folder sidecar reached publication after a change at {phase}.");
+            AssertEx.Equal(phase == "commit", staged, "An ownership change before execution should abort before staging.");
+        }
+        AssertEx.Equal(path, error.SidecarPath);
     }
 
     private static async Task<(LocalSaveContext Context, MovieMetadata Metadata)> Load(string video)

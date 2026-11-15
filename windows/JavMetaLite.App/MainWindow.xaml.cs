@@ -4407,7 +4407,7 @@ public partial class MainWindow : Window
                 timeout.SourceDisplayName,
                 Math.Ceiling(timeout.Timeout.TotalSeconds)),
             MetadataSourceRateLimitException => LocalizationService.Get("Error.SourceRateLimited"),
-            FolderNfoOwnershipChangedException ownership => LocalizationService.Get("Error.FolderNfoOwnershipChanged", ownership.NfoPath),
+            FolderSidecarOwnershipChangedException ownership => LocalizationService.Get("Error.FolderSidecarOwnershipChanged", ownership.SidecarPath),
             _ => exception.Message
         };
 
