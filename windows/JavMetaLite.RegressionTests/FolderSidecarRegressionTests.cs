@@ -122,10 +122,10 @@ internal static class FolderSidecarRegressionTests
         using var identity = WindowsIdentity.GetCurrent();
         var user = identity.User!;
         var directory = target.Directory!;
-        var originalDirectorySecurity = directory.GetAccessControl();
-        var originalFileSecurity = target.GetAccessControl();
-        var restrictedDirectory = directory.GetAccessControl();
-        var restrictedFile = target.GetAccessControl();
+        var restrictedDirectory = directory.GetAccessControl(AccessControlSections.Access);
+        var restrictedFile = target.GetAccessControl(AccessControlSections.Access);
+        var originalDirectorySecurity = restrictedDirectory.GetSecurityDescriptorBinaryForm();
+        var originalFileSecurity = restrictedFile.GetSecurityDescriptorBinaryForm();
         restrictedDirectory.AddAccessRule(new FileSystemAccessRule(user, FileSystemRights.ListDirectory, AccessControlType.Deny));
         restrictedFile.AddAccessRule(new FileSystemAccessRule(user, FileSystemRights.ReadAttributes, AccessControlType.Deny));
         try
@@ -146,8 +146,11 @@ internal static class FolderSidecarRegressionTests
         }
         finally
         {
-            directory.SetAccessControl(originalDirectorySecurity);
-            target.SetAccessControl(originalFileSecurity);
+            // Loading the saved descriptors marks the access sections for persistence.
+            restrictedDirectory.SetSecurityDescriptorBinaryForm(originalDirectorySecurity, AccessControlSections.Access);
+            directory.SetAccessControl(restrictedDirectory);
+            restrictedFile.SetSecurityDescriptorBinaryForm(originalFileSecurity, AccessControlSections.Access);
+            target.SetAccessControl(restrictedFile);
         }
     }
 
