@@ -1,4 +1,6 @@
 using System.IO;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Xml.Linq;
 using JavMetaLite.Core.Models;
 using JavMetaLite.Core.Services;
@@ -12,6 +14,8 @@ internal static class FolderSidecarRegressionTests
     [
         new("folder-sidecar", "Single movie folder fallback and filename priority", TestDiscovery),
         new("folder-sidecar", "CD group reads folder metadata but mixed movies do not", TestMultipartDiscovery),
+        new("folder-sidecar", "An unrelated video link cycle does not block a CD save", TestCyclicVideoLink),
+        new("folder-sidecar", "An access-denied video link still blocks saving", TestDeniedVideoLink),
         new("folder-sidecar", "In-place folder update preserves names and unknown XML", TestInPlace),
         new("folder-sidecar", "New directory retains standard output naming", TestNewDirectory),
         new("folder-sidecar", "Artwork replacement uses original PNG name and encoding", TestReplacement),
@@ -67,6 +71,84 @@ internal static class FolderSidecarRegressionTests
         workspace.WriteFile("OTHER-456.mp4", [3]);
         sidecars = LocalSidecarLocator.Locate(video, "TEST-123", true);
         AssertEx.False(sidecars.HasNfo, "Mixed CD folder must not share NFO.");
+    }
+
+    private static async Task TestCyclicVideoLink()
+    {
+        using var workspace = new TestWorkspace("folder-cyclic-link");
+        var first = workspace.WriteFile("TEST-123/TEST-123-cd1.mp4", [1, 2, 3]);
+        var second = workspace.WriteFile("TEST-123/TEST-123-cd2.mp4", [4, 5, 6]);
+        var nfo = workspace.PathOf("TEST-123", "movie.nfo");
+        await File.WriteAllTextAsync(nfo, "<movie><title>Original</title><id>TEST-123</id><unknown>keep</unknown></movie>");
+        var link = workspace.PathOf("TEST-123", "OTHER-456.mp4");
+        var otherLink = workspace.PathOf("TEST-123", "OTHER-789.mp4");
+        File.CreateSymbolicLink(link, otherLink);
+        File.CreateSymbolicLink(otherLink, link);
+
+        using var job = new MovieJob();
+        var loaded = await MovieJobLoader.LoadAsync(job, first, WindowsArtworkImageProcessor.Instance);
+        AssertEx.Equal(LocalMetadataLoadStatus.Loaded, loaded.MetadataStatus, loaded.MetadataError?.ToString());
+        AssertEx.Equal(nfo, loaded.Sidecars?.NfoPath);
+        AssertEx.True(job.VideoPaths.SequenceEqual([first, second]), "The link cycle changed the imported CD group.");
+
+        var organization = new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, false, workspace.Root);
+        var options = new SaveOptions(true, false, false, false, false, false);
+        job.InitializeSaveConfiguration(new MovieSaveConfiguration(options, organization));
+        job.Metadata.Title = "Updated";
+        var plan = FileOrganizationService.BuildPlan(job.VideoPaths, job.Metadata, options, organization, job.CreateLocalSaveContext());
+        plan = await FileOrganizationService.BindPreviewTargetsAsync(plan, job.Metadata);
+        job.BeginSave(job.ReviewRevision);
+        using var output = new OutputService(WindowsArtworkImageProcessor.Instance);
+        var result = await new FileOrganizationService(output).ExecuteAsync(plan, job.Metadata, allowOverwrite: true);
+        AssertEx.Equal(nfo, result.Outputs.NfoPath);
+        var saved = XDocument.Load(nfo).Root!;
+        AssertEx.Equal("Updated", saved.Element("title")?.Value);
+        AssertEx.Equal("keep", saved.Element("unknown")?.Value);
+        AssertEx.True(File.ReadAllBytes(first).SequenceEqual(new byte[] { 1, 2, 3 }) &&
+            File.ReadAllBytes(second).SequenceEqual(new byte[] { 4, 5, 6 }), "The CD videos changed during the NFO save.");
+        AssertEx.True(new FileInfo(link).LinkTarget is not null && new FileInfo(otherLink).LinkTarget is not null,
+            "Saving the CD group changed the unrelated links.");
+        workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestDeniedVideoLink()
+    {
+        using var workspace = new TestWorkspace("folder-denied-link");
+        var video = await CreateMovie(workspace, "TEST-123-cd1.mp4");
+        workspace.WriteFile("TEST-123-cd2.mp4", [2]);
+        var target = new FileInfo(workspace.WriteFile("protected/OTHER-456.mp4", [3]));
+        File.CreateSymbolicLink(workspace.PathOf("OTHER-456.mp4"), target.FullName);
+
+        using var identity = WindowsIdentity.GetCurrent();
+        var user = identity.User!;
+        var directory = target.Directory!;
+        var originalDirectorySecurity = directory.GetAccessControl();
+        var originalFileSecurity = target.GetAccessControl();
+        var restrictedDirectory = directory.GetAccessControl();
+        var restrictedFile = target.GetAccessControl();
+        restrictedDirectory.AddAccessRule(new FileSystemAccessRule(user, FileSystemRights.ListDirectory, AccessControlType.Deny));
+        restrictedFile.AddAccessRule(new FileSystemAccessRule(user, FileSystemRights.ReadAttributes, AccessControlType.Deny));
+        try
+        {
+            target.SetAccessControl(restrictedFile);
+            directory.SetAccessControl(restrictedDirectory);
+            AssertEx.Throws<UnauthorizedAccessException>(() => File.GetAttributes(target.FullName),
+                "The fixture must deny inspection of the linked video target.");
+
+            using var job = new MovieJob();
+            var loaded = await MovieJobLoader.LoadAsync(job, video, WindowsArtworkImageProcessor.Instance);
+            AssertEx.Equal(LocalMetadataLoadStatus.SidecarInspectionFailed, loaded.MetadataStatus, loaded.MetadataError?.ToString());
+            AssertEx.True(loaded.MetadataError is UnauthorizedAccessException && job.LocalNfoSaveBlocked,
+                "An inspection failure must block saving.");
+            job.InitializeSaveConfiguration(new MovieSaveConfiguration(Options, new OrganizationOptions(false, false)));
+            AssertEx.Throws<InvalidOperationException>(() => job.BeginSave(job.ReviewRevision),
+                "An access-denied video link must leave the save blocked.");
+        }
+        finally
+        {
+            directory.SetAccessControl(originalDirectorySecurity);
+            target.SetAccessControl(originalFileSecurity);
+        }
     }
 
     private static async Task<(LocalSaveContext Context, MovieMetadata Metadata)> Load(string video)

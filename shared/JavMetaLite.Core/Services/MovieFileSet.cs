@@ -12,6 +12,8 @@ public sealed record MovieFilePart(
 
 public sealed class MovieFileSet
 {
+    private const int CannotResolveFilenameHResult = unchecked((int)0x80070781); // ERROR_CANT_RESOLVE_FILENAME
+
     private static readonly Regex CdSuffixPattern = new(
         @"^(?<base>.+?)[ ._-]+cd(?<number>\d+)$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -162,18 +164,28 @@ public sealed class MovieFileSet
     internal static string? GetExistingGroupKey(string videoPath)
     {
         try { return GetGroupKey(ReadExistingPart(videoPath)); }
-        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException) { return null; }
+        catch (IOException exception) when (exception is FileNotFoundException or DirectoryNotFoundException ||
+            OperatingSystem.IsWindows() && exception.HResult == CannotResolveFilenameHResult)
+        {
+            return null;
+        }
     }
 
     private static MovieFilePart ReadExistingPart(string path)
     {
         var part = Analyze(path);
-        var file = new FileInfo(part.Path);
+        var resolvedPath = part.Path;
+        // Use a throwing lookup so an inspection failure cannot look like a missing file.
+        var attributes = File.GetAttributes(resolvedPath);
         // Windows keeps the link name for grouping and uses the resolved path to check existence.
-        var target = OperatingSystem.IsWindows() && file.Exists && (file.Attributes & FileAttributes.ReparsePoint) != 0
-            ? file.ResolveLinkTarget(returnFinalTarget: true) ?? file : file;
-        if (target is not FileInfo { Exists: true })
-            throw new FileNotFoundException($"找不到解析后的影片文件：{target.FullName}", target.FullName);
+        if (OperatingSystem.IsWindows() && (attributes & FileAttributes.ReparsePoint) != 0 &&
+            File.ResolveLinkTarget(resolvedPath, returnFinalTarget: true) is { } target)
+        {
+            resolvedPath = target.FullName;
+            attributes = File.GetAttributes(resolvedPath);
+        }
+        if ((attributes & FileAttributes.Directory) != 0)
+            throw new FileNotFoundException($"找不到解析后的影片文件：{resolvedPath}", resolvedPath);
         return part;
     }
 
