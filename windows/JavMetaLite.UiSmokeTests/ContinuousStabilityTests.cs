@@ -163,18 +163,18 @@ internal static partial class Program
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
             var uri = request.RequestUri!;
-            if (uri.Host != "www.libredmm.com" || !uri.AbsolutePath.EndsWith(".json", StringComparison.Ordinal))
+            if (uri.Host != "www.libredmm.com" || !uri.AbsolutePath.StartsWith("/api/v1/movies/", StringComparison.Ordinal))
                 throw new InvalidOperationException($"Unexpected stability network request: {uri}.");
             Interlocked.Increment(ref _calls);
             Interlocked.Increment(ref _inFlight);
             try
             {
                 await Task.Delay(Block ? Timeout.Infinite : 2, token);
-                var id = Path.GetFileNameWithoutExtension(uri.AbsolutePath);
+                var id = Path.GetFileName(uri.AbsolutePath);
                 var failed = Fail && int.Parse(id.Split('-')[1]) % 10 == 0;
                 return new HttpResponseMessage(failed ? HttpStatusCode.InternalServerError : HttpStatusCode.OK)
                 {
-                    Content = new StringContent(JsonSerializer.Serialize(new { normalized_id = id, title = $"Synthetic {id}" }))
+                    Content = new StringContent(JsonSerializer.Serialize(new { movie = new { code = id, title = $"Synthetic {id}" } }))
                 };
             }
             catch (OperationCanceledException) { Interlocked.Increment(ref _canceled); throw; }

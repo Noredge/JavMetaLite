@@ -276,7 +276,7 @@
     <sys:String x:Key="SearchFeedback.RetryQueue">重試所選失敗來源（{0}）</sys:String>
     <sys:String x:Key="SearchFeedback.RetryingQueue">正在重試所選 {0} 部影片的失敗來源…</sys:String>
     <sys:String x:Key="SearchFeedback.R18CoolingDown">R18.dev 請求限流，等待約 {0} 秒後重試；可取消任務。</sys:String>
-    <sys:String x:Key="Error.SourceRateLimited">R18.dev 請求過於頻繁（HTTP 429），請稍後重試失敗來源；已取得的資料會保留。</sys:String>
+    <sys:String x:Key="Error.SourceRateLimited">資料來源請求過於頻繁（HTTP 429），請稍後重試失敗來源；已取得的資料會保留。</sys:String>
     <sys:String x:Key="Status.BatchSourcesComplete">搜尋結束：完整 {0} · 部分來源失敗 {1} · 全部失敗 {2} · 取消 {3} · 未開始 {4}</sys:String>
     <sys:String x:Key="Main.SearchQueueSourceTooltip">搜尋來源：{0}；最多同時搜尋 2 部影片，不會儲存檔案</sys:String>
     <sys:String x:Key="Status.BatchSearchingSource">正在透過 {1} 搜尋 {0} 部影片；最多並行 2 部…</sys:String>

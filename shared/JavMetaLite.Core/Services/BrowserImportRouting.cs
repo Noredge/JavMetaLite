@@ -99,7 +99,7 @@ public static class BrowserImportRouting
 
         if (normalizedSource == MetadataSourcePreferenceProfile.LibreDmm)
         {
-            return uri.AbsolutePath.Contains("/movies/", StringComparison.OrdinalIgnoreCase);
+            return uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries) is ["movies", _];
         }
 
         if (normalizedSource == MetadataSourcePreferenceProfile.R18Dev)
@@ -123,20 +123,10 @@ public static class BrowserImportRouting
 
         if (normalizedSource == MetadataSourcePreferenceProfile.LibreDmm)
         {
-            var segments = uri.AbsolutePath
-                .Split('/', StringSplitOptions.RemoveEmptyEntries);
-            var moviesIndex = Array.FindIndex(segments, segment =>
-                string.Equals(segment, "movies", StringComparison.OrdinalIgnoreCase));
-            if (moviesIndex >= 0 && moviesIndex + 1 < segments.Length)
-            {
-                var value = Uri.UnescapeDataString(segments[moviesIndex + 1]);
-                if (value.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-                {
-                    value = value[..^5];
-                }
-
-                return MovieIdParser.Normalize(value);
-            }
+            var value = Uri.UnescapeDataString(uri.Segments[^1].TrimEnd('/'));
+            if (value.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                value = value[..^5];
+            return LibreDmmClient.NormalizeLookupCode(value);
         }
 
         if (normalizedSource == MetadataSourcePreferenceProfile.R18Dev)
@@ -248,6 +238,9 @@ public static class BrowserImportRouting
         string rawId)
     {
         var existingUrl = existing?.SourceUrl?.Trim() ?? string.Empty;
+        if (sourceName == MetadataSourcePreferenceProfile.LibreDmm &&
+            TryExtractMovieId(sourceName, existingUrl) is { Length: > 0 } code)
+            return LibreDmmClient.BuildDetailPageUrl(code);
         return IsExpectedDetailPage(sourceName, existingUrl)
             ? existingUrl
             : BuildFallbackUrl(sourceName, rawId);
