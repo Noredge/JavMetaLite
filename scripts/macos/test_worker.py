@@ -1875,7 +1875,7 @@ class ProviderWorkerTests(unittest.TestCase):
         self.assertEqual(original_video, Path(current['videoPaths'][0]).read_bytes())
 
     @staticmethod
-    def libre_url(movie): return f'https://www.libredmm.com/movies/{movie}.json'
+    def libre_url(movie): return f'https://www.libredmm.com/api/v1/movies/{movie}'
 
     @staticmethod
     def r18_url(content): return f'https://r18.dev/videos/vod/movies/detail/-/content_id={content}/json'
@@ -1888,7 +1888,8 @@ class ProviderWorkerTests(unittest.TestCase):
 
     @staticmethod
     def libre(movie, title='Synthetic Libre title', **extra):
-        return {'normalized_id': movie, 'title': title, 'subtitle': movie.replace('-', '').lower(), **extra}
+        return {'movie': {'code': movie, 'title': title, 'products': [
+            {'content_id': movie.replace('-', '').lower(), 'preferred': True}], **extra}}
 
     @staticmethod
     def r18(movie, content, title='Synthetic R18 title', **extra):
@@ -2246,7 +2247,7 @@ class ProviderWorkerTests(unittest.TestCase):
         _, job = self.worker.import_video('IPX-081.mp4', nfo=None)
         job = self.worker.edit(job, {'title': 'Manual before fresh query'})
         self.configure([
-            self.route(self.libre_url('IPX-081'), self.ok(self.libre('IPX-081', title='Fresh Libre title', makers=['Libre maker']))),
+            self.route(self.libre_url('IPX-081'), self.ok(self.libre('IPX-081', title='Fresh Libre title', makers=[{'name': 'Libre maker'}]))),
             self.route(self.combined_url('ipx00081'), self.ok(self.r18('IPX-081', 'ipx00081', title='Fresh R18 title', maker_name_en='R18 maker')))
         ])
         response = self.worker.request('jobs.search', {'jobId': job['jobId'], 'sourceMode': 'custom',
@@ -2281,7 +2282,7 @@ class ProviderWorkerTests(unittest.TestCase):
         before = video.with_suffix('.nfo').read_bytes()
         local_baseline = job['metadata'].copy()
         self.configure([
-            self.route(self.libre_url('IPX-081'), self.ok(self.libre('IPX-081', title='DMM full-source title', makers=['DMM maker']))),
+            self.route(self.libre_url('IPX-081'), self.ok(self.libre('IPX-081', title='DMM full-source title', makers=[{'name': 'DMM maker'}]))),
             self.route(self.combined_url('ipx00081'), self.ok(self.r18('IPX-081', 'ipx00081', title='R18 full-source title', maker_name_en='R18 maker')))
         ])
         self.assertEqual('completed', self.search(job, 'all')['result']['outcome'])
@@ -2439,7 +2440,7 @@ class ProviderWorkerTests(unittest.TestCase):
         shared_sample = 'https://awsimgsrc.dmm.com/dig/digital/video/test00920/test00920jp-1.jpg'
         libre_samples = [shared_sample, 'https://example.invalid/libre/sample2.jpg']
         self.configure([self.route(self.libre_url('TEST-920'), self.ok(self.libre('TEST-920',
-            cover_image_url='https://example.invalid/libre/cover.jpg', thumbnail_image_url='https://example.invalid/libre/poster.jpg', sample_image_urls=libre_samples))),
+            cover={'url': 'https://example.invalid/libre/cover.jpg', 'thumb_url': 'https://example.invalid/libre/poster.jpg'}, sample_images=libre_samples))),
             self.route(self.combined_url('test00920'), self.ok(self.r18('TEST-920', 'test00920',
                 jacket_full_url='https://example.invalid/r18/cover.jpg', gallery=[{'image_full': 'https://example.invalid/r18/sample.jpg'}])))])
         self.assertEqual('completed', self.search(job, 'all')['result']['outcome'])

@@ -1,1 +1,28 @@
-{"normalized_id":"DEMO-001","title":"Synthetic provider title","subtitle":"demo00001","release_date":"2026-01-02","runtime":90,"description":"Synthetic source response; never a live lookup.","actresses":["Synthetic actor"],"genres":["Demo"]}
+{
+  "movie": {
+    "code": "DEMO-001",
+    "base_code": "DEMO-001",
+    "pseudo_code": "DEMO-001~42",
+    "title": "Synthetic provider title",
+    "release_date": "2026-01-02",
+    "runtime_minutes": 90,
+    "description": "Synthetic source response.",
+    "actresses": [{"id": 7, "name": "Synthetic actor", "image_url": "https://example.invalid/actor.jpg"}],
+    "genres": [{"id": 1, "name": "Demo"}, {"id": 3, "name": "Second genre"}],
+    "makers": [{"id": 42, "name": "Demo studio"}],
+    "labels": [{"id": 2, "name": "Demo label"}],
+    "directors": [{"id": 5, "name": "Demo director"}],
+    "series": [{"id": 6, "name": "Demo series"}],
+    "review": {"average": 4.2399997, "count": 3},
+    "products": [
+      {"content_id": "demo001", "preferred": false},
+      {"content_id": "demo00001", "preferred": true}
+    ],
+    "cover": {
+      "url": "https://pics.dmm.co.jp/digital/video/demo00001/demo00001pl.jpg",
+      "thumb_url": "https://example.invalid/libre-poster.jpg"
+    },
+    "sample_images": ["https://example.invalid/large1.jpg"],
+    "sample_images_small": ["https://example.invalid/small1.jpg", "https://example.invalid/small2.jpg"]
+  }
+}

@@ -30,8 +30,9 @@ internal static partial class Program
             Equal(canonical, current.SourceUrl); Equal("DEMO-001", current.Id); Equal(0, calls.Count);
             await Throws<BrowserPageImportException>(() => importer.ImportAsync("javlibrary", canonical, html, "DEMO-002"));
         }
-        var libreResult = await importer.ImportAsync("libredmm", "https://www.libredmm.com/movies/DEMO-001", "<html>Captured</html>", "DEMO-001");
-        Equal("Synthetic provider title", libreResult.Title); Equal(1, calls.Count);
+        var libreResult = await importer.ImportAsync("libredmm", "https://www.libredmm.com/movies/DEMO-001~42", "<html>Captured</html>", "DEMO-001");
+        Equal("Synthetic provider title", libreResult.Title); Equal("DEMO-001", libreResult.Id);
+        Equal("https://www.libredmm.com/api/v1/movies/DEMO-001~42", calls.Single());
         var r18Result = await importer.ImportAsync("r18dev", "https://r18.dev/videos/vod/movies/detail/-/id=demoactual001/", "<div id=\"video-info\">Captured</div>", "DEMO-001");
         Equal("Synthetic R18 title", r18Result.Title); Equal(2, calls.Count);
         Check(calls.Last().Contains("combined=demoactual001/json"), "Browser import did not use authoritative R18 content ID");

@@ -8,8 +8,10 @@ using JavMetaLite.Core.Models;
 
 namespace JavMetaLite.Core.Services;
 
-public sealed partial class LibreDmmClient : IMetadataProvider
+public sealed partial class LibreDmmClient : IRequestScheduledMetadataProvider
 {
+    private const string Site = "https://www.libredmm.com";
+    private static readonly TimeSpan LookupTimeout = TimeSpan.FromMinutes(1);
     private readonly HttpClient _httpClient;
     private readonly bool _ownsClient;
 
@@ -22,98 +24,201 @@ public sealed partial class LibreDmmClient : IMetadataProvider
     public string Name => "libredmm";
     public string DisplayName => "LibreDMM";
 
-    public async Task<MovieMetadata> SearchAsync(string rawId, CancellationToken cancellationToken = default)
+    public Task<MovieMetadata> SearchAsync(string rawId, CancellationToken cancellationToken = default) =>
+        SearchWithRequestTimeoutAsync(rawId, TimeSpan.FromSeconds(30), cancellationToken);
+
+    public async Task<MovieMetadata> SearchWithRequestTimeoutAsync(
+        string rawId, TimeSpan requestTimeout, CancellationToken cancellationToken)
     {
-        var id = MovieIdParser.Normalize(rawId);
-        if (string.IsNullOrWhiteSpace(id))
-        {
+        var code = NormalizeLookupCode(rawId);
+        if (string.IsNullOrWhiteSpace(code))
             throw new ArgumentException("请先输入影片番号。", nameof(rawId));
-        }
 
-        var detailPageUrl = BuildDetailPageUrl(id);
-        var detailJsonUrl = $"{detailPageUrl}.json";
-        using (var detailResponse = await _httpClient.GetAsync(detailJsonUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+        var url = $"{Site}/api/v1/movies/{Uri.EscapeDataString(code)}";
+        using var lookup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        lookup.CancelAfter(LookupTimeout);
+        try
         {
-            if (detailResponse.IsSuccessStatusCode)
+            while (true)
             {
-                var detailJson = await detailResponse.Content.ReadAsStringAsync(cancellationToken);
-                return ParseJson(detailJson, detailPageUrl, id);
-            }
+                using var response = await GetResponseAsync(url, requestTimeout, lookup.Token);
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                    throw new MetadataNotFoundException(DisplayName, code);
+                if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                    throw new MetadataSourceRateLimitException(
+                        DateTimeOffset.UtcNow + RetryDelay(response, TimeSpan.FromMinutes(1)), DisplayName);
 
-            if (detailResponse.StatusCode != HttpStatusCode.NotFound)
-            {
-                detailResponse.EnsureSuccessStatusCode();
+                response.EnsureSuccessStatusCode();
+                if (response.StatusCode != HttpStatusCode.Accepted)
+                {
+                    var json = await response.Content.ReadAsStringAsync(lookup.Token);
+                    using var document = JsonDocument.Parse(json);
+                    return ParseMovieResponse(document.RootElement, code);
+                }
+
+                var delay = RetryDelay(response, TimeSpan.FromSeconds(3));
+                // A 202 starts a lookup on the server. Poll the same code, within one overall deadline.
+                await Task.Delay(delay > LookupTimeout ? LookupTimeout : delay, lookup.Token);
             }
         }
-
-        var url = $"https://www.libredmm.com/search?q={Uri.EscapeDataString(id)}&format=json";
-        using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        if (response.StatusCode == HttpStatusCode.NotFound)
+        catch (OperationCanceledException error) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new MetadataNotFoundException(DisplayName, id);
+            throw new MetadataSourceTimeoutException(Name, DisplayName, LookupTimeout, error);
         }
-        response.EnsureSuccessStatusCode();
-        var json = await response.Content.ReadAsStringAsync(cancellationToken);
-        return ParseJson(json, response.RequestMessage?.RequestUri?.AbsoluteUri ?? url, id);
+    }
+
+    private async Task<HttpResponseMessage> GetResponseAsync(string url, TimeSpan timeout, CancellationToken token)
+    {
+        using var request = CancellationTokenSource.CreateLinkedTokenSource(token);
+        request.CancelAfter(timeout);
+        try
+        {
+            // Buffer the body within the per-request timeout, including slow reads after the headers.
+            return await _httpClient.GetAsync(url, request.Token);
+        }
+        catch (OperationCanceledException error) when (!token.IsCancellationRequested)
+        {
+            throw new MetadataSourceTimeoutException(Name, DisplayName, timeout, error);
+        }
+    }
+
+    private static TimeSpan RetryDelay(HttpResponseMessage response, TimeSpan fallback)
+    {
+        var retry = response.Headers.RetryAfter;
+        var delay = retry?.Delta ?? (retry?.Date - (response.Headers.Date ?? DateTimeOffset.UtcNow)) ?? fallback;
+        return delay < TimeSpan.FromSeconds(1) ? TimeSpan.FromSeconds(1) : delay;
     }
 
     public MovieMetadata ParseJson(string json, string sourceUrl, string? fallbackId = null)
     {
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
-        if (root.ValueKind != JsonValueKind.Object || !string.IsNullOrWhiteSpace(GetString(root, "err")))
-        {
-            throw new MetadataNotFoundException(DisplayName, MovieIdParser.Normalize(fallbackId));
-        }
+        if (root.ValueKind == JsonValueKind.Object &&
+            (root.TryGetProperty("movie", out _) || root.TryGetProperty("works", out _)))
+            return ParseMovieResponse(root, NormalizeLookupCode(fallbackId));
 
-        var id = MovieIdParser.Normalize(FirstNonEmpty(GetString(root, "normalized_id"), fallbackId ?? string.Empty));
+        // Older flat responses are still supported by this parsing entry point.
         var expectedId = MovieIdParser.Normalize(fallbackId);
-        if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(GetString(root, "title")) ||
-            (!string.IsNullOrWhiteSpace(expectedId) && !string.Equals(id, expectedId, StringComparison.OrdinalIgnoreCase)))
-        {
+        var id = MovieIdParser.Normalize(FirstNonEmpty(GetString(root, "normalized_id"), expectedId));
+        if (GetString(root, "err").Length > 0 || id.Length == 0 || GetString(root, "title").Length == 0 ||
+            (expectedId.Length > 0 && !string.Equals(id, expectedId, StringComparison.OrdinalIgnoreCase)))
             throw new MetadataNotFoundException(DisplayName, expectedId);
+
+        var metadata = ReadCommonFields(root, id, sourceUrl);
+        metadata.ReleaseDate = NormalizeReleaseDate(GetString(root, "date"));
+        metadata.RuntimeMinutes = GetRuntimeMinutes(root);
+        metadata.ContentId = GetString(root, "subtitle").ToLowerInvariant();
+        metadata.Rating = GetPositiveNumber(root, "review");
+        var samples = GetStringArray(root, "sample_image_urls").ToArray();
+        metadata.FallbackCoverUrl = GetString(root, "cover_image_url");
+        metadata.CoverUrl = BuildHighResolutionCoverUrl(samples, metadata.FallbackCoverUrl);
+        metadata.PosterUrl = FirstNonEmpty(GetString(root, "thumbnail_image_url"), metadata.FallbackCoverUrl, metadata.CoverUrl);
+        metadata.ScreenshotUrls = samples.Select(DmmImageUrlHelper.NormalizeScreenshotUrl)
+            .Where(value => Uri.TryCreate(value, UriKind.Absolute, out _)).ToArray();
+        return metadata;
+    }
+
+    private MovieMetadata ParseMovieResponse(JsonElement root, string expectedCode)
+    {
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("movie", out var movie) ||
+            movie.ValueKind != JsonValueKind.Object)
+        {
+            if (Items(root, "works").Any())
+                throw new InvalidDataException($"LibreDMM 上有多部作品共用番号 {expectedCode}，请在网页中选择具体作品后导入。");
+            throw new InvalidDataException("LibreDMM 未返回作品详情。");
         }
 
-        var sourceCoverUrl = GetString(root, "cover_image_url");
-        var posterUrl = GetString(root, "thumbnail_image_url");
-        var contentId = GetString(root, "subtitle").ToLowerInvariant();
-        var sourceScreenshots = GetStringArray(root, "sample_image_urls").ToArray();
-        var coverUrl = BuildHighResolutionCoverUrl(sourceScreenshots, sourceCoverUrl);
-        var actors = GetActors(root);
-        var screenshots = sourceScreenshots
-            .Select(DmmImageUrlHelper.NormalizeScreenshotUrl)
-            .Where(value => Uri.TryCreate(value, UriKind.Absolute, out _))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var code = GetString(movie, "code");
+        var id = FirstNonEmpty(GetString(movie, "base_code"), code.Split('~')[0]);
+        var pseudoCode = GetString(movie, "pseudo_code");
+        if (code.Length == 0 || id.Length == 0 || GetString(movie, "title").Length == 0)
+            throw new InvalidDataException("LibreDMM 作品详情缺少番号或标题。");
+        if (expectedCode.Length > 0)
+        {
+            var matchesWork = string.Equals(expectedCode, code, StringComparison.OrdinalIgnoreCase) ||
+                              string.Equals(expectedCode, pseudoCode, StringComparison.OrdinalIgnoreCase);
+            if (!matchesWork || !string.Equals(expectedCode.Split('~')[0], id, StringComparison.OrdinalIgnoreCase))
+                throw new MetadataNotFoundException(DisplayName, expectedCode);
+        }
 
+        var metadata = ReadCommonFields(movie, id, BuildDetailPageUrl(code));
+        metadata.ReleaseDate = NormalizeReleaseDate(GetString(movie, "release_date"));
+        if (movie.TryGetProperty("runtime_minutes", out var runtime) && runtime.ValueKind == JsonValueKind.Number &&
+            runtime.TryGetInt32(out var minutes) && minutes > 0)
+            metadata.RuntimeMinutes = minutes.ToString(CultureInfo.InvariantCulture);
+        if (movie.TryGetProperty("review", out var review))
+            metadata.Rating = GetPositiveNumber(review, "average");
+
+        var products = Items(movie, "products");
+        var preferred = products.FirstOrDefault(product => product.ValueKind == JsonValueKind.Object &&
+            product.TryGetProperty("preferred", out var flag) && flag.ValueKind == JsonValueKind.True);
+        metadata.ContentId = FirstNonEmpty(GetString(preferred, "content_id"),
+            products.Select(product => GetString(product, "content_id")).FirstOrDefault(value => value.Length > 0) ?? "");
+
+        if (movie.TryGetProperty("cover", out var cover))
+        {
+            var full = NormalizeImageUrl(GetString(cover, "url"));
+            metadata.FallbackCoverUrl = full;
+            metadata.CoverUrl = HighResolutionJacket(full);
+            metadata.PosterUrl = FirstNonEmpty(NormalizeImageUrl(GetString(cover, "thumb_url")), full);
+        }
+
+        var large = Items(movie, "sample_images").ToArray();
+        var small = Items(movie, "sample_images_small").ToArray();
+        metadata.ScreenshotUrls = Enumerable.Range(0, Math.Max(large.Length, small.Length))
+            .Select(i => FirstNonEmpty(SampleAt(large, i), SampleAt(small, i))).ToArray();
+        return metadata;
+    }
+
+    private static string SampleAt(JsonElement[] samples, int index) =>
+        index < samples.Length && samples[index].ValueKind == JsonValueKind.String
+            ? NormalizeImageUrl(samples[index].GetString() ?? "") : "";
+
+    // Only upgrade the selected digital jacket. Samples can belong to a different product.
+    private static string HighResolutionJacket(string url)
+    {
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Host == "pics.dmm.co.jp" &&
+            uri.Query.Length == 0 && uri.Segments is ["/", "digital/", "video/", var directory, var file])
+        {
+            var id = directory.TrimEnd('/');
+            if (id.All(char.IsAsciiLetterOrDigit) && file == id + "pl.jpg")
+                return $"https://awsimgsrc.dmm.com/pics_dig{uri.AbsolutePath}";
+        }
+        return url;
+    }
+
+    private MovieMetadata ReadCommonFields(JsonElement root, string id, string sourceUrl)
+    {
+        var actors = GetActors(root);
         return new MovieMetadata
         {
             Id = id,
             Title = GetString(root, "title"),
             OriginalTitle = GetString(root, "title"),
-            ReleaseDate = NormalizeReleaseDate(GetString(root, "date")),
-            RuntimeMinutes = GetRuntimeMinutes(root),
             Director = JoinStrings(root, "directors"),
             Maker = JoinStrings(root, "makers"),
             Label = JoinStrings(root, "labels"),
+            Series = JoinStrings(root, "series"),
             ActorsText = string.Join(", ", actors.Select(actor => actor.Name)),
             Actors = actors,
             GenresText = JoinStrings(root, "genres"),
             Plot = CleanDescription(GetString(root, "description")),
-            Rating = GetPositiveNumber(root, "review"),
-            ContentId = contentId,
-            CoverUrl = coverUrl,
-            FallbackCoverUrl = sourceCoverUrl,
-            PosterUrl = FirstNonEmpty(posterUrl, sourceCoverUrl, coverUrl),
-            ScreenshotUrls = screenshots,
             SourceUrl = sourceUrl,
             SourceName = Name,
             SourceDisplayName = DisplayName
         };
     }
 
+    internal static string NormalizeLookupCode(string? value)
+    {
+        // A work selected on the website has a suffix that the generic filename parser would discard.
+        var parts = (value ?? "").Trim().Split('~', 2);
+        var id = MovieIdParser.Normalize(parts[0]);
+        return parts.Length == 2 ? id + "~" + parts[1] : id;
+    }
+
     public static string BuildDetailPageUrl(string rawId) =>
-        $"https://www.libredmm.com/movies/{Uri.EscapeDataString(MovieIdParser.Normalize(rawId))}";
+        $"{Site}/movies/{Uri.EscapeDataString(NormalizeLookupCode(rawId))}";
 
     internal static string BuildHighResolutionCoverUrl(IEnumerable<string> screenshotUrls, string fallbackUrl)
     {
@@ -169,7 +274,7 @@ public sealed partial class LibreDmmClient : IMetadataProvider
 
     private static string GetRuntimeMinutes(JsonElement root)
     {
-        if (root.TryGetProperty("volume", out var value) && value.TryGetInt32(out var seconds) && seconds > 0)
+        if (root.TryGetProperty("volume", out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var seconds) && seconds > 0)
         {
             return Math.Max(1, (int)Math.Round(seconds / 60d)).ToString(CultureInfo.InvariantCulture);
         }
@@ -178,16 +283,13 @@ public sealed partial class LibreDmmClient : IMetadataProvider
     }
 
     private static string JoinStrings(JsonElement root, string property) =>
-        string.Join(", ", GetStringArray(root, property).Distinct(StringComparer.OrdinalIgnoreCase));
+        string.Join(", ", Items(root, property)
+            .Select(item => item.ValueKind == JsonValueKind.String ? item.GetString()?.Trim() : GetString(item, "name"))
+            .Where(name => !string.IsNullOrWhiteSpace(name)).Distinct(StringComparer.OrdinalIgnoreCase));
 
     private static IReadOnlyList<ActorMetadata> GetActors(JsonElement root)
     {
-        if (!root.TryGetProperty("actresses", out var items) || items.ValueKind != JsonValueKind.Array)
-        {
-            return Array.Empty<ActorMetadata>();
-        }
-
-        return items.EnumerateArray()
+        return Items(root, "actresses")
             .Select(item => new ActorMetadata(
                 GetString(item, "name"),
                 NormalizeImageUrl(GetString(item, "image_url"))))
@@ -199,7 +301,7 @@ public sealed partial class LibreDmmClient : IMetadataProvider
 
     private static string NormalizeImageUrl(string value)
     {
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
         {
             return string.Empty;
         }
@@ -212,21 +314,18 @@ public sealed partial class LibreDmmClient : IMetadataProvider
         return uri.AbsoluteUri;
     }
 
-    private static IEnumerable<string> GetStringArray(JsonElement root, string property)
-    {
-        if (!root.TryGetProperty(property, out var items) || items.ValueKind != JsonValueKind.Array)
-        {
-            return Array.Empty<string>();
-        }
+    private static IEnumerable<JsonElement> Items(JsonElement root, string property) =>
+        root.ValueKind == JsonValueKind.Object && root.TryGetProperty(property, out var items) &&
+        items.ValueKind == JsonValueKind.Array ? items.EnumerateArray() : [];
 
-        return items.EnumerateArray()
-            .Select(item => item.ValueKind == JsonValueKind.String ? item.GetString()?.Trim() ?? string.Empty : string.Empty)
-            .Where(value => !string.IsNullOrWhiteSpace(value));
-    }
+    private static IEnumerable<string> GetStringArray(JsonElement root, string property) =>
+        Items(root, property).Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => item.GetString()!.Trim()).Where(value => value.Length > 0);
 
     private static string GetPositiveNumber(JsonElement root, string property)
     {
-        if (!root.TryGetProperty(property, out var value) || !value.TryGetDouble(out var number) || number <= 0)
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty(property, out var value) ||
+            value.ValueKind != JsonValueKind.Number || !value.TryGetDouble(out var number) || number <= 0)
         {
             return string.Empty;
         }
@@ -237,12 +336,12 @@ public sealed partial class LibreDmmClient : IMetadataProvider
     private static string GetString(JsonElement element, string property)
     {
         if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(property, out var value) ||
-            value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            value.ValueKind != JsonValueKind.String)
         {
             return string.Empty;
         }
 
-        return value.ValueKind == JsonValueKind.String ? value.GetString()?.Trim() ?? string.Empty : value.ToString().Trim();
+        return value.GetString()!.Trim();
     }
 
     private static string FirstNonEmpty(params string[] values) =>

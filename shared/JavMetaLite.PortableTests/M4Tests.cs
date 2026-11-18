@@ -344,8 +344,7 @@ internal static partial class Program
         job.MetadataReview.SetManualValue(MetadataField.Title, "Retain manual choice");
         var libreCalls = 0;
         var r18Calls = 0;
-        var libreJson = Fixture("libredmm.json").TrimEnd().TrimEnd('}') + ",\"cover_image_url\":\"https://example.invalid/libre-cover.jpg\"}";
-        using var libreHttp = new HttpClient(new InspectableHandler(_ => { libreCalls++; return JsonReply(libreJson); }));
+        using var libreHttp = new HttpClient(new InspectableHandler(_ => { libreCalls++; return JsonReply(Fixture("libredmm.json")); }));
         using var limitedHttp = new HttpClient(new InspectableHandler(_ =>
         {
             r18Calls++;

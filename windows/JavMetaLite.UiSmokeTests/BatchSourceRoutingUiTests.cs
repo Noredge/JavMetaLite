@@ -2,6 +2,7 @@ using System.Collections;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using JavMetaLite.App;
@@ -203,11 +204,15 @@ internal static partial class Program
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _calls);
-            if (request.RequestUri!.Host.Contains("javlibrary", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("JAVLibrary is manual-only.");
             await Task.Delay(2, cancellationToken);
-            var body = request.RequestUri.Host.Contains("libredmm", StringComparison.OrdinalIgnoreCase)
-                ? "{\"title\":\"Libre fixture\"}" : "{\"title_en\":\"R18 fixture\"}";
+            var uri = request.RequestUri!;
+            var body = uri.Host switch
+            {
+                "www.libredmm.com" when uri.Segments is ["/", "api/", "v1/", "movies/", var code] =>
+                    JsonSerializer.Serialize(new { movie = new { code, title = "Libre fixture" } }),
+                "r18.dev" => "{\"title_en\":\"R18 fixture\"}",
+                _ => throw new InvalidOperationException($"Unexpected queue search request: {uri}")
+            };
             return new HttpResponseMessage(HttpStatusCode.OK)
             { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
         }

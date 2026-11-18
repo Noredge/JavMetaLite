@@ -106,8 +106,8 @@ public sealed class R18RequestScheduler
     }
 }
 
-public sealed class MetadataSourceRateLimitException(DateTimeOffset retryAt)
-    : Exception("R18.dev 请求过于频繁（HTTP 429）；已保留其他来源资料，请稍后重试失败来源。")
+public sealed class MetadataSourceRateLimitException(DateTimeOffset retryAt, string sourceDisplayName = "R18.dev")
+    : Exception($"{sourceDisplayName} 请求过于频繁（HTTP 429）；已保留其他来源资料，请稍后重试失败来源。")
 {
     public DateTimeOffset RetryAt { get; } = retryAt;
 }

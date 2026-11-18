@@ -518,18 +518,73 @@ internal static partial class Program
 
     private static async Task Provider()
     {
-        using var http = new HttpClient(new ReplyHandler(HttpStatusCode.OK, Fixture("libredmm.json")));
-        using var provider = new LibreDmmClient(http);
-        var metadata = await provider.SearchAsync("DEMO-001");
-        Equal("Synthetic provider title", metadata.Title);
-        Equal("DEMO-001", metadata.Id);
-        foreach (var status in new[] { HttpStatusCode.NotFound, HttpStatusCode.TooManyRequests })
+        const string api = "https://www.libredmm.com/api/v1/movies/DEMO-001";
+        var json = Fixture("libredmm.json");
+        var calls = 0;
+        using var http = new HttpClient(new InspectableHandler(request =>
         {
-            using var failedHttp = new HttpClient(new ReplyHandler(status, "{}"));
-            using var failedProvider = new LibreDmmClient(failedHttp);
-            var attempt = await MetadataSearchCoordinator.SearchAttemptAsync("DEMO-001", failedProvider);
-            Check(!attempt.Success && attempt.Error is not null, $"{status} unexpectedly succeeded");
-        }
+            Equal(api, request.RequestUri!.AbsoluteUri);
+            if (++calls > 1) return JsonReply(json);
+            var pending = new HttpResponseMessage(HttpStatusCode.Accepted);
+            pending.Headers.RetryAfter = new(TimeSpan.FromSeconds(1));
+            return pending;
+        }));
+        using var provider = new LibreDmmClient(http);
+        var metadata = await provider.SearchAsync("demo001");
+        Equal(2, calls);
+        Equal("Synthetic provider title", metadata.Title);
+        Equal(metadata.Title, metadata.OriginalTitle);
+        Equal("DEMO-001", metadata.Id);
+        Equal("https://www.libredmm.com/movies/DEMO-001", metadata.SourceUrl);
+        Equal("2026-01-02", metadata.ReleaseDate);
+        Equal("90", metadata.RuntimeMinutes);
+        Equal("4.2", metadata.Rating);
+        Equal("Demo director", metadata.Director);
+        Equal("Demo studio", metadata.Maker);
+        Equal("Demo label", metadata.Label);
+        Equal("Demo series", metadata.Series);
+        Equal("Demo, Second genre", metadata.GenresText);
+        Equal("Synthetic actor", metadata.ActorsText);
+        Equal("https://example.invalid/actor.jpg", metadata.Actors.Single().ImageUrl);
+        Equal("demo00001", metadata.ContentId);
+        Equal("https://awsimgsrc.dmm.com/pics_dig/digital/video/demo00001/demo00001pl.jpg", metadata.CoverUrl);
+        Equal("https://pics.dmm.co.jp/digital/video/demo00001/demo00001pl.jpg", metadata.FallbackCoverUrl);
+        Equal("https://example.invalid/libre-poster.jpg", metadata.PosterUrl);
+        Check(metadata.ScreenshotUrls.SequenceEqual(["https://example.invalid/large1.jpg", "https://example.invalid/small2.jpg"]),
+            "Expected the largest available image for each sample");
+
+        const string sparse = """
+            {"movie":{"code":"DEMO-001","title":"Demo","runtime_minutes":null,"review":null,
+            "cover":{"url":"https://example.invalid/selected.jpg"},"products":[{"content_id":"fallback"}]}}
+            """;
+        var minimal = provider.ParseJson(sparse, api, "DEMO-001");
+        Equal("", minimal.RuntimeMinutes); Equal("", minimal.Rating);
+        Equal("fallback", minimal.ContentId);
+        Equal("https://example.invalid/selected.jpg", minimal.CoverUrl);
+        Equal(minimal.CoverUrl, minimal.PosterUrl);
+        ThrowsSync<InvalidDataException>(() => provider.ParseJson("""{"movie":{"title":"No ID"}}""", api, "DEMO-001"));
+        ThrowsSync<MetadataNotFoundException>(() => provider.ParseJson(json, api, "DEMO-002"));
+        ThrowsSync<MetadataNotFoundException>(() => provider.ParseJson(json, api, "DEMO-001~43"));
+        ThrowsSync<InvalidDataException>(() => provider.ParseJson("""{"code":"DEMO-001","works":[{"code":"DEMO-001~42"},{"code":"DEMO-001~43"}]}""", api, "DEMO-001"));
+
+        using var absentHttp = new HttpClient(new ReplyHandler(HttpStatusCode.NotFound, "{}"));
+        using var absent = new LibreDmmClient(absentHttp);
+        await Throws<MetadataNotFoundException>(() => absent.SearchAsync("DEMO-001"));
+        using var limitedHttp = new HttpClient(new ReplyHandler(HttpStatusCode.TooManyRequests, "<html>Rate limited</html>"));
+        using var limited = new LibreDmmClient(limitedHttp);
+        await Throws<MetadataSourceRateLimitException>(() => limited.SearchAsync("DEMO-001"));
+
+        using var cancel = new CancellationTokenSource();
+        var pendingCalls = 0;
+        using var pendingHttp = new HttpClient(new InspectableHandler(_ =>
+        {
+            pendingCalls++;
+            cancel.CancelAfter(TimeSpan.FromMilliseconds(50));
+            return new HttpResponseMessage(HttpStatusCode.Accepted);
+        }));
+        using var pendingProvider = new LibreDmmClient(pendingHttp);
+        await Throws<OperationCanceledException>(() => pendingProvider.SearchAsync("DEMO-001", cancel.Token));
+        Equal(1, pendingCalls);
     }
 
     private static Task ImagesTest()

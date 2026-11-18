@@ -272,7 +272,7 @@
     <sys:String x:Key="SearchFeedback.RetryQueue">選択分の失敗を再試行（{0}）</sys:String>
     <sys:String x:Key="SearchFeedback.RetryingQueue">選択した {0} 本の失敗ソースを再試行中…</sys:String>
     <sys:String x:Key="SearchFeedback.R18CoolingDown">R18.dev の制限により約 {0} 秒後に再試行します。キャンセル可能です。</sys:String>
-    <sys:String x:Key="Error.SourceRateLimited">R18.dev のリクエスト制限（HTTP 429）です。取得済みの情報は保持されます。後で失敗ソースを再試行してください。</sys:String>
+    <sys:String x:Key="Error.SourceRateLimited">取得元のリクエスト制限（HTTP 429）です。取得済みの情報は保持されます。後で失敗ソースを再試行してください。</sys:String>
     <sys:String x:Key="Status.BatchSourcesComplete">検索終了：完了 {0} · 一部失敗 {1} · 全失敗 {2} · 中止 {3} · 未開始 {4}</sys:String>
     <sys:String x:Key="Main.SearchQueueSourceTooltip">検索元：{0}。最大 2 本を同時検索。ファイルは保存しません</sys:String>
     <sys:String x:Key="Status.BatchSearchingSource">{1} で {0} 本を検索中（最大 2 本を並列処理）…</sys:String>
