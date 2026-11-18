@@ -6,8 +6,8 @@ Start with the platform guides for installation and builds. Maintained technical
 
 | Platform | Guide | Tests | Release information |
 | --- | --- | --- | --- |
-| Windows | [Installation and build](../windows/README.md) | [Development and testing](windows/TESTING.md) | [Published releases](https://github.com/Noredge/JavMetaLite/releases/tag/v1.2.3) |
-| macOS | [Installation and build](../macos/README.md) · [Bundled first-launch guide](macos/PACKAGE.md) | [Core/full and manual checks](macos/TESTING.md) | [Current verification limits](macos/STATUS.md) · [Published release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.0) |
+| Windows | [Installation and build](../windows/README.md) | [Development and testing](windows/TESTING.md) | [Published releases](https://github.com/Noredge/JavMetaLite/releases/tag/v1.2.4) |
+| macOS | [Installation and build](../macos/README.md) · [Bundled first-launch guide](macos/PACKAGE.md) | [Core/full and manual checks](macos/TESTING.md) | [Current verification limits](macos/STATUS.md) · [Published release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.1) |
 
 [Screenshots](SCREENSHOTS-v1.2.0.md) use synthetic data and state the version captured.
 

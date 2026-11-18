@@ -1,10 +1,10 @@
 # macOS 发布检查
 
-macOS **1.0.0 / build51 / macos-v1.0.0** 按以下清单发布。执行命令见 [RELEASING](RELEASING.md) 和 [TESTING](TESTING.md)，已记录范围与限制见 [STATUS](STATUS.md)。
+macOS **1.0.1 / build52 / macos-v1.0.1** 按以下清单发布。执行命令见 [RELEASING](RELEASING.md) 和 [TESTING](TESTING.md)，已记录范围与限制见 [STATUS](STATUS.md)。
 
 ## 版本与来源
 
-- App 版本、build、标签、四语 README 与 Release 文案一致；Windows v1.2.3 版本、标签、资产与 Latest 不变。
+- App 版本、build、标签、四语 README 与 Release 文案一致；Windows v1.2.4 单独提供便携包并设为 Latest。
 - 冻结提交及发布标签的 Mac、Windows **full** 门禁均通过。PR head、CI 实际 merge checkout 和打包提交分别记录。
 - 包来自干净源码；源码输入、工具链、依赖锁、许可证与 notices 完整。ZIP、外部清单、包内清单和 SHA-256 对应同一产物。
 
@@ -28,5 +28,5 @@ macOS **1.0.0 / build51 / macos-v1.0.0** 按以下清单发布。执行命令见
 ## 发布核对
 
 - 稳定版清除 Pre-release，**不设为 Latest**；发布前核对三个附件的服务端大小/摘要。
-- 发布后确认 tag 指向、公开下载、ZIP SHA、版本/签名说明，以及 Windows Latest 仍为 v1.2.3。
+- 发布后确认 tag 指向、公开下载、ZIP SHA、版本/签名说明，以及 Windows Latest 仍为 v1.2.4。
 - 已发布附件保持不可变；后续二进制变更使用新版本和标签。

@@ -97,7 +97,7 @@ public actor WorkerClient {
         // is replayed and a late response to the old request cannot authorize it.
         let generation = sessionGeneration
         let result = try await request("initialize", params: .object([
-            "protocolVersion": .number(1), "clientVersion": .string("1.0.0"),
+            "protocolVersion": .number(1), "clientVersion": .string("1.0.1"),
             "locale": .string(Locale.preferredLanguages.first ?? "en")
         ]))
         guard generation == sessionGeneration, process?.isRunning == true, input != nil else {

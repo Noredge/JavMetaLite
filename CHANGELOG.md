@@ -1,5 +1,12 @@
 # Changelog
 
+## Windows 1.2.4 and macOS 1.0.1 (build 52)
+
+- Restore LibreDMM metadata and artwork lookup through the v1 movie API for single and batch searches.
+- Preserve the selected work when importing a LibreDMM page for a shared catalog number.
+
+[Windows release](https://github.com/Noredge/JavMetaLite/releases/tag/v1.2.4) · [macOS release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.1)
+
 ## 1.2.3
 
 - Fix movie ID recognition during discovery for filenames containing dotted prefixes such as `mirror.example@ABF-391-U.mp4`.
