@@ -7,7 +7,7 @@
 [![Windows CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 [![macOS CI](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml)
 
-> Windows **1.2.4** · macOS **1.0.1**。
+> Windows **1.2.4** · macOS **1.1.0**。
 
 用於本機影片資料審核與整理的 Windows／macOS 工具，支援單片編輯、批次處理及 Jellyfin 相容輸出。
 
@@ -16,7 +16,7 @@
 | 平台 | 需求 | 下載 |
 | --- | --- | --- |
 | Windows **1.2.4** | Windows 10/11 x64 | [可攜 ZIP](https://github.com/Noredge/JavMetaLite/releases/download/v1.2.4/JavMetaLite-v1.2.4-win-x64-portable.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/v1.2.4) |
-| macOS **1.0.1** | Apple Silicon · macOS 15+ | [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.0.1/JavMetaLite-macOS-arm64-Release-adhoc.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.1) |
+| macOS **1.1.0** | Apple Silicon · macOS 15+ | [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.1.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0) |
 
 開啟前請核對 Release 的 SHA-256。Windows 內建瀏覽器需要 WebView2；macOS 套件採用 ad-hoc 簽署、未公證，詳見[首次啟動指南](macos/README.md#first-launch)。Intel 尚未驗證。
 

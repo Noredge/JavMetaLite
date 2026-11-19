@@ -7,7 +7,7 @@
 [![Windows CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 [![macOS CI](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml)
 
-> Windows **1.2.4** · macOS **1.0.1**。
+> Windows **1.2.4** · macOS **1.1.0**。
 
 ローカル動画の情報を確認・整理する Windows／macOS アプリです。単体編集と一括処理に対応し、Jellyfin 用のメタデータや画像を出力できます。
 
@@ -16,7 +16,7 @@
 | プラットフォーム | 動作環境 | ダウンロード |
 | --- | --- | --- |
 | Windows **1.2.4** | Windows 10/11 x64 | [ポータブル ZIP](https://github.com/Noredge/JavMetaLite/releases/download/v1.2.4/JavMetaLite-v1.2.4-win-x64-portable.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/v1.2.4) |
-| macOS **1.0.1** | Apple Silicon · macOS 15 以降 | [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.0.1/JavMetaLite-macOS-arm64-Release-adhoc.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.1) |
+| macOS **1.1.0** | Apple Silicon · macOS 15 以降 | [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.1.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0) |
 
 起動前に Release の SHA-256 を確認してください。Windows の内蔵ブラウザーには WebView2 が必要です。macOS 版はアドホック署名のみで未公証です。[初回起動ガイド](macos/README.md#first-launch)を参照してください。Intel は未検証です。
 

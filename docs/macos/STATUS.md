@@ -1,8 +1,12 @@
-# macOS 1.0 状态与验证范围
+# macOS 状态与验证范围
 
-macOS **1.0.1（build52）**，Apple Silicon，最低部署目标 macOS 15。下载、精确源码提交、最终 ZIP 的 SHA-256、清单与门禁链接以 [macOS 1.0.1 Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.1) 为准。Windows 保持 **v1.2.4**，独立保留 Latest。
+macOS **1.1.0**，Apple Silicon，最低部署目标 macOS 15。下载、精确源码提交、最终 ZIP 的 SHA-256、清单与门禁链接以 [macOS 1.1.0 Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0) 为准。Windows 保持 **v1.2.4**，独立保留 Latest。
 
 GitHub 包采用 **ad-hoc 签名**，不提供 Developer ID 或公证。项目的 `github-adhoc` 政策允许正式发布，但不代表 Apple 身份验证、恶意软件扫描或 Gatekeeper 自动放行。首次打开方式见 [安装说明](../../macos/README.md#first-launch)。
+
+## 1.1.0 候选版验证
+
+在 Apple Silicon Mac 上打开了从 CI 下载的候选应用并载入本地影片。用随包 Worker 对已有 NFO 的副本执行番号查询后的关联和保存，回读确认手动修改的标题、主动清空的评分以及原有演员、导演、简介和标签均符合预期。[候选包 CI](https://github.com/Noredge/JavMetaLite/actions/runs/44482717424)
 
 ## 1.0.0 已记录的验收范围
 

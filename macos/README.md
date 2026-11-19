@@ -4,7 +4,7 @@ A native editor for reviewing movie metadata and artwork, editing local NFO file
 
 ## Run
 
-Download the published [macOS 1.0.1](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.1), extract the [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.0.1/JavMetaLite-macOS-arm64-Release-adhoc.zip) and open `JavMetaLite.app`. Apple Silicon and macOS 15+ are required; no .NET installation is needed. The package is ad-hoc signed, without Developer ID or notarization; Gatekeeper acceptance is not established. Intel is unverified. This is the project’s GitHub distribution format; it does not mean Apple has verified the publisher or scanned the app.
+Download the published [macOS 1.1.0](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0), extract the [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.1.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) and open `JavMetaLite.app`. Apple Silicon and macOS 15+ are required; no .NET installation is needed. The package is ad-hoc signed, without Developer ID or notarization; Gatekeeper acceptance is not established. Intel is unverified. This is the project’s GitHub distribution format; it does not mean Apple has verified the publisher or scanned the app.
 
 ## First launch
 
@@ -45,7 +45,7 @@ Command-O imports, Command-F searches the queue, Command-R queries the current m
 
 The image viewer offers side arrows, Close on the left, Fit and Actual Size. Mouse wheel/pinch zoom, precise trackpad pan and Command-scroll zoom are native adapters; physical-device acceptance remains separate from API tests. Cached-source selection does not start a new query, and late image results cannot replace another review.
 
-[Release notes](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.1) · [Verified scope](../docs/macos/STATUS.md) · [Testing](../docs/macos/TESTING.md) · [Architecture](../docs/macos/ARCHITECTURE.md) · [Protocol](../docs/macos/PROTOCOL.md) · [Safety](../docs/macos/SAFETY-MATRIX.md) · [Releasing](../docs/macos/RELEASING.md)
+[Release notes](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0) · [Verified scope](../docs/macos/STATUS.md) · [Testing](../docs/macos/TESTING.md) · [Architecture](../docs/macos/ARCHITECTURE.md) · [Protocol](../docs/macos/PROTOCOL.md) · [Safety](../docs/macos/SAFETY-MATRIX.md) · [Releasing](../docs/macos/RELEASING.md)
 
 [MIT license](../LICENSE) · [Third-party notices](../THIRD_PARTY_NOTICES.md).
 

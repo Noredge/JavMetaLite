@@ -1,6 +1,6 @@
 # macOS release procedure
 
-The stable macOS release is **1.0.1**, tagged [`macos-v1.0.1`](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.1), for Apple Silicon and macOS 15+. Windows **v1.2.4** keeps its own assets and GitHub Latest status. See [verified scope](STATUS.md) and the [release checklist](RELEASE-CHECKLIST.md).
+The stable macOS release is **1.1.0**, tagged [`macos-v1.1.0`](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0), for Apple Silicon and macOS 15+. Windows **v1.2.4** keeps its own assets and GitHub Latest status. See [verified scope](STATUS.md) and the [release checklist](RELEASE-CHECKLIST.md).
 
 ## Freeze and validate
 
