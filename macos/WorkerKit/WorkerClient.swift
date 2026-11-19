@@ -125,7 +125,11 @@ public actor WorkerClient {
     }
 
     public func request(_ method: String, params: JSONValue = .object([:])) async throws -> JSONValue {
-        let deadline = ContinuousClock.now.advanced(by: requestTimeout)
+        try await request(method, params: params, timeout: requestTimeout)
+    }
+
+    func request(_ method: String, params: JSONValue, timeout: Duration) async throws -> JSONValue {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
         guard process?.isRunning == true, input != nil, !shuttingDown || method == "shutdown" else {
             throw unavailable("The metadata engine is unavailable.")
         }
