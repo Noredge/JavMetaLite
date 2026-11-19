@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Artwork disk-cache lifetime/leases, using synthetic media and loopback only.
-Production-only cases also run against the extracted shipping Worker. Tiny budget
-injection is accepted solely by the separate non-publishable regression host.
+Tiny budget injection uses the separate non-publishable regression host.
 """
 import hashlib
 import http.server

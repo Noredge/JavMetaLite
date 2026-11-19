@@ -12,6 +12,73 @@ import WorkerKit
 
 @Suite(.serialized) @MainActor struct WorkspaceInteractionTests {
     private let preferences = TestPreferenceDomain()
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["JAVMETALITE_SEARCH_TEST_HOST"] != nil))
+    func importsStayLocalUntilExplicitQueryUsesChosenSource() async throws {
+        _ = NSApplication.shared
+        let executable = try #require(ProcessInfo.processInfo.environment["JAVMETALITE_SEARCH_TEST_HOST"])
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let config = root.appendingPathComponent("responses.json")
+        let libreURL = "https://www.libredmm.com/api/v1/movies/IPX-081"
+        let r18URL = "https://r18.dev/videos/vod/movies/detail/-/combined=ipx00081/json"
+        let fixture = """
+        {"routes":[
+          {"url":"\(libreURL)","responses":[{"status":200,"json":{"movie":{"code":"IPX-081","title":"Libre title","products":[{"content_id":"ipx00081","preferred":true}]}}}]},
+          {"url":"\(r18URL)","responses":[{"status":200,"json":{"dvd_id":"IPX-081","content_id":"ipx00081","title":"R18 title"}}]}
+        ]}
+        """
+        try Data(fixture.utf8).write(to: config)
+        let store = WorkspaceStore(engineExecutable: { URL(fileURLWithPath: executable) },
+            engineArguments: ["--data-root", root.appendingPathComponent("state").path, "--fixture-config", config.path],
+            defaults: preferences.defaults)
+        await store.start()
+        func requestURLs() async throws -> [String] {
+            let recorded = try await store.worker.request("fixture.requests")
+            return recorded["requests"].arrayValue.filter { $0["kind"].stringValue == "http" }.map { $0["url"].stringValue }
+        }
+        do {
+            let movie = root.appendingPathComponent("IPX-081.mp4")
+            try Data("synthetic video".utf8).write(to: movie)
+            await store.importPaths([movie.path])
+            let imported = try #require(store.selectedJob)
+            #expect(imported.metadata["id"].stringValue == "IPX-081" && imported.searchAttempts.isEmpty)
+            #expect(store.discoveryReview == nil && store.preview == nil)
+            store.sourceMode = "r18dev"
+            #expect(try await requestURLs() == [])
+            store.searchActionTargets(); try await idle(store)
+            #expect(try await requestURLs() == [r18URL])
+            #expect(store.selectedJob?.metadata["title"].stringValue == "R18 title")
+            store.sourceMode = "libredmm"
+            #expect(try await requestURLs() == [r18URL])
+            #expect(store.selectedJob?.metadata["title"].stringValue == "R18 title")
+            store.searchActionTargets(); try await idle(store)
+            #expect(try await requestURLs() == [r18URL, libreURL])
+            #expect(store.selectedJob?.metadata["title"].stringValue == "Libre title")
+            store.selectReviewSource("r18dev", jobID: imported.jobID, metadataOnly: true); try await idle(store)
+            let cached = try #require(store.selectedJob)
+            #expect(cached.metadata["title"].stringValue == "R18 title" && store.reviewSource(cached) == "r18dev")
+            #expect(store.sourceMode == "libredmm")
+            #expect(!FileManager.default.fileExists(atPath: movie.deletingPathExtension().appendingPathExtension("nfo").path))
+
+            let folder = root.appendingPathComponent("Local")
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let local = folder.appendingPathComponent("DEMO-002.mp4")
+            try Data("local video".utf8).write(to: local)
+            try Data("<movie><id>DEMO-002</id><title>DEMO-002 · Local review</title></movie>".utf8)
+                .write(to: local.deletingPathExtension().appendingPathExtension("nfo"))
+            await store.importPaths([folder.path])
+            let confirmation = try #require(store.confirmDiscovery())
+            await confirmation.value
+            let review = try #require(store.jobs.first { $0.metadata["id"].stringValue == "DEMO-002" })
+            #expect(review.metadata["title"].stringValue == "DEMO-002 · Local review")
+            #expect(store.displayTitle(for: review) == "Local review")
+            #expect(review.searchAttempts.isEmpty)
+            #expect(try await requestURLs() == [r18URL, libreURL])
+        } catch { await store.worker.shutdown(); throw error }
+        await store.worker.shutdown()
+    }
+
     @Test func workspaceSettingsRestoreWithoutRestoringQueueDraftsOrPlans() {
         let store = WorkspaceStore(defaults: preferences.defaults)
         store.writeNfo = false; store.writePoster = true; store.writeFanart = true; store.writeSamples = true
@@ -30,17 +97,26 @@ import WorkerKit
         #expect(!restored.queueVisible && !restored.inspectorVisible && restored.moreOptionsExpanded && !restored.importRecursively)
         #expect(restored.jobs.isEmpty && restored.drafts.isEmpty && restored.checkedJobIDs.isEmpty && restored.preview == nil)
         #expect(!restored.previewStale && restored.saveOptionsPayload["overwriteExisting"].boolValue)
+        restored.writeSamples = false
+        #expect(!restored.replaceLocalSamples)
+        restored.writeSamples = true
+        #expect(!restored.saveOptionsPayload["replaceLocalExtrafanart"].boolValue)
+        #expect(!WorkspaceStore(defaults: preferences.defaults).replaceLocalSamples)
         restored.targetMode = "SourceNumberFolder"
         #expect(WorkspaceStore(defaults: preferences.defaults).targetMode == "SourceNumberFolder")
     }
     @Test func preferenceMigrationAndInvalidValuesKeepSafeDefaults() {
         preferences.defaults.set(true, forKey: "skipSavePreview")
         let legacy = WorkspaceStore(defaults: preferences.defaults)
-        #expect(legacy.skipSavePreview && legacy.writeNfo && legacy.inspectorVisible && legacy.queueVisible)
-        #expect(!legacy.writePoster && !legacy.renameVideo)
-        preferences.defaults.set(["targetMode": "unrecognized", "sourceMode": "combined-removed", "customRootDirectory": "relative/path", "writeNfo": "bad"], forKey: WorkspaceStore.workspacePreferencesKey)
+        #expect(legacy.skipSavePreview && legacy.writeNfo && !legacy.inspectorVisible && legacy.queueVisible)
+        #expect(legacy.writePoster && !legacy.renameVideo)
+        #expect(!legacy.writeSamples && !legacy.replaceLocalSamples)
+        preferences.defaults.set(["targetMode": "unrecognized", "sourceMode": "combined-removed", "customRootDirectory": "relative/path", "writeNfo": "bad", "writeSamples": false, "replaceLocalSamples": true], forKey: WorkspaceStore.workspacePreferencesKey)
         let invalid = WorkspaceStore(defaults: preferences.defaults)
         #expect(invalid.targetMode == "VideoDirectory" && invalid.sourceMode == "libredmm" && invalid.customRootDirectory.isEmpty && invalid.writeNfo)
+        #expect(!invalid.writeSamples && !invalid.replaceLocalSamples)
+        invalid.writeSamples = true
+        #expect(!invalid.replaceLocalSamples)
     }
     @Test(.enabled(if: ProcessInfo.processInfo.environment["JAVMETALITE_TEST_WORKER"] != nil))
     func engineStartupDoesNotResetRestoredSaveControls() async throws {
@@ -657,6 +733,20 @@ import WorkerKit
             #expect(store.selectedJob?.artwork.first(where: { $0["kind"].stringValue == "sample" })?["selected"].boolValue == false)
             #expect(store.errorMessage == nil && busyTransitions.isEmpty)
             busy.cancel()
+            // Applying a gallery choice and the choice of files to write are independent.
+            job = try #require(store.selectedJob)
+            store.applyGallery(job: job, coverID: "", sampleIDs: [sample.artworkIdentity]) {}
+            try await idle(store)
+            job = try #require(store.selectedJob)
+            #expect(job.artwork.first(where: { $0.artworkIdentity == sample.artworkIdentity })?["selected"].boolValue == true)
+            #expect(!store.writeSamples && !store.replaceLocalSamples)
+            store.writeSamples = true
+            store.replaceLocalSamples = true
+            store.applyGallery(job: job, coverID: "", sampleIDs: []) {}
+            try await idle(store)
+            job = try #require(store.selectedJob)
+            #expect(job.artwork.first(where: { $0.artworkIdentity == sample.artworkIdentity })?["selected"].boolValue == false)
+            #expect(store.writeSamples && store.replaceLocalSamples)
             // A save requested immediately after a queued toggle waits for its
             // acknowledgement, and previews the latest revision.
             store.selectArtwork(sample, jobID: job.jobID, selected: true)
@@ -699,21 +789,19 @@ import WorkerKit
         let drafts = store.drafts
         store.searchText = "Title a"
         #expect(store.visibleJobs.count == 1)
-        #expect(!store.canSearchActionTargets && !store.canPreviewActionTargets)
-        store.searchActionTargets(); store.saveActionTargets()
-        #expect(!store.working && store.preview == nil)
-        store.toggleAllChecks()
-        #expect(store.allMoviesChecked && store.checkedJobIDs == ["a", "b", "c"])
-        #expect(store.selectedID == "b" && store.drafts == drafts)
+        #expect(store.actionTargetJobs.map(\.jobID) == ["b"] && store.canPreviewActionTargets)
         store.showBatchOverview()
-        #expect(store.showingBatchOverview && store.selectedID == "b")
+        #expect(store.showingBatchOverview && !store.canSearchActionTargets && !store.canPreviewActionTargets)
+        store.toggleAllChecks()
+        #expect(store.allMoviesChecked && store.actionTargetJobs.map(\.jobID) == ["a", "b", "c"])
         store.selectNavigation(["c"])
-        #expect(!store.showingBatchOverview && store.checkedJobIDs == ["a", "b", "c"])
-        store.toggleChecked("b")
+        #expect(!store.showingBatchOverview && store.actionTargetJobs.map(\.jobID) == ["c"])
+        store.showBatchOverview()
+        store.setChecked("b", checked: false)
         #expect(store.actionTargetJobs.map(\.jobID) == ["a", "c"] && store.selectedID == "c")
-        store.toggleAllChecks(); store.toggleAllChecks()
-        #expect(store.checkedJobIDs.isEmpty && !store.canPreviewActionTargets && store.drafts == drafts)
-        store.working = true; store.toggleAllChecks(); store.toggleChecked("a"); store.toggleQueueNavigationChecks()
+        store.setAllChecks(false)
+        #expect(store.showingBatchOverview && !store.canPreviewActionTargets && store.drafts == drafts)
+        store.working = true; store.toggleAllChecks(); store.setChecked("a", checked: true)
         #expect(store.checkedJobIDs.isEmpty)
         #expect(store.jobs.map(\.reviewRevision) == [9, 9, 9])
     }
@@ -745,6 +833,7 @@ import WorkerKit
             let jobs = store.jobs, third = try #require(jobs.last)
             for (i, job) in jobs.enumerated() { store.edit("title", value: i < 2 ? "Checked \(i+1)" : "Unmarked draft stays", job: job) }
             store.checkedJobIDs = Set(jobs.prefix(2).map(\.jobID)); store.selectNavigation([third.jobID])
+            store.showBatchOverview()
             store.saveActionTargets(); try await idle(store)
             #expect(store.preview?.jobIDs == Array(jobs.prefix(2).map(\.jobID)))
             #expect(store.preview?.canExecute == true)
@@ -803,37 +892,28 @@ import WorkerKit
         #expect(store.canImportFiles && store.canRetrySources && store.canSearchActionTargets && store.canPreviewActionTargets && store.canClearQueue && store.canOpenBrowser, "Ending the actual AppKit sheet restores actions without another navigation or model edit.")
         #expect(store.selectedID == "review" && store.jobs.first?.reviewRevision == 17 && store.drafts["review"]?["title"] == "Keep the current review")
     }
-    @Test func inspectorStartsOpenAndActionScopesAreExplicit() {
+    @Test func editorCommandsFollowCurrentMovieAndBatchCommandsFollowChecks() {
         _ = NSApplication.shared
-        let old = preferences.defaults.object(forKey: "inspectorVisible")
-        preferences.defaults.set(false, forKey: "inspectorVisible")
-        defer { if let old { preferences.defaults.set(old, forKey: "inspectorVisible") } else { preferences.defaults.removeObject(forKey: "inspectorVisible") } }
         let store = WorkspaceStore(defaults: preferences.defaults)
-        #expect(store.inspectorVisible)
-        store.jobs = ["a", "b", "c", "unknown"].map { id in MovieJobSnapshot(.object(["jobId": .string(id), "reviewRevision": .number(7), "hasFailedSources": .bool(true), "metadata": .object(["id": .string(id == "unknown" ? "" : "DEMO-101")])])) }
+        #expect(!store.inspectorVisible)
+        store.jobs = ["a", "c", "unknown"].map { id in MovieJobSnapshot(.object(["jobId": .string(id), "reviewRevision": .number(7), "hasFailedSources": .bool(true), "metadata": .object(["id": .string(id == "unknown" ? "" : "DEMO-101")])])) }
         store.ready = true; store.capabilities = .object(["batchSave": .bool(true), "manualBrowserImport": .bool(true), "discoverInputs": .bool(true)])
         store.selectNavigation(["a"])
-        #expect(store.canOpenBrowser)
-        #expect(store.actionTargetScope == "checked" && store.actionTargetJobs.isEmpty)
-        #expect(!store.canSearchActionTargets && !store.canPreviewActionTargets)
         store.checkedJobIDs = ["c"]
+        #expect(store.actionTargetScope == "current" && store.actionTargetJobs.map(\.jobID) == ["a"])
+        #expect(store.canSearchActionTargets && store.canPreviewActionTargets && store.canOpenBrowser)
+        store.showBatchOverview()
         #expect(store.actionTargetScope == "checked" && store.actionTargetJobs.map(\.jobID) == ["c"])
-        store.selectNavigation(["a", "b"])
-        #expect(store.canOpenBrowser && store.navigationSelection.count == 1)
-        #expect(store.actionTargetScope == "checked" && store.actionTargetJobs.map(\.jobID) == ["c"])
-        #expect(store.canSearchActionTargets && store.canPreviewActionTargets)
-        store.checkedJobIDs = []; store.selectNavigation(["unknown"])
+        #expect(!store.canOpenBrowser && !store.canRetrySources)
+        store.selectNavigation(["unknown"])
         #expect(!store.canSearchActionTargets && !store.canOpenBrowser)
         store.drafts["unknown"] = ["id": "DEMO-104"]
-        #expect(!store.canSearchActionTargets && store.recognizedSearchJobs.count == 4 && store.canOpenBrowser)
-        store.checkedJobIDs = ["unknown"]
-        #expect(store.canSearchActionTargets)
-        #expect(store.canImportFiles && store.canRetrySources)
+        #expect(store.canSearchActionTargets && store.canOpenBrowser && store.canRetrySources)
         store.statusUnconfirmed = true
-        #expect(!store.canSearchActionTargets && !store.canPreviewActionTargets && !store.canSearchAllRecognized && !store.canClearQueue)
+        #expect(!store.canSearchActionTargets && !store.canPreviewActionTargets && !store.canClearQueue)
         store.statusUnconfirmed = false; store.preview = SavePreview(.object(["planId": .string("open-review")]))
         #expect(!store.canClearQueue && !store.canSearchActionTargets && !store.canOpenBrowser && !store.canImportFiles && !store.canRetrySources)
-        #expect(store.jobs.map(\.reviewRevision) == [7, 7, 7, 7])
+        #expect(store.jobs.map(\.reviewRevision) == [7, 7, 7])
     }
     @Test func pendingNavigationAndBatchSearchKeepTheirTargetsAndRevisions() async throws {
         _ = NSApplication.shared
@@ -843,12 +923,11 @@ import WorkerKit
             store.ready = true; store.capabilities = .object(["manualBrowserImport": .bool(true), "discoverInputs": .bool(true)])
             try await store.refresh(); store.selectNavigation(["a"])
             store.detailTab = "artwork"; store.artworkSourceByJob["b"] = "local"
-            store.checkedJobIDs = ["b"]
             store.selectQueueNavigation(["b"]); store.searchActionTargets(); try await idle(store)
             #expect(store.detailTab == "metadata" && store.artworkSourceByJob["b"] == nil)
             var state = try await store.worker.request("fixture.state")
             #expect(state["searches"].arrayValue.last?["jobIds"].arrayValue == [.string("b")])
-            store.checkedJobIDs = ["c"]; store.selectNavigation(["b", "a"])
+            store.checkedJobIDs = ["c"]; store.selectNavigation(["b", "a"]); store.showBatchOverview()
             store.searchActionTargets(); try await idle(store)
             state = try await store.worker.request("fixture.state")
             #expect(state["searches"].arrayValue.last?["jobIds"].arrayValue == [.string("c")])
@@ -885,7 +964,7 @@ import WorkerKit
             await withCheckedContinuation { c in DispatchQueue.main.async { c.resume() } }
             state = try await store.worker.request("fixture.state")
             #expect(state["searches"].arrayValue.count == before && store.selectedID == "unknown")
-            store.selectRecognized(); store.searchActionTargets(); try await idle(store)
+            store.showBatchOverview(); store.selectRecognized(); store.searchActionTargets(); try await idle(store)
             state = try await store.worker.request("fixture.state")
             #expect(state["searches"].arrayValue.last?["jobIds"].arrayValue == ["a", "b", "c", "unknown"].map(JSONValue.string))
             #expect(store.jobs.map(\.reviewRevision) == [11, 12, 13, 15])

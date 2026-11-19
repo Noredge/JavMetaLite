@@ -23,10 +23,11 @@ import NativeBridgeKit
                 Button(tr("addMovies")) { store.chooseFiles() }.keyboardShortcut("o").disabled(!store.canImportFiles)
             }
             CommandGroup(replacing: .saveItem) {
-                Button(String(format: tr("saveActionCount"), store.actionTargetCount)) { store.saveActionTargets() }.keyboardShortcut("s").disabled(!store.canPreviewActionTargets)
+                Button(store.saveActionLabel) { store.saveActionTargets() }.keyboardShortcut("s").disabled(!store.canPreviewActionTargets)
             }
             CommandMenu(tr("metadata")) {
-                Button(String(format: tr("queryAction.checked"), store.actionTargetCount)) { store.searchActionTargets() }.keyboardShortcut("r").disabled(!store.canSearchActionTargets)
+                Button(tr("lookupByID")) { store.showingLookup = true }.keyboardShortcut("k").disabled(!store.canImportFiles || !store.capabilities["lookupById"].boolValue)
+                Button(store.queryActionLabel) { store.searchActionTargets() }.keyboardShortcut("r").disabled(!store.canSearchActionTargets)
                 Button(tr("retrySources")) { store.search(retry: true) }.disabled(!store.canRetrySources)
                 Button(tr("manualBrowser")) { store.openBrowser() }.keyboardShortcut("b", modifiers: [.command, .option]).disabled(!store.canOpenBrowser)
                 Divider()
@@ -38,7 +39,7 @@ import NativeBridgeKit
                     .keyboardShortcut(.delete, modifiers: [.command, .option]).disabled(!store.canClearQueue)
             }
             CommandGroup(after: .sidebar) {
-                Button(tr("toggleQueue")) { store.queueVisible.toggle() }.keyboardShortcut("l", modifiers: [.command, .option])
+                Button(tr("toggleQueue")) { store.queueVisible.toggle() }.keyboardShortcut("l", modifiers: [.command, .option]).disabled(store.jobs.isEmpty || store.showingBatchOverview)
                 Button(tr("inspector")) { store.inspectorVisible.toggle() }.keyboardShortcut("i", modifiers: [.command, .option])
             }
         }

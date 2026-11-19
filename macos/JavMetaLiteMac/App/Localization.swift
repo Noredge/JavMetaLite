@@ -35,8 +35,8 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     }
 }
 
-enum AppLocalization {
-    static var resources: Bundle {
+struct AppLocalization {
+    static let resources: Bundle = {
         #if SWIFT_PACKAGE
         // SwiftPM accessors differ across toolchains: some try the app root,
         // then an absolute build-machine path, and trap if neither exists.
@@ -55,26 +55,35 @@ enum AppLocalization {
         #else
         return Bundle.main
         #endif
-    }
-    static func string(_ key: String, preference: String, preferredLanguages: [String] = Locale.preferredLanguages, resources: Bundle) -> String {
-        let language = AppLanguage.resolve(preference: preference, preferredLanguages: preferredLanguages)
-        let missing = "__JavMetaLite_missing_translation__"
-        for code in language == "en" ? ["en"] : [language, "en"] {
-            // SwiftPM 6.1 lowercases lproj names; Xcode preserves their source
-            // spelling. Resolve literal directories, without Bundle's implicit
-            // language fallback hiding an explicitly selected Chinese locale.
-            guard let root = resources.resourceURL else { continue }
-            for directory in Set([code, code.lowercased()]).sorted() {
-                if let localized = Bundle(url: root.appendingPathComponent(directory + ".lproj", isDirectory: true)) {
-                    let value = localized.localizedString(forKey: key, value: missing, table: "Localizable")
-                    if value != missing { return value }
+    }()
+    static let shared = AppLocalization(resources: resources)
+    private let bundles: [String: Bundle]
+
+    init(resources: Bundle) {
+        var found: [String: Bundle] = [:]
+        if let root = resources.resourceURL {
+            for language in AppLanguage.allCases where language != .system {
+                let code = language.rawValue
+                // SwiftPM can lowercase lproj names while Xcode preserves their spelling.
+                for directory in [code, code.lowercased()] {
+                    if let bundle = Bundle(url: root.appendingPathComponent(directory + ".lproj", isDirectory: true)) {
+                        found[code] = bundle
+                        break
+                    }
                 }
             }
         }
-        return key
+        bundles = found
+    }
+
+    func string(_ key: String, preference: String, preferredLanguages: [String] = Locale.preferredLanguages) -> String {
+        let language = AppLanguage.resolve(preference: preference, preferredLanguages: preferredLanguages)
+        let missing = "__JavMetaLite_missing_translation__"
+        if let translated = bundles[language]?.localizedString(forKey: key, value: missing, table: nil), translated != missing { return translated }
+        return bundles["en"]?.localizedString(forKey: key, value: key, table: nil) ?? key
     }
 }
 
 func tr(_ key: String) -> String {
-    AppLocalization.string(key, preference: UserDefaults.standard.string(forKey: "interfaceLanguage") ?? "system", resources: AppLocalization.resources)
+    AppLocalization.shared.string(key, preference: UserDefaults.standard.string(forKey: "interfaceLanguage") ?? "system")
 }

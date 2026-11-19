@@ -3,36 +3,50 @@ import SwiftUI
 import WorkerKit
 #endif
 
-/// Browsing selection and persistent checks remain distinct; the top bar names the action range.
 struct BatchSummaryView: View {
     @EnvironmentObject var store: WorkspaceStore
-    let checkedJobs: [MovieJobSnapshot]
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Label(String(format: tr("checkedMovieCount"), checkedJobs.count), systemImage: "rectangle.stack").font(.title2.weight(.semibold))
-            Text(tr("batchDirectActionHint")).foregroundStyle(.secondary)
-            Divider()
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(checkedJobs) { job in
-                        HStack {
-                            Image(systemName: store.checkedJobIDs.contains(job.jobID) ? "checkmark.square.fill" : "square").foregroundStyle(.secondary)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Button(job.metadata["id"].stringValue) { store.selectNavigation([job.jobID]) }.buttonStyle(.link).font(.headline)
-                                Text(store.value("title", job: job)).lineLimit(1).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            HStack(spacing: 8) {
-                                PrimaryArtworkPreview(job: job, kind: "poster", height: 54).frame(width: 36)
-                                PrimaryArtworkPreview(job: job, kind: "fanart", height: 54).frame(width: 81)
-                            }
-                            Text(store.status(job)).font(.caption).foregroundStyle(.secondary).frame(width: 76, alignment: .trailing)
-                        }
-                    }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(tr("batchMode")).font(.system(size: 28, weight: .semibold, design: .serif))
+                Text(String(format: tr("checkedMovieCount"), store.checkedJobIDs.count)).foregroundStyle(.secondary)
+                Spacer()
+                Button(tr(store.allMoviesChecked ? "uncheckAllMovies" : "checkAllMovies")) { store.toggleAllChecks() }
+                    .help(tr("checkAllMoviesHelp"))
+                Menu {
+                    Button(tr("selectRecognizedQueue")) { store.selectRecognized() }
+                    Button(tr("selectPendingQueue")) { store.selectCategory(.pending) }
+                    Button(tr("selectIssuesQueue")) { store.selectCategory(.issues) }
+                    Button(tr("clearChecks")) { store.setAllChecks(false) }
+                    Divider()
+                    Button(tr("confirmParts")) { store.reviewParts() }.disabled(!store.canReviewParts)
+                } label: { Image(systemName: "ellipsis.circle") }
+                    .fixedSize().accessibilityLabel(tr("queueActions"))
+            }
+            HStack {
+                QuerySourcePicker().fixedSize().disabled(store.working || store.statusUnconfirmed)
+                if store.sourceMode == "custom" {
+                    Button(tr("configureSources")) { store.showingSourceProfile = true }.disabled(store.working || store.statusUnconfirmed)
                 }
             }
-            Spacer(minLength: 0)
-        }.padding(28)
+            if store.sourceMode != "libredmm" { Text(tr("r18BatchSlowNote")).font(.caption).foregroundStyle(.secondary) }
+            Divider()
+            List(store.visibleJobs) { job in
+                HStack {
+                    Toggle(isOn: Binding(get: { store.checkedJobIDs.contains(job.jobID) },
+                        set: { store.setChecked(job.jobID, checked: $0) })) {
+                        QueueRow(job: job)
+                    }.toggleStyle(.checkbox).accessibilityLabel(tr("includeInBatch") + " · " + store.value("id", job: job))
+                    Spacer()
+                    Button { store.selectNavigation([job.jobID]) } label: { Image(systemName: "arrow.up.right") }
+                        .buttonStyle(.borderless).accessibilityLabel(tr("viewCurrentMovie")).help(tr("viewCurrentMovie"))
+                }
+            }.listStyle(.plain).scrollContentBackground(.hidden)
+            .onKeyPress(keys: ["a", "A"], phases: .down) { press in
+                guard press.modifiers.contains(.command) else { return .ignored }
+                store.setAllChecks(!press.modifiers.contains(.shift)); return .handled
+            }
+        }.disabled(store.working || store.statusUnconfirmed)
     }
 }
 

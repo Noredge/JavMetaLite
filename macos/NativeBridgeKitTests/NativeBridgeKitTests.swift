@@ -60,7 +60,11 @@ import WorkerKit
         let cropped = try #require(await cache.image(url: url, maximumPixelSize: 600, posterCrop: true))
         let full = try #require(await cache.image(url: url, maximumPixelSize: 600))
         #expect(cropped.width == 200 && cropped.height == 200)
+        #expect(cropped.nativeSize == CGSize(width: 200, height: 200))
         #expect(full.width == 401 && full.height == 200)
+        let smallPoster = try #require(await cache.image(url: url, maximumPixelSize: 120, posterCrop: true))
+        #expect(smallPoster.width == 120 && smallPoster.height == 120)
+        #expect(smallPoster.nativeSize == cropped.nativeSize)
         let tiff = try #require(cropped.image.tiffRepresentation)
         let pixels = try #require(NSBitmapImageRep(data: tiff))
         let color = try #require(pixels.colorAt(x: 0, y: 0)?.usingColorSpace(.deviceRGB))
@@ -444,6 +448,10 @@ for line in sys.stdin:
             #expect(!store.jobs.contains { $0.videoPaths.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }.contains(recognizedVideo.resolvingSymlinksInPath().path) })
             #expect(store.navigationSelection == oldNavigation); #expect(store.checkedJobIDs == [oldJob.jobID]); #expect(store.drafts == oldDrafts)
             #expect(try await store.worker.request("jobs.get", params: .object(["jobId": .string(oldJob.jobID)])) == oldRaw)
+            await store.importPaths([recognizedVideo.resolvingSymlinksInPath().path])
+            #expect(store.discoveryReview == nil && store.jobs.count == 3)
+            #expect(store.selectedJob?.videoPaths.first.map { URL(fileURLWithPath: $0).standardizedFileURL } == recognizedVideo.standardizedFileURL)
+            #expect(store.drafts == oldDrafts && store.checkedJobIDs == [oldJob.jobID])
             for url in [oldVideo, recognizedVideo, unknownVideo] { #expect(try Data(contentsOf: url) == Data("Synthetic discovery bytes".utf8)) }
             await store.worker.shutdown()
         } catch { await store.worker.shutdown(); throw error }
@@ -522,23 +530,18 @@ for line in sys.stdin:
         await withCheckedContinuation { continuation in DispatchQueue.main.async { continuation.resume() } }
         #expect(store.selectedID == "a" && publications == 0)
 
-        store.selectQueueNavigation(["b"]); store.toggleQueueNavigationChecks()
+        store.selectQueueNavigation(["b"])
         store.selectQueueNavigation(["c"])
-        #expect(store.selectedID == "a" && store.checkedJobIDs.isEmpty && publications == 0)
+        #expect(store.selectedID == "a" && publications == 0)
         await withCheckedContinuation { continuation in DispatchQueue.main.async { continuation.resume() } }
-        #expect(store.selectedID == "c" && store.checkedJobIDs == ["b"])
-        #expect(publications > 0)
-        store.toggleQueueNavigationChecks(); store.toggleQueueNavigationChecks()
-        await withCheckedContinuation { continuation in DispatchQueue.main.async { continuation.resume() } }
-        #expect(store.checkedJobIDs == ["b"], "Two rapid Space presses must cancel each other.")
-
-        store.selectQueueNavigation(["b"]); store.toggleQueueNavigationChecks()
+        #expect(store.selectedID == "c" && store.checkedJobIDs.isEmpty)
+        store.selectQueueNavigation(["b"])
         store.selectNavigation(["a"])
         await withCheckedContinuation { continuation in DispatchQueue.main.async { continuation.resume() } }
-        #expect(store.selectedID == "a" && store.checkedJobIDs == ["b"], "Programmatic navigation invalidates stale UI work.")
-        store.selectQueueNavigation(["b"]); store.toggleQueueNavigationChecks()
+        #expect(store.selectedID == "a", "Programmatic navigation invalidates stale UI work.")
+        store.selectQueueNavigation(["b"])
         #expect(!store.flushPendingQueueUpdates(commit: { false }))
-        #expect(store.selectedID == "a" && store.queueNavigationSelection == ["a"] && store.checkedJobIDs == ["b"], "Rejected composition commit retains accepted selection and checkmarks.")
+        #expect(store.selectedID == "a" && store.queueNavigationSelection == ["a"])
 
         store.searchText = "Synthetic a"
         store.selectQueueNavigation(["b"]); store.selectQueueNavigation([])
@@ -550,7 +553,7 @@ for line in sys.stdin:
         store.ready = true; store.checkedJobIDs = ["a", "b"]
         store.selectQueueNavigation(["c"])
         store.reviewParts()
-        #expect(store.partsReviewIDs == ["a", "b"] && store.checkedJobIDs == ["a", "b"], "A command flushes pending navigation and Space before capturing its targets.")
+        #expect(store.partsReviewIDs == ["a", "b"] && store.checkedJobIDs == ["a", "b"], "A command flushes pending navigation before capturing its targets.")
 
         store.selectNavigation(["a"])
         store.selectQueueNavigation(["c"])
@@ -588,7 +591,7 @@ for line in sys.stdin:
         #expect(store.selectedID == first.jobID && store.checkedJobIDs == [second.jobID])
         store.searchText = "DEMO-102"
         #expect(store.visibleJobs.map(\.jobID) == [second.jobID])
-        #expect(store.drafts == drafts && store.actionTargetJobs.map(\.jobID) == [second.jobID])
+        #expect(store.drafts == drafts && store.actionTargetJobs.map(\.jobID) == [first.jobID])
         #expect(store.jobs.map(\.reviewRevision) == [17, 23] && !store.working)
     }
 

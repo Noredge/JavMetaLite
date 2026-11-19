@@ -9,20 +9,11 @@ trap 'rm -rf "$STAGING_ROOT"' EXIT
 ZIP="$STAGING_ROOT/JavMetaLite-macOS-$ARCH-$CONFIGURATION-$SIGN_MODE.zip"
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP"
 python3 "$SCRIPT_DIR/release_manifest.py" payload --app "$APP_PATH" --output "$ZIP.manifest.json" --archive "$ZIP"
-# Validate the archive after extraction, including generic payload signatures.
-python3 - "$ZIP" "$SCRIPT_DIR/verify-package.sh" "$SCRIPT_DIR/run_worker_suites.py" "$REPO_ROOT/artifacts/test-results/package-$ARCH" "${VERIFY_ARGUMENTS[@]}" <<'PYVERIFY'
-import os, pathlib, subprocess, sys, tempfile
-with tempfile.TemporaryDirectory(prefix="JavMetaLite 中文 解包 ") as temporary:
-    subprocess.run(['/usr/bin/ditto', '-x', '-k', sys.argv[1], temporary], check=True)
-    app = pathlib.Path(temporary) / 'JavMetaLite.app'
-    subprocess.run([sys.argv[2], str(app), '--manifest', sys.argv[1] + '.manifest.json', '--archive', sys.argv[1], *sys.argv[5:]], check=True)
-    worker = app / 'Contents/Helpers/JavMetaLiteWorker.bundle/Contents/MacOS/JavMetaLite.Worker'
-    environment = {'HOME': temporary, 'TMPDIR': temporary, 'PATH': '/usr/bin:/bin'}
-    # This no-SDK extraction gate runs only the shipping executable.
-    # Fixed-provider integration is mandatory in test.sh, using a separate nonpublishable host.
-    subprocess.run([sys.executable, sys.argv[3], '--worker', str(worker), '--mode', 'package',
-                    '--log-dir', sys.argv[4], '--jobs', '2'], env=environment, check=True)
-PYVERIFY
+EXTRACTED="$STAGING_ROOT/解包 App"
+mkdir "$EXTRACTED"
+/usr/bin/ditto -x -k "$ZIP" "$EXTRACTED"
+"$SCRIPT_DIR/verify-package.sh" "$EXTRACTED/JavMetaLite.app" --manifest "$ZIP.manifest.json" \
+  --archive "$ZIP" --launch-app "${VERIFY_ARGUMENTS[@]}"
 (cd "$(dirname "$ZIP")" && /usr/bin/shasum -a 256 "$(basename "$ZIP")" > "$(basename "$ZIP").sha256")
 DESTINATION="$REPO_ROOT/artifacts/macos/$(basename "$ZIP")"
 mv "$ZIP" "$DESTINATION"

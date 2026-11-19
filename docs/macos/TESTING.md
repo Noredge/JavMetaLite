@@ -14,16 +14,16 @@ Set `DOTNET=/absolute/path/to/dotnet` if the pinned SDK is outside PATH. Omittin
 
 | Profile | Required coverage |
 | --- | --- |
-| Core | Portable Core, all Swift/Worker protocol tests, four-language lookup, Xcode source membership, CI tooling, atomic queue removal, stale plans/idempotent receipts, active-operation retention and all artwork-cache lifecycle/budget tests. |
-| Full | All core coverage plus the 1000-review queue case, large completed-result/pending-preview byte-budget cases, release tools/manifests and flat Xcode module typecheck. Full CI also runs signed App/ZIP/no-SDK extracted-package regression. |
+| Core | Portable Core, all Swift/Worker protocol tests, four-language lookup, Xcode source membership, atomic queue removal, stale plans/idempotent receipts, active-operation retention and all artwork-cache lifecycle/budget tests. |
+| Full | All core coverage plus the 1000-review queue case, large completed-result/pending-preview byte-budget cases, CI tooling, release tools/manifests and flat Xcode module typecheck. Full CI also runs signed App/ZIP/no-SDK extracted-package regression. |
 
-Only three named Python stress cases are marked full-only. The profile contract test inventories all 103 Worker cases and requires the remaining 100 to stay in core, including all transaction-recovery cases. Core still tests real production retention count limits, stale-token refusal, cancellation and active-operation protection; full tests the large byte budgets. Reports list profile and skipped case IDs explicitly. Package mode rejects core even if a parent environment requests it. Core evidence has its own artifact name and contains no release ZIP.
+Core defers three pressure tests covering a thousand queued reviews and the byte budgets for completed results and pending previews. File conflicts, cancellation, recovery and limits on retained plans run in both profiles.
 
 Worker protocol, retention, queue and artwork-cache suites run with at most two concurrent drivers and independent temporary roots. `worker-suites.json` records suite durations and exit codes; `*.timings.json` records individual cases. Slow RPC/operation/close phases appear as `WORKER_PHASE` in logs. Unexpected shutdown failure requiring a forced kill fails the test; deliberate crash cases still explicitly kill and reap their own Worker.
 
-GitHub selects docs/core/full on main pushes and pull requests targeting main/mac. Edited allowlisted documents use docs checks; edits to known existing C#/Swift source use core. Changes to retention/cache/import/preview pressure-sensitive implementations, packaged resources/licenses, project/SDK/dependency inputs, scripts/workflows, unknown files, additions/deletions and missing comparison bases require full. Windows keeps its existing full automated gate for every product profile. Branch pushes do not duplicate PR gates.
+GitHub runs core tests for Mac and shared changes on main pushes and pull requests to main or mac. Windows runs for Windows and shared changes. Documentation edits run the link checker. Platform workflows also track their build inputs, including packaged licenses and the Windows fixture used by the Mac portable tests.
 
-`macos-v*` tags force full validation in both workflows. Manual Mac dispatch defaults to full and also offers core for explicitly checking the daily profile; a core result is never release acceptance. Both named final checks always report the selected level and reject failed classification or required platform work. No scheduled job is required to retain coverage: sensitive changes and release/manual full runs execute the deferred stress tests.
+A `macos-v*` tag or manual Mac dispatch with `validation=full` runs full tests and builds the candidate ZIP. The uploaded `macos-arm64-candidate` artifact contains the ZIP, SHA-256 and manifest. Failed tests upload their logs. Publishing is a separate decision.
 
 The Mac gate runs:
 
@@ -50,9 +50,9 @@ The Mac gate runs:
   --expected-sign-mode adhoc
 ```
 
-Packaging extracts its ZIP with `ditto`, verifies payload bytes/signatures/architectures/dependencies/four languages, and runs the production Worker protocol, queue and retention suites from the extracted bundle with no SDK environment. It does not package RegressionHost. The embedded build manifest records source/toolchain/dependency inputs; the external manifest binds the signed payload and ZIP. The default `github-adhoc` readiness policy accepts verified local integrity for GitHub distribution; Developer ID, notarization and Gatekeeper fields remain independent. `manualAcceptanceVerified` is always false in the automated report. Installation and native acceptance need separate evidence; see [the release policy](RELEASING.md).
+Packaging extracts the signed ZIP with `ditto` and verifies its files, signatures, architectures, dependencies and four languages against the manifest. It launches the extracted App with a disposable data root, waits for its bundled Worker to start, then runs the import/edit/preview/save round-trip against the packaged Worker without an installed SDK. The test reads the NFO back and checks that the video bytes are intact. The full protocol, cache, queue and retention suites run once before packaging.
 
-Packaging checks the pre-ZIP App's complete static structure, then runs dynamic startup/cache checks once on the final extracted payload and its protocol/queue/retention suites with two drivers. Package suite logs are retained under `artifacts/test-results/package-arm64/`. Standalone `build.sh` and `verify-package.sh` keep dynamic checks enabled by default; `--structure-only` on verification explicitly reports that Worker execution was deferred. Packaging never accepts structure-only verification as its final gate.
+The embedded manifest records build inputs. The external manifest binds the signed payload to the ZIP. Native acceptance, notarization and first launch on a clean Mac have separate evidence. See [the release policy](RELEASING.md).
 
 ## Native manual regression
 

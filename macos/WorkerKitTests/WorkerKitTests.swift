@@ -648,16 +648,21 @@ extension WorkerKitTests {
     @Test func cancelingAPartialWriteClosesFramingAndShutdownRemainsBounded() async throws {
         let fixture = try StalledPipeFixture()
         defer { fixture.remove() }
-        let client = WorkerClient(requestTimeout: .seconds(2))
+        let client = WorkerClient(requestTimeout: .seconds(10))
         do {
             let startup = try await fixture.start(client)
             let large = Task { try await client.request("browser.importPage", params: .object(["html": .string(String(repeating: "c", count: 1024 * 1024))])) }
-            try await Task.sleep(for: .milliseconds(100))
-            #expect((await client.requestRetention).bytes > 0)
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while (await client.requestRetention).writtenInCurrentFrame == 0 && ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            try #require((await client.requestRetention).writtenInCurrentFrame > 0, "Cancel only after the pipe has accepted part of the frame.")
             let started = ContinuousClock.now
             large.cancel()
             do { _ = try await large.value; Issue.record("Canceling a partially transmitted request must fail.") }
-            catch let error as RPCFailure { #expect(error.reason == "WORKER_UNAVAILABLE") }
+            catch let error as RPCFailure {
+                #expect(error.reason == "WORKER_UNAVAILABLE" && error.message.contains("canceled"))
+            }
             await client.shutdown()
             #expect(started.duration(to: .now) < .seconds(1), "Cancel and shutdown must not await a stalled pipe.")
             let state = await client.requestRetention

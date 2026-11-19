@@ -378,6 +378,29 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
         TouchReview();
     }
 
+    // A number-only review acquires the video's sidecar baseline without resetting its chosen values.
+    public void AttachReviewedVideo(MovieJob local)
+    {
+        if (VideoPath is not null || local.VideoPath is null || local.LocalNfoSaveBlocked)
+            throw new InvalidOperationException("A detached review and a readable movie are required.");
+        var cover = ArtworkReview.SelectedCandidate?.Source.Name;
+        var stills = Metadata.ScreenshotUrls.ToArray();
+        var selected = Enum.GetValues<MetadataField>().Select(MetadataReview.GetSelectedCandidate)
+            .OfType<MetadataFieldCandidate>().ToArray();
+        UpdateVideoPaths(local.VideoPaths);
+        RefreshLocalMetadataBaseline(local.LocalMetadataBundle);
+        SetLocalArtwork(local.LocalArtworkCandidate);
+        SetLocalExtrafanart(local.LocalExtrafanartPaths);
+        if (LocalSourceMetadata is not null)
+        {
+            ReplaceMetadata(CloneMetadata(Metadata), [.. SourceResults, LocalSourceMetadata], CaptureManualCandidates());
+            foreach (var field in selected) MetadataReview.SelectCandidate(field.Field, field.Source.Name);
+        }
+        if (cover is not null) SelectArtworkSource(cover);
+        Metadata.ScreenshotUrls = stills;
+        TouchReview();
+    }
+
     public void InitializeSaveConfiguration(MovieSaveConfiguration configuration)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

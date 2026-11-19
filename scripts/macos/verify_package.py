@@ -6,14 +6,40 @@ import os
 from pathlib import Path
 import plistlib
 import re
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 from release_manifest import BUILD_MANIFEST, digest, inventory, is_macho, require, verify_payload
 
 
 def run(arguments, **kwargs):
     return subprocess.run([str(x) for x in arguments], check=True, text=True, capture_output=True, **kwargs)
+
+
+def check_app_startup(frontend, directory, env):
+    # WorkspaceView starts the bundled Worker. Only that process can create a
+    # session in this fresh data root, even if another JavMetaLite is open.
+    data = directory / 'frontend-data'
+    with subprocess.Popen([frontend, '--worker-data-root', data, '-ApplePersistenceIgnoreState', 'YES'],
+                          cwd=directory, env=env, start_new_session=True) as app:
+        try:
+            deadline = time.monotonic() + 30
+            while not any(data.glob('cache/artwork/*/.owner.json')):
+                require(app.poll() is None, 'Extracted app exited during startup')
+                require(time.monotonic() < deadline, 'Extracted app did not start its bundled Worker')
+                time.sleep(0.1)
+            require(app.poll() is None, 'Extracted app exited after starting its Worker')
+        finally:
+            # This process group belongs exclusively to the disposable test.
+            try:
+                os.killpg(app.pid, signal.SIGTERM)
+                app.wait(timeout=5)
+            except ProcessLookupError:
+                pass
+            except subprocess.TimeoutExpired:
+                os.killpg(app.pid, signal.SIGKILL)
 
 
 def signature(path, mode, team, *, runtime=False, entitlements=None):
@@ -212,9 +238,13 @@ def verify(args):
         require(snapshot['jobs'] == [] and snapshot['activeOperations'] == [], 'Isolated Worker snapshot is not empty')
         require(any(x.get('id') == 'verify-shutdown' and 'result' in x for x in replies), 'No shutdown acknowledgement')
         require(all(x.get('jsonrpc') == '2.0' for x in replies), 'Nonprotocol stdout')
-        cache_checks = run([sys.executable, Path(__file__).with_name('test_worker_artwork_cache.py'),
-                            worker, '--production-only'], env=env, timeout=60)
-        print(cache_checks.stderr.strip())
+        if args.launch_app:
+            check_app_startup(frontend, Path(temp), env)
+            roundtrip = run([sys.executable, Path(__file__).with_name('test_worker.py'), worker,
+                             '--production-only', 'WorkerTests.test_03_import_edit_preview_save_roundtrip_and_duplicate_execute'],
+                            env=env, timeout=60)
+            print(roundtrip.stderr.strip())
+            print('Extracted app startup and bundled Worker save/readback passed')
     print(f'PACKAGE PASS: {expected_arch}, {mode}, {native_count} native files, {localized_count} keys × 4 languages, complete signatures/entitlements/dependencies, no-SDK Worker initialize/snapshot/shutdown')
     print('Notarization and Gatekeeper acceptance require separate recorded checks.')
 
@@ -226,6 +256,7 @@ def main():
     parser.add_argument('--archive', type=Path)
     parser.add_argument('--expected-sign-mode', choices=['adhoc', 'developer-id'])
     parser.add_argument('--expected-team-id')
+    parser.add_argument('--launch-app', action='store_true', help='Launch the app and check a disposable save round-trip')
     parser.add_argument('--structure-only', action='store_true',
                         help='Check all payload/signature/resource rules; defer dynamic Worker tests')
     args = parser.parse_args()

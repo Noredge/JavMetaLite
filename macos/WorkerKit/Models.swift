@@ -63,6 +63,7 @@ public struct MovieJobSnapshot: Identifiable, Sendable, Equatable {
     public let jobID: String
     public let reviewRevision: Int
     public let metadata: JSONValue
+    public let lookupOnly: Bool
     public let videoPaths: [String]
     public let localNfoPath: String?
     public let searchState: String
@@ -80,6 +81,7 @@ public struct MovieJobSnapshot: Identifiable, Sendable, Equatable {
     public let busy: Bool
     public init(_ json: JSONValue) {
         jobID = json["jobId"].stringValue; reviewRevision = json["reviewRevision"].intValue
+        lookupOnly = json["lookupOnly"].boolValue
         metadata = json["metadata"]; videoPaths = json["videoPaths"].arrayValue.map(\.stringValue)
         localNfoPath = json["localNfoPath"].stringValue.isEmpty ? nil : json["localNfoPath"].stringValue
         searchState = json["searchState"].stringValue; saveState = json["saveState"].stringValue

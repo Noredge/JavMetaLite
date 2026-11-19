@@ -12,9 +12,8 @@ Run public entry points from the repository root. Paths and CLI options are reta
 | [New-ReleasePackage.ps1](New-ReleasePackage.ps1) | Windows CI and release guide → self-contained portable EXE, ZIP and checksums. |
 | [Test-PortablePackage.ps1](Test-PortablePackage.ps1) | Windows CI → verify the actual portable ZIP, identity and notices. |
 | [Test-ReleasePackage.ps1](Test-ReleasePackage.ps1) | Called by `Test-Automated.ps1`; negative tests for release/package rules. |
-| [ci/scope.py](ci/scope.py) | Called by `.github/workflows/ci-scope.yml`; select docs/core/full conservatively. |
-| [ci/check_docs.py](ci/check_docs.py) | Called by `ci-scope.yml`; validate tracked Markdown links. |
-| [ci/test_ci_tools.py](ci/test_ci_tools.py) | Called by `ci-scope.yml` and macOS `test.sh`; scope, link and suite-runner regressions. |
+| [ci/check_docs.py](ci/check_docs.py) | Called by `docs.yml` to validate tracked Markdown links. |
+| [ci/test_ci_tools.py](ci/test_ci_tools.py) | Called by full Mac tests for link and suite-runner regressions. |
 | [macos/test.sh](macos/test.sh) | macOS CI → localization, portable, Swift, protocol, queue, retention and cache tests. |
 | [macos/build.sh](macos/build.sh) | Called by `package.sh`; locked Worker restore, Swift build, bundle, sign and verify. |
 | [macos/package.sh](macos/package.sh) | macOS CI and release guide → signed ZIP, extracted-payload checks and checksums. |
@@ -42,11 +41,11 @@ Run public entry points from the repository root. Paths and CLI options are reta
 | [macos/test_release_tools.py](macos/test_release_tools.py) | Called by full `test.sh`; failure-oriented signing/notarization/readiness tests. |
 | [macos/test_release_manifest.py](macos/test_release_manifest.py) | Called by full `test.sh`; provenance, tamper detection and source-export regressions. |
 | [macos/test_lifecycle_measurement.py](macos/test_lifecycle_measurement.py) | Called by full `test.sh`; lifecycle-driver boundary tests. |
-| [macos/run_worker_suites.py](macos/run_worker_suites.py) | Called by test/package scripts; bounded suite execution with isolated fixtures. |
+| [macos/run_worker_suites.py](macos/run_worker_suites.py) | Called by `test.sh`; bounded suite execution with isolated fixtures. |
 | [macos/test_worker.py](macos/test_worker.py) | Loaded by suite runner and related tests; protocol/controlled-provider harness. |
 | [macos/test_worker_retention.py](macos/test_worker_retention.py) | Called by suite runner; retention limits and cleanup safety. |
 | [macos/test_queue_interactions.py](macos/test_queue_interactions.py) | Called by suite runner; batch selection/queue atomicity and pressure cases. |
-| [macos/test_worker_artwork_cache.py](macos/test_worker_artwork_cache.py) | Development suite runner and package verification; artwork cache safety. |
+| [macos/test_worker_artwork_cache.py](macos/test_worker_artwork_cache.py) | Worker suite runner; artwork cache safety. |
 | [macos/test_diagnostics.py](macos/test_diagnostics.py) | Imported by Worker test suites; timing and HTTP shutdown diagnostics. |
 
 ## Optional measurements and manual checks

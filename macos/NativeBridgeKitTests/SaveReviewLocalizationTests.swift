@@ -14,7 +14,7 @@ struct SaveReviewLocalizationTests {
         let original = "Cross-job input/output conflict: " + path
         for (language, explanation) in explanations {
             let localize: (String) -> String = {
-                AppLocalization.string($0, preference: language, resources: AppLocalization.resources)
+                AppLocalization.shared.string($0, preference: language)
             }
             let display = SaveReviewText.conflict(original, localize: localize)
             #expect(Data(display.utf8) == Data((explanation + path).utf8), "Translate the explanation, never normalize, truncate or interpret the path.")

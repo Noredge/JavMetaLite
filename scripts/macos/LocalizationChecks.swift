@@ -13,6 +13,9 @@ struct LocalizationChecks {
         }
         let catalog = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: catalogPath))) as! [String: Any]
         let strings = catalog["strings"] as! [String: [String: Any]]
+        let catalogStrings = AppLocalization(resources: resources)
+        let lowercaseStrings = AppLocalization(resources: lowercaseResources)
+        let fallbackStrings = AppLocalization(resources: fallback)
         var checks = 0
         func check(_ condition: @autoclosure () -> Bool, _ message: String) {
             guard condition() else { fatalError(message) }
@@ -25,9 +28,9 @@ struct LocalizationChecks {
                 let localizations = entry["localizations"] as! [String: [String: Any]]
                 let unit = localizations[language]!["stringUnit"] as! [String: Any]
                 let expected = unit["value"] as! String
-                let actual = AppLocalization.string(key, preference: language, preferredLanguages: ["en-US"], resources: resources)
+                let actual = catalogStrings.string(key, preference: language, preferredLanguages: ["en-US"])
                 check(actual == expected, "Actual Bundle lookup mismatch: \(language)/\(key): \(actual)")
-                let lowercase = AppLocalization.string(key, preference: language, preferredLanguages: ["en-US"], resources: lowercaseResources)
+                let lowercase = lowercaseStrings.string(key, preference: language, preferredLanguages: ["en-US"])
                 check(lowercase == expected, "SwiftPM lowercase bundle lookup mismatch: \(language)/\(key): \(lowercase)")
             }
             check(AppLanguage.normalizePreference(language) == language, "Saved explicit language changed")
@@ -43,8 +46,8 @@ struct LocalizationChecks {
         check(AppLanguage.resolve(preference: "system", preferredLanguages: ["fr-FR"]) == "en", "Unsupported system locale must fall back to English")
         check(AppLanguage.resolve(preference: "invalid", preferredLanguages: ["zh-TW"]) == "zh-Hant", "Invalid saved preference must follow system")
         check(AppLanguage.normalizePreference("invalid") == "system", "Invalid preference normalization failed")
-        check(AppLocalization.string("englishFallback", preference: "ja", resources: fallback) == "English fallback value", "Missing selected-language key must use English")
-        check(AppLocalization.string("__missing_key__", preference: "ja", resources: fallback) == "__missing_key__", "Unknown key fallback failed")
+        check(fallbackStrings.string("englishFallback", preference: "ja") == "English fallback value", "Missing selected-language key must use English")
+        check(fallbackStrings.string("__missing_key__", preference: "ja") == "__missing_key__", "Unknown key fallback failed")
         check(AppLanguage.traditionalChinese.nativeName == "繁體中文" && AppLanguage.japanese.nativeName == "日本語", "Language names must be self-identifying")
         print("LOCALIZATION RUNTIME PASS: \(checks) checks; \(strings.count) keys × 4 languages × 2 resource layouts; regional selection and English fallback")
     }

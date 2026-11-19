@@ -30,8 +30,9 @@ import AppKit
         textView.autoresizingMask = [.width]
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
-        scrollView.documentView = textView; scrollView.borderType = .bezelBorder
-        scrollView.drawsBackground = true; scrollView.backgroundColor = .textBackgroundColor
+        scrollView.documentView = textView; scrollView.borderType = .noBorder
+        textView.drawsBackground = false
+        scrollView.drawsBackground = false
     }
     public func configure(value: String, label: String, editable: Bool, multiline: Bool) {
         self.multiline = multiline
