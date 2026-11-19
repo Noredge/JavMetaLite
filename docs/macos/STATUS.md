@@ -4,33 +4,20 @@ macOS **1.1.0**，Apple Silicon，最低部署目标 macOS 15。下载、精确�
 
 GitHub 包采用 **ad-hoc 签名**，不提供 Developer ID 或公证。项目的 `github-adhoc` 政策允许正式发布，但不代表 Apple 身份验证、恶意软件扫描或 Gatekeeper 自动放行。首次打开方式见 [安装说明](../../macos/README.md#first-launch)。
 
-## 1.1.0 候选版验证
+## 1.1.0 发布验证
 
-在 Apple Silicon Mac 上打开了从 CI 下载的候选应用并载入本地影片。用随包 Worker 对已有 NFO 的副本执行番号查询后的关联和保存，回读确认手动修改的标题、主动清空的评分以及原有演员、导演、简介和标签均符合预期。[候选包 CI](https://github.com/Noredge/JavMetaLite/actions/runs/44482717424)
+- 发布标签的 Apple Silicon 完整测试、应用打包和解压启动检查通过。同一提交的 Windows 回归测试与便携包校验通过。[Mac CI](https://github.com/Noredge/JavMetaLite/actions/runs/44570373664) · [Windows CI](https://github.com/Noredge/JavMetaLite/actions/runs/44570405698)
+- 在 Apple Silicon Mac（macOS 27.2.1）上打开正式 ZIP 中的应用并载入本地影片。用随包 Worker 关联已有 NFO 的副本，保存后回读，确认手动修改的标题和清空的评分均符合预期，原有导演、演员、简介、类型和来源网址均保留。
+- 公开下载的三个附件均已校验。版本、提交和 ZIP 的 SHA-256 可在[发布页](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0)核对。
 
-## 1.0.0 已记录的验收范围
-
-发布准备基线 `61c045c` 的 [Mac full CI](https://github.com/Noredge/JavMetaLite/actions/runs/41162866567) 和 [Windows full CI](https://github.com/Noredge/JavMetaLite/actions/runs/41162866579) 均通过；实际 CI 检出为 PR 合并提交 `60a8df7`。这组结果属于版本冻结前的候选，最终 1.0 包与标签须完成 [发布清单](RELEASE-CHECKLIST.md)，不能借用候选 ZIP 的哈希。
-
-| 范围 | 结果 |
-| --- | --- |
-| Mac 自动门禁 | Portable 60/60、770 断言；Swift 97；Worker 103；四语 512 键、4126 运行时检查；发布工具 37、清单 15、测量辅助 6、CI 工具 12。 |
-| 包完整性 | ad-hoc 签名、17 个原生文件、依赖与资源、最终 ZIP 解包后的无 SDK Worker 启动均通过。生产包测试 72 项通过；3 项预算注入仅在独立测试宿主执行，完整门禁已覆盖。 |
-| Windows 自动门禁 | 46 项 smoke、66/66 事务回归、WPF 自动检查与便携包校验通过。 |
-| 本机文件系统 | 最终 build49 候选在 APFS 磁盘映像上完成 8 类场景：跨卷校验复制、满盘、只读、预览后卸载、复制中卸载、直接挂载点卸载、权限拒绝、重复保存。共 300 次保存；离线卷保留恢复状态与现场。 |
-| 本机真实来源 | 同一候选对 3 个 ID × LibreDMM/R18.dev 的 6 次元数据查询及 NFO 保存/拒绝/回读保护通过。未据此验证远程图片、浏览器登录或长期可用性。 |
-| 本机原生离线流程 | 同一候选的隔离 QA 实例完成本地导入、审核、仅 NFO 保存、图片预览、磁盘回读和正常退出。仅 Worker 及后代阻断 IP 网络；主 App/WebKit 未断网，不能称为全 App 或物理断网测试。 |
-| 补充原生回归 | 发布准备期间已验证事务核验/归档、取消、草稿参考导出、相关基线拒绝后重新导入保存；导出取消/失败保草稿、指定合成图片 Trash/Put Back、图片错误后重试。主工作区完成四语 × 浅/深色共 8 个最小窗口布局。 |
-| 有限生命周期测量 | 生产 Worker 的 20 分钟测量完成 2169 轮、每轮 16 个合成条目；媒体不变、清空队列、退出移除缓存。该测量来自版本冻结前候选，不证明长期无泄漏或原生 UI 稳定性。 |
-
-本机记录来自 Apple Silicon Mac / macOS 27.0.1。原生 QA 使用独立身份与临时数据根，核对产品执行文件和 Worker 载荷；自动化、原生操作、磁盘回读及每次候选的来源分别留证。开发机和隔离启动包装不等于干净 Mac 或浏览器下载后的首次放行验收。
+1.0 版的磁盘映像、真实来源和压力测试数据保存在[当时的验证记录](https://github.com/Noredge/JavMetaLite/blob/macos-v1.0.1/docs/macos/STATUS.md)。
 
 ## 使用与恢复边界
 
 - 保存默认先预览；过期 revision/plan、外部文件变化与输入冲突必须拒绝。取消/失败保留草稿和可恢复现场，不自动重放保存。
 - 事务恢复核验文件后，只有符合已记录状态且未变化的记录才可由用户确认归档。归档只移动日志；相关影片须重新导入取得新基线。参考 JSON 不含可执行计划，也不自动恢复草稿。
 - 旧预览版日志缺少可信前后态证据，保持只读。按 [人工核查流程](TESTING.md#legacy-transaction-records)保留原日志、核对文件与备份后处理，不能通过删除警告宣称已恢复。
-- 队列和未提交草稿不会在普通退出后自动恢复。图片删除使用系统废纸篓并独立确认；重要媒体仍应备份。
+- 队列和未提交草稿不会在普通退出后自动恢复。1.1.0 中需要删除本地图片时，请在 Finder 操作。
 
 ## 尚未覆盖
 

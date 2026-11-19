@@ -16,7 +16,7 @@ on:
       - 'THIRD_PARTY_NOTICES.md'
       - '.github/workflows/ci.yml'
   pull_request:
-    branches: [main, mac]
+    branches: [main]
     paths: *windows_paths
   workflow_dispatch:
     inputs:

@@ -22,12 +22,12 @@ Keep project names, assembly names, namespaces, package IDs and runtime bundle p
 
 ## Build and release contracts
 
-Run scripts from the repository root using the [Windows guide](../../windows/README.md) or [macOS guide](../../macos/README.md). Existing `scripts/*.ps1` and `scripts/macos/*.sh` commands, their options, artifact names and output directories remain the public entry points. The CI workflow files, job names, triggers, signing modes and release permissions are unchanged by the directory move.
+Run scripts from the repository root using the [Windows guide](../../windows/README.md) or [macOS guide](../../macos/README.md). Existing `scripts/*.ps1` and `scripts/macos/*.sh` commands, their options, artifact names and output directories remain the public entry points.
 
 Platform path filters live in the [Windows](../../.github/workflows/ci.yml) and [Mac](../../.github/workflows/macos.yml) workflows. Update them when moving a platform dependency. Shared code triggers both platforms. `scripts/macos/release_manifest.py` must include Windows, shared and macOS source inputs and locate all three RID lock files. A source export must still rebuild without `.git`.
 
 ## Retention and removal
 
-The repository organization pass moved all ten root .NET project directories and archived four release notes plus thirteen performance JSON files. No tracked implementation, script, fixture, license or historical measurement was deleted. Scripts were classified by their actual callers and manual purpose in the [inventory](../../scripts/README.md); absence from CI alone does not establish obsolescence.
+The [script inventory](../../scripts/README.md) lists CI callers and manual uses.
 
 Before removing a file, check tracked references, project includes, dynamically constructed paths, packaging manifests and documented manual entry points. Keep untracked local status files and private evidence outside commits. Current safety requirements, protocol specifications and release inputs belong in maintained documentation, even when their original filename mentions a regression or version.

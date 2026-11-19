@@ -21,7 +21,7 @@ Core defers three pressure tests covering a thousand queued reviews and the byte
 
 Worker protocol, retention, queue and artwork-cache suites run with at most two concurrent drivers and independent temporary roots. `worker-suites.json` records suite durations and exit codes; `*.timings.json` records individual cases. Slow RPC/operation/close phases appear as `WORKER_PHASE` in logs. Unexpected shutdown failure requiring a forced kill fails the test; deliberate crash cases still explicitly kill and reap their own Worker.
 
-GitHub runs core tests for Mac and shared changes on main pushes and pull requests to main or mac. Windows runs for Windows and shared changes. Documentation edits run the link checker. Platform workflows also track their build inputs, including packaged licenses and the Windows fixture used by the Mac portable tests.
+GitHub runs core tests for Mac and shared changes on main pushes and pull requests to main. Windows runs for Windows and shared changes. Documentation edits run the link checker. Platform workflows also track their build inputs, including packaged licenses and the Windows fixture used by the Mac portable tests.
 
 A `macos-v*` tag or manual Mac dispatch with `validation=full` runs full tests and builds the candidate ZIP. The uploaded `macos-arm64-candidate` artifact contains the ZIP, SHA-256 and manifest. Failed tests upload their logs. Publishing is a separate decision.
 

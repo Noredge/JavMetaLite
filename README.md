@@ -20,9 +20,11 @@ A Windows and macOS app for reviewing and organizing local movie metadata, indiv
 
 Verify the release SHA-256 before opening. Windows needs WebView2 for the embedded browser. The macOS package is ad-hoc signed and not notarized; see the [first-launch guide](macos/README.md#first-launch). Intel is unverified.
 
+![macOS 1.1.0 movie review and save settings](docs/images/macos-1.1.0-workspace.en.png)
+
 ![Windows single-movie workspace, v1.2.0](docs/images/javmetalite-v1.2.0-main-single.en.png)
 
-[More screenshots](docs/SCREENSHOTS-v1.2.0.md) · Synthetic demo data.
+[More screenshots](docs/SCREENSHOTS.md) · Synthetic demo data.
 
 ## Features
 
@@ -30,7 +32,7 @@ Verify the release SHA-256 before opening. Windows needs WebView2 for the embedd
 - Search with LibreDMM (recommended default), R18.dev or custom multi-source rules. JAVLibrary is manual web lookup only.
 - Edit local NFO metadata, choose artwork sources and stills, and export NFO, poster, fanart and optional stills (`extrafanart`).
 - Read `movie.nfo` and folder-level artwork in dedicated movie folders; retain their names when saving in place.
-- Compare and delete local images in the viewer; the main window flags low-resolution covers for review.
+- Look up a catalog number directly, or drop a movie to review its local data before searching online.
 - Preview file changes before saving; keep movies in place or organize them into a chosen folder. Four UI languages supported.
 
 ## Build from source

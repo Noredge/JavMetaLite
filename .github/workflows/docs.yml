@@ -9,7 +9,7 @@ on:
       - 'scripts/ci/check_docs.py'
       - '.github/workflows/docs.yml'
   pull_request:
-    branches: [main, mac]
+    branches: [main]
     paths: *docs_paths
 
 permissions:

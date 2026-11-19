@@ -1,10 +1,14 @@
 # JavMetaLite for macOS
 
-A native editor for reviewing movie metadata and artwork, editing local NFO files and organizing media. The **1.1.0** candidate supports Apple Silicon and macOS 15 or later. Windows has its own release and download.
+A native editor for reviewing movie metadata and artwork, editing local NFO files and organizing media. Version **1.1.0** runs on Apple Silicon and requires macOS 15 or later. Windows has its own release and download.
 
 ## Run
 
 Download the published [macOS 1.1.0](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0), extract the [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.1.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) and open `JavMetaLite.app`. Apple Silicon and macOS 15+ are required; no .NET installation is needed. The package is ad-hoc signed, without Developer ID or notarization; Gatekeeper acceptance is not established. Intel is unverified. This is the project’s GitHub distribution format; it does not mean Apple has verified the publisher or scanned the app.
+
+![macOS 1.1.0 workbench with local movie metadata and save settings](../docs/images/macos-1.1.0-workspace.en.png)
+
+[Artwork selection and other languages](../docs/SCREENSHOTS.md#macos-110)
 
 ## First launch
 
@@ -14,13 +18,13 @@ Download the published [macOS 1.1.0](https://github.com/Noredge/JavMetaLite/rele
 
 Package integrity, Developer ID, notarization, system assessment and successful manual launch are recorded separately. Installation instructions are also bundled in `JavMetaLite.app/Contents/Resources/READ-ME.md` ([source](../docs/macos/PACKAGE.md)).
 
-## Use the redesigned editor (local build)
+## Review a movie
 
 Dropping a movie reads its ID, local NFO and images. Choose a **Query source** and click **Search Metadata** (Command-R) to fetch online results. A folder or multipart scan opens a local selection sheet. **Look Up ID** (Command-K) lets you enter a number, choose a source and click **Search Metadata** without a file. Use **Link Movie** to attach the reviewed result before saving.
 
 The **Result source** menu below the title switches between local and previously fetched metadata, preserving manual fields and selected images. The menu next to **Edit details** opens manual web import and custom source settings. The main review shows cast, maker, release date and runtime above the synopsis, followed by director, label, genres and rating. Click a field value or **Edit details** to edit in place and compare field candidates. **Done** applies the edits to the review. **Choose images** lets you compare covers and select stills. Apply the selection to the review, then use the bottom save action to preview the actual files. Save settings sit beside that action. The sidebar offers batch processing when there are multiple movies. Batch commands affect the checked rows.
 
-Manual web import captures only the explicitly requested supported page and closes after successful import. Website verification is user-controlled and isolated to this app's WebKit session. Images can be reviewed, selected and sent to macOS Trash with a separate confirmation.
+Manual web import captures the page you select and closes after a successful import. Website verification takes place in the app’s WebKit session. To remove a local image from disk in 1.1.0, use Finder.
 
 If the engine process exits, the recovery screen retains the last review and unsent drafts. Export Review writes a JSON reference; quitting or closing offers export first, or a separately confirmed end without export. Canceling or failing export keeps the session open. A response timeout while the process remains alive still requires status reconciliation. Exports do not confirm disk outcomes or replay saves; reopen the app, inspect transaction recovery and reread files before reapplying edits.
 

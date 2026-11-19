@@ -20,9 +20,11 @@
 
 開啟前請核對 Release 的 SHA-256。Windows 內建瀏覽器需要 WebView2；macOS 套件採用 ad-hoc 簽署、未公證，詳見[首次啟動指南](macos/README.md#first-launch)。Intel 尚未驗證。
 
+![macOS 1.1.0 影片資料與儲存設定](docs/images/macos-1.1.0-workspace.zh-Hant.png)
+
 ![Windows 單片工作區，v1.2.0](docs/images/javmetalite-v1.2.0-main-single.zh-Hant.png)
 
-[更多擷圖](docs/SCREENSHOTS-v1.2.0.md) · 圖片與資料均為合成示範。
+[更多擷圖](docs/SCREENSHOTS.md) · 圖片與資料均為合成示範。
 
 ## 主要功能
 
@@ -30,7 +32,7 @@
 - 支援 LibreDMM（預設建議）、R18.dev 與自訂多來源；JAVLibrary 僅供手動網頁查詢。
 - 編輯本機 NFO、選擇圖片來源與劇照，產生 NFO、海報、fanart 與選用的劇照（`extrafanart`）。
 - 支援獨立影片資料夾的 `movie.nfo` 與資料夾層級圖片，普通單片原地儲存保留其命名。
-- 圖片檢視器支援比較與本機圖片刪除，主介面提供低解析度封套提示。
+- 可直接查詢番號，也可拖入影片先核對本機資料，再選擇來源連線查詢。
 - 儲存前預覽檔案變更，可保持影片原位或整理到指定資料夾；支援簡、繁、英、日四語言。
 
 ## 從原始碼建置
