@@ -206,7 +206,8 @@ class WorkerTests(unittest.TestCase):
             job = worker.request('jobs.lookup', {'id': 'demo001'})['result']
             self.assertEqual([], job['videoPaths'])
             self.assertTrue(job['lookupOnly'])
-            job = worker.edit(job, {'title': 'Reviewed title'})
+            job = worker.edit(job, {'rating': '4.2'})
+            job = worker.edit(job, {'title': 'Reviewed title', 'rating': ''})
             def revision():
                 return {'jobId': job['jobId'], 'expectedReviewRevision': job['reviewRevision']}
             self.reason(worker.request('save.preview', revision()), 'INVALID_PARAMS')
@@ -214,7 +215,11 @@ class WorkerTests(unittest.TestCase):
             video = Path(self.temp.name) / 'DEMO-001.mp4'
             video.write_bytes(b'original video')
             nfo = video.with_suffix('.nfo')
-            nfo.write_text('<movie><id>DEMO-001</id><title>Local title</title><custom>keep</custom></movie>')
+            nfo.write_text('<movie><id>DEMO-001</id><title>Local title</title><rating>8</rating>'
+                           '<director>Local director</director><studio>Local studio</studio>'
+                           '<actor><name>Local actor</name><thumb>actor.jpg</thumb></actor>'
+                           '<plot>Local plot</plot><website>https://example.test/movie</website>'
+                           '<custom>keep</custom></movie>')
             original = nfo.read_bytes()
             (video.parent / 'poster.png').write_bytes(synthetic_png(30, 45))
             job = worker.request('jobs.attachVideo', {**revision(), 'path': str(video)})['result']
@@ -229,8 +234,13 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(original, nfo.read_bytes())
             done = worker.operation(worker.request('save.execute', {'planId': plan['planId']})['result']['operationId'])
             self.assertEqual([job['jobId']], done['result']['savedJobIds'])
-            self.assertEqual('Reviewed title', ET.parse(nfo).findtext('title'))
-            self.assertEqual('keep', ET.parse(nfo).findtext('custom'))
+            saved = ET.parse(nfo)
+            for field, expected in {'title': 'Reviewed title', 'director': 'Local director',
+                                    'studio': 'Local studio', 'actor/name': 'Local actor',
+                                    'actor/thumb': 'actor.jpg', 'plot': 'Local plot',
+                                    'website': 'https://example.test/movie', 'custom': 'keep'}.items():
+                self.assertEqual(expected, saved.findtext(field), field)
+            self.assertIsNone(saved.find('rating'))
             self.assertEqual(b'original video', video.read_bytes())
 
     def test_01_handshake_fragmented_and_back_to_back(self):
