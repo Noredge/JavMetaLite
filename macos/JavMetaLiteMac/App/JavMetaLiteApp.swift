@@ -19,6 +19,11 @@ import NativeBridgeKit
         .windowToolbarStyle(.unified)
         .windowResizability(.contentMinSize)
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button(tr("aboutApp")) {
+                    NSApp.orderFrontStandardAboutPanel(options: [.version: ""])
+                }
+            }
             CommandGroup(replacing: .newItem) {
                 Button(tr("addMovies")) { store.chooseFiles() }.keyboardShortcut("o").disabled(!store.canImportFiles)
             }

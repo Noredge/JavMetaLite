@@ -1,6 +1,34 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "aboutApp": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About JavMetaLite"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关于 JavMetaLite"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "JavMetaLite について"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "關於 JavMetaLite"
+          }
+        }
+      }
+    },
     "addMovies": {
       "localizations": {
         "en": {
