@@ -72,22 +72,16 @@ def run_suites(suites, log_dir, jobs=2, environment=None, timeout=600, profile='
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--worker', type=Path, required=True)
-    parser.add_argument('--mode', choices=['development', 'package'], required=True)
     parser.add_argument('--profile', choices=['core', 'full'], default='full')
     parser.add_argument('--log-dir', type=Path, required=True)
     parser.add_argument('--jobs', type=int, choices=[1, 2, 3, 4], default=2)
     args = parser.parse_args()
-    if args.mode == 'package' and args.profile != 'full':
-        parser.error('Final package verification requires the full profile')
     worker = str(args.worker.resolve())
-    protocol_flags = ['--require-search-host'] if args.mode == 'development' else ['--production-only']
     suites = [(name, [sys.executable, str(HERE / script), worker, *flags]) for name, script, flags in [
-        ('protocol', 'test_worker.py', protocol_flags),
+        ('protocol', 'test_worker.py', ['--require-search-host']),
         ('retention', 'test_worker_retention.py', []),
         ('queue-interactions', 'test_queue_interactions.py', []),
-        # Package verification runs shipping cache cases once, after extraction.
-        *([('artwork-cache', 'test_worker_artwork_cache.py', ['--require-search-host'])]
-          if args.mode == 'development' else [])]]
+        ('artwork-cache', 'test_worker_artwork_cache.py', ['--require-search-host'])]]
     report = run_suites(suites, args.log_dir, args.jobs, profile=args.profile)
     raise SystemExit(1 if any(row['exitCode'] for row in report['suites']) else 0)
 

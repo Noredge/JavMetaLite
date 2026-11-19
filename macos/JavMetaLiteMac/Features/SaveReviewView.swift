@@ -8,38 +8,58 @@ struct SaveReviewView: View {
     let preview: SavePreview
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack { Image(systemName: "checkmark.rectangle").font(.title).foregroundStyle(.tint); VStack(alignment: .leading, spacing: 4) {
-                Text(tr("reviewSaveTitle")).font(.title2).fontWeight(.semibold)
-                Text(preview.combinesParts ? String(format: tr("reviewCombinedPartsCount"), preview.jobIDs.count) : String(format: tr("reviewMovieCount"), preview.jobs.count)).font(.callout).foregroundStyle(.secondary)
-            } }
+            HStack {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(tr("reviewSaveTitle")).font(.system(size: 26, weight: .semibold, design: .serif))
+                    Text(preview.combinesParts ? String(format: tr("reviewCombinedPartsCount"), preview.jobIDs.count) : String(format: tr("reviewMovieCount"), preview.jobs.count))
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "doc.text.magnifyingglass").font(.title).foregroundStyle(FilmDesk.accent)
+            }
             Text(tr("reviewSaveConsent")).font(.callout).foregroundStyle(.secondary)
             if !preview.canExecute { Label(tr("saveBlockedSummary"), systemImage: "exclamationmark.octagon.fill").font(.callout).foregroundStyle(.orange) }
             Divider()
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                LazyVStack(alignment: .leading, spacing: 18) {
                     ForEach(preview.jobs) { group in
                         VStack(alignment: .leading, spacing: 10) {
-                            Text(store.jobs.first(where: { $0.jobID == group.jobID })?.metadata["id"].stringValue ?? group.jobID).font(.headline)
-                            if let job = store.jobs.first(where: { $0.jobID == group.jobID }), job.artwork.contains(where: { store.artworkPaths[store.artworkKey($0, jobID: job.jobID)] == nil }) {
+                            if let job = store.jobs.first(where: { $0.jobID == group.jobID }) {
+                                Text([store.value("id", job: job), store.value("title", job: job)].filter { !$0.isEmpty }.joined(separator: "   ·   "))
+                                    .font(.headline).lineLimit(2)
+                            }
+                            if store.writePoster || store.writeFanart || store.writeSamples, let job = store.jobs.first(where: { $0.jobID == group.jobID }), job.artwork.contains(where: { store.artworkPaths[store.artworkKey($0, jobID: job.jobID)] == nil }) {
                                 Text(tr("saveWithoutLoadedPreviews")).font(.caption).foregroundStyle(.secondary)
                             }
                             ForEach(Array(group.changes.enumerated()), id: \.offset) { _, change in
                                 HStack(alignment: .top, spacing: 14) {
                                     Text(operationLabel(change)).font(.callout.weight(.semibold)).foregroundStyle(change["conflict"].boolValue ? .red : .primary).frame(width: 90, alignment: .leading)
                                     VStack(alignment: .leading, spacing: 5) {
-                                        if !change["source"].stringValue.isEmpty && change["source"] != change["target"] { Text(change["source"].stringValue).foregroundStyle(.secondary).textSelection(.enabled) }
-                                        if !change["source"].stringValue.isEmpty && change["source"] != change["target"] {
-                                            Label(change["target"].stringValue, systemImage: "arrow.down.right").textSelection(.enabled)
-                                        } else { Text(change["target"].stringValue).textSelection(.enabled) }
-                                        Text(changeReason(change)).font(.caption).foregroundStyle(.secondary)
-                                        if !change["reason"].stringValue.isEmpty { DisclosureGroup(tr("technicalDetails")) { Text(change["reason"].stringValue).font(.caption).textSelection(.enabled) }.font(.caption).foregroundStyle(.secondary) }
+                                        let target = change["target"].stringValue
+                                        let source = change["source"].stringValue
+                                        let file = URL(fileURLWithPath: target)
+                                        let isStill = file.deletingLastPathComponent().lastPathComponent.lowercased() == "extrafanart"
+                                            && ["jpg", "jpeg", "png", "webp"].contains(file.pathExtension.lowercased())
+                                        Text(isStill ? tr("artwork.sample") + " · " + file.lastPathComponent : file.lastPathComponent)
+                                            .font(.body.weight(.medium))
+                                        if !source.isEmpty && source != target {
+                                            Text(source).foregroundStyle(.secondary).textSelection(.enabled)
+                                            Label(target, systemImage: "arrow.down.right").textSelection(.enabled)
+                                        } else { Text(target).foregroundStyle(.secondary).textSelection(.enabled) }
+                                        if !changeReason(change).isEmpty {
+                                            DisclosureGroup(tr("technicalDetails")) {
+                                                Text(changeReason(change)).textSelection(.enabled)
+                                                let raw = change["reason"].stringValue
+                                                if !raw.isEmpty && raw != changeReason(change) { Text(raw).textSelection(.enabled) }
+                                            }.font(.caption).foregroundStyle(.secondary)
+                                        }
                                     }.font(.callout).frame(maxWidth: .infinity, alignment: .leading)
                                 }.padding(.vertical, 4)
                                 Divider()
                             }
                             ForEach(displayWarnings(group.warnings), id: \.self) { Label($0, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange) }
                             ForEach(group.blockingConflicts, id: \.self) { conflictRow($0) }
-                        }
+                        }.padding(14).background(FilmDesk.surface, in: RoundedRectangle(cornerRadius: 8))
                     }
                     ForEach(displayWarnings(preview.warnings, excluding: Set(preview.jobs.flatMap { $0.warnings }.map(warningLabel))), id: \.self) { Label($0, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange) }
                     ForEach(preview.blockingConflicts, id: \.self) { conflictRow($0) }
@@ -53,7 +73,7 @@ struct SaveReviewView: View {
                 Button(tr("confirmSave")) { store.save() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
                     .disabled(!preview.canExecute || store.previewStale || store.working)
             }
-        }.padding(24).frame(width: 780, height: 560)
+        }.padding(24).frame(width: 740, height: 500).background(FilmDesk.paper).tint(FilmDesk.accent)
     }
     private func conflictRow(_ message: String) -> some View {
         HStack(alignment: .top) {

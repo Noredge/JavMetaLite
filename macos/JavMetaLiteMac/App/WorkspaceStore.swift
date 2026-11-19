@@ -13,17 +13,15 @@ import NativeBridgeKit
     @Published private(set) var selectedID: String? { didSet { if let selectedID, navigationSelection != [selectedID] { navigationSelection = [selectedID] } } }
     @Published var navigationSelection: Set<String> = []
     private var pendingQueueSelection: Set<String>?
-    private var pendingQueueToggles: [Set<String>] = []
     private var queueUpdateScheduled = false
     private var queueUpdateGeneration = 0
     var queueNavigationSelection: Set<String> { pendingQueueSelection ?? navigationSelection }
-    @Published var checkedJobIDs: Set<String> = [] {
-        didSet { if checkedJobIDs.isEmpty && showingBatchOverview { showingBatchOverview = false } }
-    }
+    @Published var checkedJobIDs: Set<String> = []
     @Published private(set) var showingBatchOverview = false
     @Published var capabilities: JSONValue = .null
     @Published var sourceMode = "libredmm" { didSet { persistWorkspacePreferences() } }
     @Published var detailTab = "metadata"
+    @Published var showingLookup = false
     @Published var queueVisible = true { didSet { persistWorkspacePreferences() } }
     @Published var moreOptionsExpanded = false { didSet { persistWorkspacePreferences() } }
     @Published var showingSourceProfile = false
@@ -34,9 +32,14 @@ import NativeBridgeKit
         didSet { persistWorkspacePreferences() }
     }
     @Published var writeNfo = true { didSet { saveConfigurationChanged(writeNfo != oldValue) } }
-    @Published var writePoster = false { didSet { saveConfigurationChanged(writePoster != oldValue) } }
-    @Published var writeFanart = false { didSet { saveConfigurationChanged(writeFanart != oldValue) } }
-    @Published var writeSamples = false { didSet { saveConfigurationChanged(writeSamples != oldValue) } }
+    @Published var writePoster = true { didSet { saveConfigurationChanged(writePoster != oldValue) } }
+    @Published var writeFanart = true { didSet { saveConfigurationChanged(writeFanart != oldValue) } }
+    @Published var writeSamples = false {
+        didSet {
+            if !writeSamples && replaceLocalSamples { replaceLocalSamples = false }
+            saveConfigurationChanged(writeSamples != oldValue)
+        }
+    }
     @Published var replaceLocalSamples = false { didSet { saveConfigurationChanged(replaceLocalSamples != oldValue) } }
     @Published var targetMode = "VideoDirectory" { didSet { saveConfigurationChanged(targetMode != oldValue) } }
     @Published var renameVideo = false { didSet { saveConfigurationChanged(renameVideo != oldValue) } }
@@ -102,8 +105,7 @@ import NativeBridgeKit
         if let failure = artworkSelectionFailure { artworkSelectionFailure = nil; throw failure }
     }
     @Published var viewerSource = ""
-    // Fresh installs open the inspector; later launches remember the user's choice.
-    @Published var inspectorVisible = true { didSet { persistWorkspacePreferences() } }
+    @Published var inspectorVisible = false { didSet { persistWorkspacePreferences() } }
     @Published var artworkPaths: [String: URL] = [:]
     private var artworkLeaseIDs: [String: String] = [:]
     // These budgets apply to completed history only. Visible views and decoders
@@ -173,10 +175,10 @@ import NativeBridgeKit
         }
         let saved = defaults.dictionary(forKey: Self.workspacePreferencesKey) ?? [:]
         writeNfo = saved["writeNfo"] as? Bool ?? true
-        writePoster = saved["writePoster"] as? Bool ?? false
-        writeFanart = saved["writeFanart"] as? Bool ?? false
+        writePoster = saved["writePoster"] as? Bool ?? true
+        writeFanart = saved["writeFanart"] as? Bool ?? true
         writeSamples = saved["writeSamples"] as? Bool ?? false
-        replaceLocalSamples = saved["replaceLocalSamples"] as? Bool ?? false
+        replaceLocalSamples = writeSamples && (saved["replaceLocalSamples"] as? Bool ?? false)
         renameVideo = saved["renameVideo"] as? Bool ?? false
         includeIDInTitle = saved["includeIDInTitle"] as? Bool ?? false
         skipSavePreview = saved["skipSavePreview"] as? Bool ?? skipSavePreview
@@ -184,7 +186,7 @@ import NativeBridgeKit
         if let root = saved["customRootDirectory"] as? String, root.isEmpty || root.hasPrefix("/") { customRootDirectory = root }
         if let mode = saved["sourceMode"] as? String, ["libredmm", "r18dev", "custom"].contains(mode) { sourceMode = mode }
         queueVisible = saved["queueVisible"] as? Bool ?? true
-        inspectorVisible = saved["inspectorVisible"] as? Bool ?? true
+        inspectorVisible = saved["inspectorVisible"] as? Bool ?? false
         moreOptionsExpanded = saved["moreOptionsExpanded"] as? Bool ?? false
         importRecursively = saved["importRecursively"] as? Bool ?? true
         restoringPreferences = false
@@ -206,11 +208,15 @@ import NativeBridgeKit
         ], forKey: Self.workspacePreferencesKey)
     }
 
-    var navigationJobs: [MovieJobSnapshot] { jobs.filter { navigationSelection.contains($0.jobID) } }
     var checkedJobs: [MovieJobSnapshot] { jobs.filter { checkedJobIDs.contains($0.jobID) } }
-    var actionTargetScope: String { "checked" }
-    var actionTargetJobs: [MovieJobSnapshot] { checkedJobs }
+    var actionTargetScope: String { showingBatchOverview ? "checked" : "current" }
+    var actionTargetJobs: [MovieJobSnapshot] { showingBatchOverview ? checkedJobs : selectedJob.map { [$0] } ?? [] }
     var actionTargetCount: Int { actionTargetJobs.count }
+    var queryActionLabel: String { showingBatchOverview ? String(format: tr("queryAction.checked"), actionTargetCount) : tr("searchMetadata") }
+    var saveActionLabel: String {
+        if showingBatchOverview { return String(format: tr(skipSavePreview ? "saveActionCount" : "batchPreviewCount"), actionTargetCount) }
+        return tr(skipSavePreview ? "save" : "reviewChanges")
+    }
     private var workspaceHasModalReview: Bool {
         preview != nil || browser != nil || showingImage || showingParts || showingResults || showingSourceProfile || showingTransactionRecovery || workspaceSheetPresented
     }
@@ -228,21 +234,15 @@ import NativeBridgeKit
     }
     var canOpenBrowser: Bool {
         ready && !working && !statusUnconfirmed && discoveryReview == nil && !workspaceHasModalReview &&
-        capabilities["manualBrowserImport"].boolValue && queueNavigationSelection.count == 1 &&
+        !showingBatchOverview && capabilities["manualBrowserImport"].boolValue && queueNavigationSelection.count == 1 &&
         jobs.contains { queueNavigationSelection.contains($0.jobID) && !$0.busy && !value("id", job: $0).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
-    var canPreviewActionTargets: Bool { canUseActionTargets && (actionTargetCount == 1 || supportsBatch) }
-    var recognizedSearchJobs: [MovieJobSnapshot] { jobs.filter { !value("id", job: $0).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } }
-    var canSearchAllRecognized: Bool {
-        ready && !working && !statusUnconfirmed && discoveryReview == nil && !workspaceHasModalReview &&
-        !recognizedSearchJobs.isEmpty && recognizedSearchJobs.allSatisfy { !$0.busy }
-    }
+    var canPreviewActionTargets: Bool { canUseActionTargets && !actionTargetJobs.contains(where: \.lookupOnly) && (actionTargetCount == 1 || supportsBatch) }
     var canClearQueue: Bool {
         ready && !working && !hasPendingArtworkSelections && !statusUnconfirmed && operationID == nil && discoveryReview == nil && !jobs.isEmpty && jobs.allSatisfy { !$0.busy } &&
         !workspaceHasModalReview && pendingTrashToken == nil && !trashRecycleInFlight && !artworkTrashFlowActive
     }
     var canImportFiles: Bool { ready && !working && !statusUnconfirmed && discoveryReview == nil && !workspaceHasModalReview && capabilities["discoverInputs"].boolValue }
-    var canBatch: Bool { ready && !working && !statusUnconfirmed && discoveryReview == nil && !checkedJobs.isEmpty && checkedJobs.allSatisfy { !$0.busy } }
     var supportsArtwork: Bool { capabilities["writeArtwork"].boolValue }
     var supportsOrganization: Bool { capabilities["organizeVideo"].boolValue }
     var canReviewParts: Bool { capabilities["confirmParts"].boolValue && !working && !statusUnconfirmed && checkedJobs.count > 1 }
@@ -250,8 +250,9 @@ import NativeBridgeKit
     var selectedJob: MovieJobSnapshot? { jobs.first { $0.jobID == selectedID } }
     var visibleJobs: [MovieJobSnapshot] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return categoryJobs(queueCategory).filter { job in
-            guard !query.isEmpty else { return true }
+        let category = categoryJobs(queueCategory)
+        guard !query.isEmpty else { return category }
+        return category.filter { job in
             let fields = [job.metadata["id"].stringValue, value("id", job: job), value("title", job: job)]
             return fields.contains { $0.localizedCaseInsensitiveContains(query) } || job.videoPaths.contains {
                 URL(fileURLWithPath: $0).lastPathComponent.localizedCaseInsensitiveContains(query)
@@ -264,13 +265,14 @@ import NativeBridgeKit
         }
     }
     func categoryJobs(_ category: QueueCategory) -> [MovieJobSnapshot] {
-        jobs.filter { QueueReviewPolicy.matches($0, category: category, hasDraft: !(drafts[$0.jobID] ?? [:]).isEmpty, knownLowResolution: hasLowResolutionCover($0)) }
+        if category == .all { return jobs }
+        return jobs.filter { QueueReviewPolicy.matches($0, category: category, hasDraft: !(drafts[$0.jobID] ?? [:]).isEmpty, knownLowResolution: hasLowResolutionCover($0)) }
     }
     func selectCategory(_ category: QueueCategory) { checkedJobIDs = Set(categoryJobs(category).map(\.jobID)) }
     func selectRecognized() { checkedJobIDs = QueueReviewPolicy.recognizedIDs(jobs) }
     var unsavedCount: Int { jobs.filter { $0.hasUnsavedChanges || !(drafts[$0.jobID] ?? [:]).isEmpty }.count }
     var canAct: Bool { ready && !working && !statusUnconfirmed && discoveryReview == nil && selectedJob != nil && selectedJob?.busy != true }
-    var canRetrySources: Bool { canAct && !workspaceHasModalReview && selectedID.map(checkedJobIDs.contains) == true && selectedJob?.hasFailedSources == true }
+    var canRetrySources: Bool { canAct && !workspaceHasModalReview && !showingBatchOverview && selectedJob?.hasFailedSources == true }
     var canRetryEngineStart: Bool {
         engineStartupFailed && !startupCompleted && !engineStarting && !ready && !working && !statusUnconfirmed && operationID == nil && discoveryReview == nil
     }
@@ -568,6 +570,7 @@ import NativeBridgeKit
         // Even an unchanged job list must retire orphaned drafts and undo stacks.
         retireReviewState(keeping: available)
         if jobs != refreshed { jobs = refreshed }
+        if refreshed.isEmpty { showingBatchOverview = false }
         let warnings = snapshot["recoveryWarnings"].arrayValue.map(\.stringValue)
         if recoveryWarnings != warnings { recoveryWarnings = warnings }
         if !snapshot["activeTrash"]["trashToken"].stringValue.isEmpty {
@@ -627,7 +630,7 @@ import NativeBridgeKit
         checkedJobIDs = checked ? Set(jobs.map(\.jobID)) : []
     }
     func showBatchOverview() {
-        guard flushPendingQueueUpdates(), !checkedJobs.isEmpty, !working, !workspaceHasModalReview, commitEditing() else { return }
+        guard flushPendingQueueUpdates(), !jobs.isEmpty, ready, !working, !statusUnconfirmed, !workspaceHasModalReview, commitEditing() else { return }
         showingBatchOverview = true
     }
     func showCurrentMovie() {
@@ -635,6 +638,7 @@ import NativeBridgeKit
         showingBatchOverview = false
     }
     func selectQueueNavigation(_ requested: Set<String>) {
+        guard !showingBatchOverview else { return }
         let ids = singleNavigation(requested)
         // Native List can report the current selection during a view update.
         // A no-op must not publish changes or clear an implicit current review.
@@ -643,14 +647,6 @@ import NativeBridgeKit
         // Filtering must retain the current review and all batch checkmarks.
         if ids.isEmpty, !queueNavigationSelection.isEmpty, queueNavigationSelection.isDisjoint(with: Set(visibleJobs.map(\.jobID))) { return }
         pendingQueueSelection = ids
-        scheduleQueueUpdate()
-    }
-    func toggleQueueNavigationChecks() {
-        guard ready, !working, !statusUnconfirmed else { return }
-        let ids = queueNavigationSelection
-        guard !ids.isEmpty else { return }
-        // Capture the target, but evaluate each toggle in order when it commits.
-        pendingQueueToggles.append(ids)
         scheduleQueueUpdate()
     }
     private func scheduleQueueUpdate() {
@@ -666,33 +662,21 @@ import NativeBridgeKit
         queueUpdateGeneration += 1
         queueUpdateScheduled = false
         pendingQueueSelection = nil
-        pendingQueueToggles.removeAll()
     }
     // Commands flush before capturing job IDs; native List callbacks only enqueue.
     // The commit dependency also lets the rejection policy be tested without a
     // fake system key window or a replacement NSApplication implementation.
     @discardableResult func flushPendingQueueUpdates(commit: (() -> Bool)? = nil) -> Bool {
-        guard pendingQueueSelection != nil || !pendingQueueToggles.isEmpty else { return true }
-        let available = Set(jobs.map(\.jobID))
-        let ids = pendingQueueSelection.map { $0.intersection(available) }
-        let toggles = pendingQueueToggles.map { $0.intersection(available) }
+        guard let requested = pendingQueueSelection else { return true }
+        let ids = requested.intersection(jobs.map(\.jobID))
         invalidatePendingQueueUpdates()
-        let changesSelection = ids.map { $0 != navigationSelection || ($0.count == 1 ? $0.first : nil) != selectedID } ?? false
-        guard !changesSelection && toggles.isEmpty || (commit?() ?? commitEditing()) else {
-            objectWillChange.send() // Restore the native List to the accepted selection.
+        guard ids != navigationSelection else { return true }
+        guard commit?() ?? commitEditing() else {
+            objectWillChange.send()
             return false
         }
-        if let ids { applyNavigation(ids, editingCommitted: true) }
-        var checked = checkedJobIDs
-        for target in toggles where !target.isEmpty {
-            if target.isSubset(of: checked) { checked.subtract(target) }
-            else { checked.formUnion(target) }
-        }
-        if checked != checkedJobIDs { checkedJobIDs = checked }
+        applyNavigation(ids, editingCommitted: true)
         return true
-    }
-    func toggleChecked(_ jobID: String) {
-        setChecked(jobID, checked: !checkedJobIDs.contains(jobID))
     }
     func setChecked(_ jobID: String, checked: Bool) {
         guard ready, !working, !statusUnconfirmed, jobs.contains(where: { $0.jobID == jobID }) else { return }
@@ -768,6 +752,19 @@ import NativeBridgeKit
         if let selected = artworkSourceByJob[job.jobID], !ArtworkReviewPolicy.sources(job.artwork).contains(selected) { artworkSourceByJob.removeValue(forKey: job.jobID) }
     }
     func value(_ field: String, job: MovieJobSnapshot) -> String { drafts[job.jobID]?[field] ?? job.metadata[field].stringValue }
+
+    func displayTitle(for job: MovieJobSnapshot) -> String {
+        let title = value("title", job: job)
+        if title.isEmpty {
+            return job.videoPaths.first.map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent } ?? tr("untitledMovie")
+        }
+        // Both workbench views already show the ID above the Jellyfin title.
+        let id = value("id", job: job)
+        guard !id.isEmpty, let prefix = title.range(of: id + " · ", options: [.anchored, .caseInsensitive]) else { return title }
+        let name = title[prefix.upperBound...].trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? title : name
+    }
+
     func edit(_ field: String, value: String, job: MovieJobSnapshot) {
         let baseline = jobs.first(where: { $0.jobID == job.jobID })?.metadata[field].stringValue ?? job.metadata[field].stringValue
         if value == baseline { drafts[job.jobID]?.removeValue(forKey: field) }
@@ -823,14 +820,13 @@ import NativeBridgeKit
         }
     }
     func chooseFiles() {
-        guard canImportFiles, commitEditing() else { return }
+        guard canImportFiles, let window = workspaceWindow, commitEditing() else { return }
         let panel = NSOpenPanel()
-        panel.title = tr("addMovies"); panel.canChooseFiles = true; panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = true; panel.prompt = tr("add")
+        panel.title = tr("addMovies"); panel.prompt = tr("add")
         let recursive = NSButton(checkboxWithTitle: tr("scanSubfolders"), target: nil, action: nil)
         recursive.state = importRecursively ? .on : .off
         NativeImportPanelConfiguration.configure(panel, recursiveControl: recursive)
-        panel.begin { [weak self] response in
+        panel.beginSheetModal(for: window) { [weak self] response in
             guard response == .OK else { return }
             Task { @MainActor in
                 self?.importRecursively = recursive.state == .on
@@ -852,9 +848,54 @@ import NativeBridgeKit
                 _ = try await worker.request("workspace.discardDiscovery", params: .object(["discoveryId": discovered["discoveryId"]]))
                 return
             }
-            installDiscovery(discovered)
+            let discovery = InputDiscovery(discovered)
+            if paths.count == 1, discovery.items.count == 1, let item = discovery.items.first, item.canImport,
+               item.videoPaths == [item.primaryPath], scanDiagnosticDetails(discovered).isEmpty,
+               URL(fileURLWithPath: paths[0]).resolvingSymlinksInPath().standardizedFileURL == URL(fileURLWithPath: item.primaryPath).standardizedFileURL {
+                discoveringInputs = false; operationID = nil; phase = "loadinglocal"
+                if let first = try await importDiscovered([item.itemID], token: discovery.discoveryID).first {
+                    selectNavigation([first]); detailTab = "metadata"
+                }
+            } else {
+                installDiscovery(discovered)
+            }
         } catch { display(error) }
     }
+    func lookupNumber(_ number: String) {
+        let id = number.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !id.isEmpty, ready, capabilities["lookupById"].boolValue else { return }
+        let source = sourceMode
+        showingLookup = false
+        perform {
+            let snapshot = try await self.worker.request("jobs.lookup", params: .object(["id": .string(id)]))
+            self.update(snapshot)
+            let jobID = snapshot["jobId"].stringValue
+            self.searchText = ""; self.queueCategory = .all
+            self.selectNavigation([jobID]); self.detailTab = "metadata"
+            try await self.queryJobs([jobID], source: source)
+        }
+    }
+
+    func attachVideo(to jobID: String) {
+        guard canAct, let job = jobs.first(where: { $0.jobID == jobID }), job.lookupOnly else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
+        panel.title = tr("attachVideo")
+        panel.begin { [weak self] result in
+            guard result == .OK, let path = panel.url?.path else { return }
+            Task { @MainActor in
+                guard let self else { return }
+                self.perform {
+                    try await self.flush(jobID)
+                    guard let job = self.jobs.first(where: { $0.jobID == jobID }) else { return }
+                    let linked = try await self.worker.request("jobs.attachVideo", params: .object([
+                        "jobId": .string(jobID), "expectedReviewRevision": .number(Double(job.reviewRevision)), "path": .string(path)]))
+                    self.update(linked)
+                }
+            }
+        }
+    }
+
     func installDiscovery(_ result: JSONValue) {
         discoveryReview = InputDiscoveryReview(InputDiscovery(result))
         discoveryErrorMessage = nil; discoveryErrorDetails = ""
@@ -874,13 +915,21 @@ import NativeBridgeKit
         return Task {
             defer { working = false; if !statusUnconfirmed { operationID = nil; phase = "" } }
             do {
-                let response = try await worker.request("workspace.importDiscovery", params: .object(["discoveryId": .string(token), "selectedItemIds": .array(ids.map(JSONValue.string))]))
-                let result = try await waitOperation(response)
-                try await refresh()
-                discoveryReview = nil
-                applyImportOutcome(result)
-            } catch { displayDiscoveryError(error) }
+                _ = try await importDiscovered(ids, token: token)
+            }
+            catch { displayDiscoveryError(error) }
         }
+    }
+
+    private func importDiscovered(_ ids: [String], token: String) async throws -> [String] {
+        let response = try await worker.request("workspace.importDiscovery", params: .object([
+            "discoveryId": .string(token), "selectedItemIds": .array(ids.map(JSONValue.string))
+        ]))
+        let result = try await waitOperation(response)
+        try await refresh()
+        discoveryReview = nil
+        applyImportOutcome(result)
+        return result["importedJobIds"].arrayValue.map(\.stringValue)
     }
     @discardableResult func discardDiscovery() -> Task<Void, Never>? {
         guard !working, !statusUnconfirmed, let token = discoveryReview?.discovery.discoveryID else { return nil }
@@ -970,50 +1019,60 @@ import NativeBridgeKit
         guard prepareActionCommand(commit: commit), canPreviewActionTargets else { return }
         makePreview(orderedJobIDs: actionTargetJobs.map(\.jobID), automaticallySave: skipSavePreview)
     }
-    func search(retry: Bool = false, batch: Bool = false, sourceOverride: String? = nil, orderedJobIDs: [String]? = nil) {
+    func search(retry: Bool = false, sourceOverride: String? = nil, orderedJobIDs: [String]? = nil) {
         guard flushPendingQueueUpdates() else { return }
         guard !retry || canRetrySources else { return }
-        let ids = orderedJobIDs ?? (retry ? selectedID.map { [$0] } ?? [] : checkedJobs.map(\.jobID))
-        guard !ids.isEmpty, Set(ids).isSubset(of: checkedJobIDs) else { return }
-        let isBatch = batch || ids.count > 1
+        let ids = orderedJobIDs ?? actionTargetJobs.map(\.jobID)
+        guard !ids.isEmpty, Set(ids).isSubset(of: actionTargetJobs.map(\.jobID)) else { return }
         let failedSources = Set((selectedJob?.searchAttempts ?? []).filter { !$0["success"].boolValue }
             .map { $0["source"].stringValue }.filter { ["libredmm", "r18dev"].contains($0) })
         // Menu retry follows the recorded failures, not a subsequently changed
         // new-query picker. Per-source buttons still keep their explicit scope.
         let source = sourceOverride ?? (retry && !failedSources.isEmpty
             ? (failedSources.count == 1 ? failedSources.first! : "custom") : sourceMode)
-        perform {
-            for id in ids { try await self.flush(id) }
-            var request: [String: JSONValue] = ["jobIds": .array(ids.map(JSONValue.string)), "sourceMode": .string(source)]
-            if source == "custom" { request["sourceProfile"] = .object(SourceProfileFields.normalized(self.sourceProfile).mapValues(JSONValue.string)) }
-            let result = try await self.worker.request(retry ? "jobs.retryFailedSources" : "jobs.search", params: .object(request))
-            let completed = try await self.waitOperation(result)
-            self.operationWarnings = completed["warnings"].arrayValue.map(\.stringValue)
-            self.operationResults = completed["jobResults"].arrayValue
-            self.operationHadProblems = self.operationResults.contains { $0["status"].stringValue != "Completed" } || !self.operationWarnings.isEmpty || ["partialFailure", "canceled"].contains(completed["outcome"].stringValue)
-            if isBatch { self.resultSummary = LocalizedStatusMessage(self.operationHadProblems ? "queryPartial" : "queryFinished") }
-            if !self.operationWarnings.isEmpty { self.errorMessage = tr("queryPartial"); self.errorDetails = self.operationWarnings.joined(separator: "\n") }
-            if isBatch && !self.operationResults.isEmpty { self.showingResults = true }
-            try await self.refresh()
-            if self.operationResults.contains(where: { $0["status"].stringValue == "Completed" }) {
-                self.detailTab = "metadata"
-                for row in self.operationResults where row["status"].stringValue == "Completed" {
-                    self.artworkSourceByJob.removeValue(forKey: row["jobId"].stringValue)
-                }
+        perform { try await self.queryJobs(ids, source: source, retry: retry, showResults: ids.count > 1) }
+    }
+    private func queryJobs(_ ids: [String], source: String, retry: Bool = false, showResults: Bool = false) async throws {
+        for id in ids { try await self.flush(id) }
+        var request: [String: JSONValue] = ["jobIds": .array(ids.map(JSONValue.string)), "sourceMode": .string(source)]
+        if source == "custom" { request["sourceProfile"] = .object(SourceProfileFields.normalized(self.sourceProfile).mapValues(JSONValue.string)) }
+        let result = try await self.worker.request(retry ? "jobs.retryFailedSources" : "jobs.search", params: .object(request))
+        let completed = try await self.waitOperation(result)
+        self.operationWarnings = completed["warnings"].arrayValue.map(\.stringValue)
+        self.operationResults = completed["jobResults"].arrayValue
+        self.operationHadProblems = self.operationResults.contains { $0["status"].stringValue != "Completed" } || !self.operationWarnings.isEmpty || ["partialFailure", "canceled"].contains(completed["outcome"].stringValue)
+        self.resultSummary = LocalizedStatusMessage(self.operationHadProblems ? "queryPartial" : "queryFinished")
+        if !self.operationWarnings.isEmpty { self.errorMessage = tr("queryPartial"); self.errorDetails = self.operationWarnings.joined(separator: "\n") }
+        if showResults && !self.operationResults.isEmpty { self.showingResults = true }
+        try await self.refresh()
+        if self.operationResults.contains(where: { $0["status"].stringValue == "Completed" }) {
+            self.detailTab = "metadata"
+            for row in self.operationResults where row["status"].stringValue == "Completed" {
+                self.artworkSourceByJob.removeValue(forKey: row["jobId"].stringValue)
             }
         }
     }
-    func reviewSource(_ job: MovieJobSnapshot) -> String { (drafts[job.jobID] ?? [:]).isEmpty ? job.reviewSource : "" }
-    func selectReviewSource(_ source: String, jobID: String) {
+    func reviewSource(_ job: MovieJobSnapshot) -> String {
+        guard (drafts[job.jobID] ?? [:]).isEmpty else { return "" }
+        if !job.reviewSource.isEmpty { return job.reviewSource }
+        // The worker also considers the cover. Here the menu describes metadata only.
+        let matches = job.reviewSources.filter { source in
+            let name = source == "local" ? "local-nfo" : source
+            let fields = job.candidates.filter { $0["source"].stringValue == name }
+            return !fields.isEmpty && fields.allSatisfy { $0["selected"].boolValue }
+        }
+        return matches.count == 1 ? matches[0] : ""
+    }
+    func selectReviewSource(_ source: String, jobID: String, metadataOnly: Bool = false) {
         guard canAct, !workspaceHasModalReview, commitEditing(), let job = jobs.first(where: { $0.jobID == jobID }), job.reviewSources.contains(source) else { return }
         perform {
             try await self.flush(jobID)
             guard let current = self.jobs.first(where: { $0.jobID == jobID }) else { return }
             let result = try await self.worker.request("jobs.selectSource", params: .object([
-                "jobId": .string(jobID), "expectedReviewRevision": .number(Double(current.reviewRevision)), "source": .string(source)
+                "jobId": .string(jobID), "expectedReviewRevision": .number(Double(current.reviewRevision)), "source": .string(source), "metadataOnly": .bool(metadataOnly)
             ]))
             self.update(result); self.previewStale = true
-            self.artworkSourceByJob.removeValue(forKey: jobID)
+            if !metadataOnly { self.artworkSourceByJob.removeValue(forKey: jobID) }
         }
     }
 
@@ -1042,6 +1101,16 @@ import NativeBridgeKit
                 "jobId": .string(jobID), "expectedReviewRevision": .number(Double(job.reviewRevision)),
                 "artworkId": artwork["artworkId"], "selected": .bool(selected)
             ]))
+        }
+    }
+    func applyGallery(job: MovieJobSnapshot, coverID: String, sampleIDs: [String], completion: @escaping () -> Void) {
+        perform {
+            let result = try await self.worker.request("artwork.applySelection", params: .object([
+                "jobId": .string(job.jobID), "expectedReviewRevision": .number(Double(job.reviewRevision)),
+                "coverId": .string(coverID), "sampleIds": .array(sampleIDs.map(JSONValue.string))]))
+            self.update(result)
+            self.previewStale = true
+            completion()
         }
     }
     func artworkSelected(_ artwork: JSONValue, jobID: String) -> Bool {
@@ -1108,17 +1177,18 @@ import NativeBridgeKit
             "targetMode": .string(targetMode), "renameVideo": .bool(renameVideo), "customRootDirectory": .string(customRootDirectory)
         ])
     }
-    func makePreview(batch: Bool = false, orderedJobIDs: [String]? = nil, confirmedParts: Bool = false, automaticallySave: Bool = false) {
+    func makePreview(orderedJobIDs: [String]? = nil, confirmedParts: Bool = false, automaticallySave: Bool = false) {
         guard flushPendingQueueUpdates() else { return }
-        let ids = orderedJobIDs ?? checkedJobs.map(\.jobID)
-        guard !ids.isEmpty, Set(ids).isSubset(of: checkedJobIDs) else { return }
+        let ids = orderedJobIDs ?? actionTargetJobs.map(\.jobID)
+        let allowed = confirmedParts ? checkedJobIDs : Set(actionTargetJobs.map(\.jobID))
+        guard !ids.isEmpty, Set(ids).isSubset(of: allowed) else { return }
         perform {
             for id in ids { try await self.flush(id) }
             let revisions = Dictionary(uniqueKeysWithValues: self.jobs.filter { ids.contains($0.jobID) }.map { ($0.jobID, JSONValue.number(Double($0.reviewRevision))) })
             let options = self.saveOptionsPayload
             let response = try await self.worker.request("save.preview", params: .object([
                 "jobIds": .array(ids.map(JSONValue.string)), "expectedReviewRevisions": .object(revisions),
-                "options": options, "async": .bool(true), "confirmedParts": .bool(confirmedParts)
+                "options": options, "async": .bool(true), "confirmedParts": .bool(confirmedParts), "availableArtworkOnly": .bool(true)
             ]))
             let result = response["operationId"].stringValue.isEmpty ? response : try await self.waitOperation(response)
             let plan = SavePreview(result)
@@ -1437,7 +1507,7 @@ import NativeBridgeKit
         return artworkErrors[artworkKey(viewerArtwork[viewerIndex], jobID: viewerJobID)]
     }
     func retryViewerArtwork(invalidatePublishedPreview: Bool = false) {
-        guard ready, !working, !statusUnconfirmed, showingImage, viewerArtwork.indices.contains(viewerIndex),
+        guard ready, !working, !statusUnconfirmed, artworkReaders[viewerReaderID] != nil, viewerArtwork.indices.contains(viewerIndex),
               let job = jobs.first(where: { $0.jobID == viewerJobID }),
               let artwork = job.artwork.first(where: { $0["artworkId"] == viewerArtwork[viewerIndex]["artworkId"] }) else { return }
         let key = artworkRequestKey(artwork, job: job)
@@ -1452,12 +1522,15 @@ import NativeBridgeKit
     }
     func openArtwork(_ artwork: JSONValue, job: MovieJobSnapshot) {
         guard commitEditing() else { return }
+        prepareArtworkViewer(artwork, job: job)
+        showingImage = true
+    }
+    func prepareArtworkViewer(_ artwork: JSONValue, job: MovieJobSnapshot) {
         // Every entry opens the complete gallery and locates the actual tapped image.
         // Resetting the display filter does not mutate reviewed sample selections.
         viewerSource = ""
         viewerJobID = job.jobID; viewerArtwork = job.artwork
         viewerIndex = ArtworkReviewPolicy.entryIndex(viewerArtwork, artworkID: artwork["artworkId"].stringValue)
-        showingImage = true
         beginArtworkRead(artwork, jobID: job.jobID, readerID: viewerReaderID, scope: "viewer")
     }
     func moveViewer(by offset: Int) {
@@ -1466,7 +1539,13 @@ import NativeBridgeKit
         beginArtworkRead(viewerArtwork[viewerIndex], jobID: viewerJobID, readerID: viewerReaderID, scope: "viewer")
     }
     func artworkKey(_ artwork: JSONValue, jobID: String) -> String {
-        jobID + "/" + artwork["artworkId"].stringValue
+        let kind = artwork["kind"].stringValue
+        let content = artwork["contentKey"].stringValue
+        if artwork["source"].stringValue != "local", kind == "poster" || kind == "fanart", !content.isEmpty {
+            // Both presentations of an online cover share the original download and its lease.
+            return jobID + "/cover/" + content
+        }
+        return jobID + "/" + artwork["artworkId"].stringValue
     }
     func artworkRequestKey(_ artwork: JSONValue, job: MovieJobSnapshot) -> String {
         let content = artwork["contentKey"].stringValue

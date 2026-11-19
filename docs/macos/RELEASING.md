@@ -1,6 +1,6 @@
 # macOS release procedure
 
-The stable macOS release is **1.0.1 (build52)**, tagged [`macos-v1.0.1`](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.0.1), for Apple Silicon and macOS 15+. Windows **v1.2.4** keeps its own assets and GitHub Latest status. See [verified scope](STATUS.md) and the [release checklist](RELEASE-CHECKLIST.md).
+The stable macOS release is **1.1.0**, tagged [`macos-v1.1.0`](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0), for Apple Silicon and macOS 15+. Windows **v1.2.4** keeps its own assets and GitHub Latest status. See [verified scope](STATUS.md) and the [release checklist](RELEASE-CHECKLIST.md).
 
 ## Freeze and validate
 
@@ -51,8 +51,8 @@ Missing or mismatched identities fail without fallback. Signing proceeds inside-
 
 ## Publish the verified assets
 
-1. Confirm the intended commit is merged and tag it with `macos-v<version>`; this patch uses `macos-v1.0.1`. Mac release tags force full validation in both workflows. Wait for both final checks to pass at the tag before publishing. If needed, manually dispatch the full workflows for the exact revision.
+1. For candidate testing, manually dispatch the Mac workflow at the intended revision with `validation=full`. After release approval, tag the intended commit with `macos-v<version>`. The Mac workflow verifies and uploads the release assets. Use the ZIP, checksum and manifest from the same successful run at that commit.
 2. Create a draft GitHub Release at that tag. For a stable release, clear Pre-release and explicitly leave **Latest unchanged**. Use the Windows release for GitHub Latest. Previews use `macos-v<version>-preview.<n>` and remain marked Pre-release.
-3. Upload the verified ZIP, matching `.sha256` and `.manifest.json`. Include version/build, minimum OS/architecture, source revision, signing mode, installation instructions, evidence links and known limitations in the release notes.
+3. Upload the verified ZIP, matching `.sha256` and `.manifest.json`. Include the version, minimum OS/architecture, source revision, signing mode, installation instructions, evidence links and known limitations in the release notes.
 4. Compare uploaded asset sizes and server digests with the local files, then publish. Verify the public tag target, download, checksums, stable/pre-release flag and unchanged Windows Latest.
 5. Keep published assets immutable. A different binary requires a new version/tag; do not overwrite a released ZIP or reuse its validation record.

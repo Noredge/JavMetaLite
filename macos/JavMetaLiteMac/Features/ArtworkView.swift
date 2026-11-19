@@ -10,12 +10,13 @@ struct CachedArtwork: View {
     let url: URL
     var maximumPixelSize: Int = 600
     var posterCrop = false
+    var fill = false
     @ViewState<NSImage?> private var image: NSImage?
     @ViewState<String> private var loadedKey = ""
     private var requestKey: String { "\(url.path)-\(maximumPixelSize)-\(posterCrop)" }
     var body: some View {
         Group {
-            if let image, loadedKey == requestKey { Image(nsImage: image).resizable().scaledToFit() }
+            if let image, loadedKey == requestKey { Image(nsImage: image).resizable().aspectRatio(contentMode: fill ? .fill : .fit) }
             else if loadedKey == requestKey { Image(systemName: "exclamationmark.triangle").foregroundStyle(.secondary).accessibilityLabel(tr("artworkPreviewFailed")) }
             else { Image(systemName: "photo").foregroundStyle(.secondary).accessibilityLabel(tr("artworkLoading")) }
         }.task(id: requestKey) {
@@ -25,41 +26,6 @@ struct CachedArtwork: View {
             let loaded = await ArtworkThumbnailCache.shared.image(url: url, maximumPixelSize: maximumPixelSize, posterCrop: posterCrop)
             if !Task.isCancelled { image = loaded?.image; loadedKey = key }
         }
-    }
-}
-
-/// The editor and batch overview use the same reviewed pair and content-keyed
-/// requests as the gallery. Previewing images never changes review selection.
-struct PrimaryArtworkPreview: View {
-    @EnvironmentObject var store: WorkspaceStore
-    let job: MovieJobSnapshot
-    let kind: String
-    var height: CGFloat = 184
-    private var artwork: JSONValue? { ArtworkReviewPolicy.primary(job.artwork, kind: kind) }
-    var body: some View {
-        VStack(spacing: 7) {
-            Button {
-                if let artwork { store.openArtwork(artwork, job: job) }
-            } label: {
-                Group {
-                    if let artwork, let url = store.artworkPaths[store.artworkKey(artwork, jobID: job.jobID)] {
-                        CachedArtwork(url: url, maximumPixelSize: height < 100 ? 200 : 700,
-                                      posterCrop: kind == "poster" && artwork["source"].stringValue != "local")
-                    } else {
-                        VStack(spacing: 8) {
-                            Image(systemName: "photo").font(height < 100 ? .body : .title)
-                            if height >= 100 { Text(tr(ArtworkReviewPolicy.previewState(hasArtwork: artwork != nil, loaded: false,
-                                failed: artwork.map { store.artworkErrors[store.artworkKey($0, jobID: job.jobID)] != nil } ?? false))).font(.caption).multilineTextAlignment(.center) }
-                        }.foregroundStyle(.secondary).frame(maxWidth: .infinity).frame(height: height)
-                            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-                    }
-                }.frame(maxWidth: .infinity).frame(height: height)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .contentShape(Rectangle())
-            }.buttonStyle(.plain).disabled(artwork == nil || store.working || store.statusUnconfirmed)
-                .accessibilityLabel(tr("artwork." + kind) + " · " + tr("viewArtwork")).help(tr("viewArtwork"))
-            if height >= 100 { Text(tr("artwork." + kind)).font(.caption).foregroundStyle(.secondary) }
-        }.modifier(ArtworkReadLifetime(artwork: artwork, job: job, scope: height < 100 ? "queue" : "detail"))
     }
 }
 
@@ -87,20 +53,27 @@ struct NativeArtworkCanvas: NSViewRepresentable {
 }
 
 struct ArtworkViewer: View {
+    var previewOnly = false
     @EnvironmentObject var store: WorkspaceStore
     @Environment(\.dismiss) var dismiss
     @FocusState private var viewerHasKeyboardFocus: Bool
     @ViewState private var scale: CGFloat = 1
     @ViewState private var nativeSize: CGSize = .zero
     @ViewState private var decodedImage: NSImage?
-    @ViewState private var loadedURL = ""
-    @ViewState private var failedDecodeURL = ""
+    @ViewState private var loadedKey = ""
+    @ViewState private var failedDecodeKey = ""
     @ViewState private var decodeAttempt = UUID()
     @ViewState private var command = ArtworkZoomCommand.fit
     @ViewState private var commandID = UUID()
     private var url: URL? { store.viewerImageURL }
-    private var nativeDecodeFailed: Bool { url.map { failedDecodeURL == $0.path } ?? false }
-    private var decodeRequestKey: String { (url?.path ?? "") + "/" + decodeAttempt.uuidString }
+    private var posterCrop: Bool {
+        guard store.viewerArtwork.indices.contains(store.viewerIndex) else { return false }
+        let art = store.viewerArtwork[store.viewerIndex]
+        return art["kind"].stringValue == "poster" && art["source"].stringValue != "local"
+    }
+    private var imageKey: String { (url?.path ?? "") + (posterCrop ? "/poster" : "/full") }
+    private var nativeDecodeFailed: Bool { url != nil && failedDecodeKey == imageKey }
+    private var decodeRequestKey: String { imageKey + "/" + decodeAttempt.uuidString }
     private func zoom(_ action: ArtworkZoomCommand) { command = action; commandID = UUID() }
     var body: some View {
         VStack(spacing: 0) {
@@ -117,12 +90,12 @@ struct ArtworkViewer: View {
                 Text("\(Int((scale * 100).rounded()))%").font(.caption.monospacedDigit()).frame(minWidth: 40)
                 Button { zoom(.zoomIn) } label: { Image(systemName: "plus.magnifyingglass") }.help(tr("zoomIn")).accessibilityLabel(tr("zoomIn"))
             }.controlSize(.small).padding(14)
-            if let job = store.jobs.first(where: { $0.jobID == store.viewerJobID }) { ArtworkSourcePicker(job: job, fromViewer: true).padding(.horizontal, 16).padding(.bottom, 10) }
+            if !previewOnly, let job = store.jobs.first(where: { $0.jobID == store.viewerJobID }) { ArtworkSourcePicker(job: job, fromViewer: true).padding(.horizontal, 16).padding(.bottom, 10) }
             if max(nativeSize.width, nativeSize.height) > 8192 { Text(tr("artworkDecodeLimit")).font(.caption).foregroundStyle(.secondary).padding(.bottom, 8) }
             Divider()
             ZStack {
-                if let url, let decodedImage, loadedURL == url.path {
-                    NativeArtworkCanvas(image: decodedImage, pixelSize: nativeSize, imageKey: url.path,
+                if let decodedImage, loadedKey == imageKey {
+                    NativeArtworkCanvas(image: decodedImage, pixelSize: nativeSize, imageKey: imageKey,
                         commandID: commandID, command: command,
                         onScale: { if abs(scale - $0) > 0.0001 { scale = $0 } },
                         onNavigate: { store.moveViewer(by: $0) })
@@ -132,7 +105,7 @@ struct ArtworkViewer: View {
                         Label(tr("artworkPreviewFailed"), systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
                         Button(tr("retryArtwork")) {
                             let invalidate = nativeDecodeFailed
-                            failedDecodeURL = ""; decodeAttempt = UUID()
+                            failedDecodeKey = ""; decodeAttempt = UUID()
                             store.retryViewerArtwork(invalidatePublishedPreview: invalidate)
                             viewerHasKeyboardFocus = true
                         }
@@ -156,14 +129,14 @@ struct ArtworkViewer: View {
         .onKeyPress(.rightArrow) { guard viewerHasKeyboardFocus else { return .ignored }; store.moveViewer(by: 1); return .handled }
         .onDisappear { store.closeArtworkViewer() }
         .task(id: decodeRequestKey) {
-            decodedImage = nil; loadedURL = ""; failedDecodeURL = ""; nativeSize = .zero; scale = 1; zoom(.fit)
+            decodedImage = nil; loadedKey = ""; failedDecodeKey = ""; nativeSize = .zero; scale = 1; zoom(.fit)
             guard let url, let reader = store.beginArtworkURLRead(url) else { return }
             defer { store.endArtworkURLRead(reader) }
-            let dimensions = await ArtworkDimensions.read(url: url)
-            let decoded = await ArtworkThumbnailCache.shared.image(url: url, maximumPixelSize: 8192)
+            let key = imageKey
+            let decoded = await ArtworkThumbnailCache.shared.image(url: url, maximumPixelSize: 8192, posterCrop: posterCrop)
             guard !Task.isCancelled else { return }
-            guard let dimensions, let decoded else { failedDecodeURL = url.path; return }
-            nativeSize = dimensions; decodedImage = decoded.image; loadedURL = url.path
+            guard let decoded else { failedDecodeKey = key; return }
+            nativeSize = decoded.nativeSize; decodedImage = decoded.image; loadedKey = key
         }
     }
     private func navigationButton(_ offset: Int) -> some View {
@@ -196,5 +169,159 @@ struct ArtworkReadLifetime: ViewModifier {
     private func retain() {
         if let artwork { store.beginArtworkRead(artwork, jobID: job.jobID, readerID: readerID, scope: scope) }
         else { store.endArtworkRead(readerID) }
+    }
+}
+
+struct DeskArtwork: View {
+    @EnvironmentObject var store: WorkspaceStore
+    @Environment(\.displayScale) private var displayScale
+    let job: MovieJobSnapshot
+    let art: JSONValue?
+    let height: CGFloat
+    var crop = false
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6).fill(FilmDesk.shelf)
+            if let art, let url = store.artworkPaths[store.artworkKey(art, jobID: job.jobID)] {
+                GeometryReader { frame in
+                    let edge = max(frame.size.width, frame.size.height) * displayScale
+                    // Use size buckets so resizing the window reuses nearby thumbnails.
+                    let pixels = max(128, Int(ceil(edge / 128)) * 128)
+                    CachedArtwork(url: url, maximumPixelSize: pixels, posterCrop: crop && art["source"].stringValue != "local")
+                        .frame(width: frame.size.width, height: frame.size.height)
+                }
+            } else if let art, store.artworkErrors[store.artworkKey(art, jobID: job.jobID)] != nil {
+                Image(systemName: "exclamationmark.triangle").accessibilityLabel(tr("artworkPreviewFailed"))
+            } else if art != nil {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "photo").accessibilityLabel(tr("noArtwork"))
+            }
+        }.frame(maxWidth: .infinity).frame(height: height).clipShape(RoundedRectangle(cornerRadius: 6))
+            .modifier(ArtworkReadLifetime(artwork: art, job: job))
+    }
+}
+
+struct GalleryPicker: View {
+    @EnvironmentObject var store: WorkspaceStore
+    @Environment(\.dismiss) private var dismiss
+    let job: MovieJobSnapshot
+    @ViewState private var kind: String
+    @ViewState private var coverSource: String
+    @ViewState private var selectedSamples: Set<String>
+    @ViewState private var highlight: String?
+    @ViewState private var compare = false
+
+    @ViewState private var enlarging = false
+    private let initialSamples: Set<String>
+
+    init(job: MovieJobSnapshot, initialKind: String) {
+        self.job = job
+        let current = job.artwork.first { $0["kind"].stringValue != "sample" && $0["selected"].boolValue }
+        _coverSource = ViewState(initialValue: current?["source"].stringValue ?? "")
+        initialSamples = Set(job.artwork.filter { $0["kind"].stringValue == "sample" && $0["selected"].boolValue }.map(Self.sampleKey))
+        _selectedSamples = ViewState(initialValue: initialSamples)
+        _kind = ViewState(initialValue: job.artwork.contains { $0["kind"].stringValue == initialKind } ? initialKind : job.artwork.first?["kind"].stringValue ?? initialKind)
+    }
+    private static func sampleKey(_ art: JSONValue) -> String {
+        art["selectionKey"].stringValue.isEmpty ? art.artworkIdentity : art["selectionKey"].stringValue
+    }
+    private var samples: [JSONValue] {
+        var seen = Set<String>()
+        return job.artwork.filter { $0["kind"].stringValue == "sample" && seen.insert(Self.sampleKey($0)).inserted }
+    }
+    private var choices: [JSONValue] { kind == "sample" ? samples : job.artwork.filter { $0["kind"].stringValue == kind } }
+    private var shown: JSONValue? {
+        choices.first { $0.artworkIdentity == highlight } ?? choices.first { $0["source"].stringValue == coverSource } ?? choices.first
+    }
+    private var applied: JSONValue? { choices.first { $0["selected"].boolValue } }
+    private var chosenCover: JSONValue? { job.artwork.first { $0["kind"].stringValue != "sample" && $0["source"].stringValue == coverSource } }
+    private var coverChanged: Bool { chosenCover.map { !$0["selected"].boolValue } ?? false }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(tr("chooseImages")).font(.title2.weight(.semibold))
+                Text(job.metadata["id"].stringValue).foregroundStyle(.secondary)
+                Spacer()
+                Picker(tr("artwork"), selection: $kind) {
+                    ForEach(["poster", "fanart", "sample"], id: \.self) { type in
+                        Text(tr("artwork." + type)).tag(type)
+                    }
+                }.pickerStyle(.segmented).labelsHidden().fixedSize()
+            }
+            HStack(spacing: 14) {
+                if compare, kind != "sample", let applied, applied.artworkIdentity != shown?.artworkIdentity {
+                    imagePanel(applied)
+                }
+                if let shown { imagePanel(shown) }
+                else { ContentUnavailableView(tr("noArtwork"), systemImage: "photo").frame(maxWidth: .infinity, minHeight: 245) }
+            }
+            if let shown {
+                HStack {
+                    if kind == "sample" {
+                        Toggle(tr("selectedSample"), isOn: Binding(get: { selectedSamples.contains(Self.sampleKey(shown)) }, set: {
+                            if $0 { selectedSamples.insert(Self.sampleKey(shown)) } else { selectedSamples.remove(Self.sampleKey(shown)) }
+                        })).toggleStyle(.checkbox)
+                    } else {
+                        Toggle(tr("compareCover"), isOn: $compare).toggleStyle(.checkbox)
+                            .disabled(applied == nil || shown.artworkIdentity == applied?.artworkIdentity)
+                    }
+                    Spacer()
+                    Button(tr("viewArtwork")) {
+                        store.prepareArtworkViewer(shown, job: job)
+                        enlarging = true
+                    }
+                    if shown["source"].stringValue == "local" {
+                        Menu {
+                            Button(tr("trashArtwork"), role: .destructive) { store.trashArtwork(shown, jobID: job.jobID) }
+                        } label: { Image(systemName: "ellipsis.circle") }.fixedSize()
+                    }
+                }
+            }
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 8) {
+                    ForEach(choices, id: \.artworkIdentity) { art in
+                        Button {
+                            highlight = art.artworkIdentity
+                            if kind != "sample" { coverSource = art["source"].stringValue }
+                        } label: {
+                            VStack(spacing: 3) {
+                                DeskArtwork(job: job, art: art, height: 50, crop: kind == "poster")
+                                HStack(spacing: 3) {
+                                    if kind == "sample", selectedSamples.contains(Self.sampleKey(art)) { Image(systemName: "checkmark") }
+                                    Text(sourceName(art["source"].stringValue)).lineLimit(1)
+                                }.font(.caption)
+                            }.padding(3).frame(width: 87).overlay {
+                                RoundedRectangle(cornerRadius: 6).strokeBorder(shown?.artworkIdentity == art.artworkIdentity ? FilmDesk.accent : .clear, lineWidth: 2)
+                            }
+                        }.buttonStyle(.plain)
+                    }
+                }.padding(2)
+            }.frame(height: 83)
+            Divider()
+            HStack {
+                Text(String(format: tr("selectedStillCount"), selectedSamples.count)).font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                Button(tr("cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(tr("applyImages")) {
+                    guard selectedSamples != initialSamples || coverChanged else { dismiss(); return }
+                    store.applyGallery(job: job, coverID: chosenCover?.artworkIdentity ?? "",
+                                       sampleIDs: samples.filter { selectedSamples.contains(Self.sampleKey($0)) }.map(\.artworkIdentity)) { dismiss() }
+                }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+            }
+        }.padding(20).frame(minWidth: 600, idealWidth: 690, maxWidth: 820).background(FilmDesk.paper)
+            .disabled(store.working || store.statusUnconfirmed)
+            .onChange(of: kind) { _, _ in highlight = nil }
+            .interactiveDismissDisabled(store.working)
+            .sheet(isPresented: $enlarging) { ArtworkViewer(previewOnly: true) }
+            .onChange(of: job.reviewRevision) { _, _ in dismiss() }
+    }
+    private func imagePanel(_ art: JSONValue) -> some View {
+        VStack(spacing: 5) {
+            DeskArtwork(job: job, art: art, height: 245, crop: kind == "poster")
+            Text(sourceName(art["source"].stringValue) + " · " + tr("artwork." + kind))
+                .font(.caption).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity)
     }
 }

@@ -25,14 +25,11 @@ internal sealed partial class Workspace
             {
                 if (!IsCurrentOnlineSource(e, candidate.Source.Name)) continue;
                 var covers = candidate.FullCoverLocations.Where(location => ArtworkLocationHelper.TryGetRemoteUri(location, out _)).Take(3).ToArray();
-                if (covers.Length > 0) yield return new("cover-" + index + "-fanart", "fanart", candidate.Source.Name, covers[0], false, selected, candidate.Source.Name, covers);
-                if (ArtworkLocationHelper.TryGetRemoteUri(candidate.PosterUrl, out var poster))
-                {
-                    // Preview the registered poster first; any fallback is confined to
-                    // this same reviewed source and is explicitly identified in the reply.
-                    var posters = new[] { poster.AbsoluteUri }.Concat(covers).Distinct(StringComparer.OrdinalIgnoreCase).Take(3).ToArray();
-                    yield return new("cover-" + index + "-poster", "poster", candidate.Source.Name, posters[0], false, selected, candidate.Source.Name, posters);
-                }
+                if (covers.Length == 0) continue;
+                // The saved poster and fanart both use this full cover. The native
+                // poster view displays its right half, at the requested pixel size.
+                yield return new("cover-" + index + "-fanart", "fanart", candidate.Source.Name, covers[0], false, selected, candidate.Source.Name, covers);
+                yield return new("cover-" + index + "-poster", "poster", candidate.Source.Name, covers[0], false, selected, candidate.Source.Name, covers);
             }
         }
         for (var i = 0; i < e.Job.LocalExtrafanartPaths.Count; i++)
@@ -53,7 +50,7 @@ internal sealed partial class Workspace
 
     private static string ArtworkContentKey(ArtworkSource source)
     {
-        var identity = new List<string> { source.Kind, source.Source, source.Location };
+        var identity = new List<string> { source.IsRemoteCover ? "cover" : source.Kind, source.Source, source.Location };
         identity.AddRange(source.PreviewLocations ?? []);
         if (source.IsLocal)
         {
@@ -184,7 +181,7 @@ internal sealed partial class Workspace
                 try
                 {
                     using var request = new HttpRequestMessage(HttpMethod.Get, location);
-                    request.Headers.UserAgent.ParseAdd("JavMetaLite/1.0.1");
+                    request.Headers.UserAgent.ParseAdd("JavMetaLite/1.1.0");
                     if (ArtworkLocationHelper.TryGetRemoteUri(location, out var uri) &&
                         (uri.Host.EndsWith(".dmm.co.jp", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".dmm.com", StringComparison.OrdinalIgnoreCase)))
                         request.Headers.Referrer = new Uri("https://www.dmm.co.jp/");
@@ -225,7 +222,7 @@ internal sealed partial class Workspace
         cancellationToken.ThrowIfCancellationRequested();
         var cached = await _artworkCache.PublishAsync(bytes, png, lease, cancellationToken);
         return new(cached.CacheId, cached.Path, png ? "image/png" : "image/jpeg", dimensions.Width, dimensions.Height, bytes.Length,
-            source.Kind == "fanart" && new CoverResolutionCheck(resolvedLocation, dimensions.Width, dimensions.Height).IsLowResolution,
+            source.MeasuresCover && new CoverResolutionCheck(resolvedLocation, dimensions.Width, dimensions.Height).IsLowResolution,
             resolvedLocation, usedFallback, attempts, lease.Explicit ? lease.Id : null);
         }
         finally { _artworkSlots.Release(); }
@@ -245,5 +242,9 @@ internal sealed partial class Workspace
     private sealed record ArtworkAttempt(string Location, string Status, int? HttpStatus = null, string? ResolvedLocation = null);
     private sealed record ArtworkPreview(string CacheId, string Path, string MimeType, int Width, int Height, int ByteLength,
         bool IsLowResolution, string ResolvedLocation, bool UsedFallback, IReadOnlyList<ArtworkAttempt> Attempts, string? LeaseId);
-    private sealed record ArtworkSource(string ArtworkId, string Kind, string Source, string Location, bool IsLocal, bool Selected, string? CandidateSource, string[]? PreviewLocations = null);
+    private sealed record ArtworkSource(string ArtworkId, string Kind, string Source, string Location, bool IsLocal, bool Selected, string? CandidateSource, string[]? PreviewLocations = null)
+    {
+        public bool IsRemoteCover => !IsLocal && Kind is ("poster" or "fanart");
+        public bool MeasuresCover => Kind == "fanart" || IsRemoteCover;
+    }
 }

@@ -13,6 +13,32 @@ internal sealed partial class Workspace
         return sources.Length > 0 ? sources : ["sources"];
     }
 
+    private object ApplyArtworkSelection(JsonElement p)
+    {
+        lock (_gate)
+        {
+            var entry = GetJob(p); EnsureIdle(entry); RequireRevision(entry, p);
+            var available = ArtworkSources(entry).ToDictionary(a => a.ArtworkId);
+            var coverId = Text(p, "coverId");
+            var cover = available.GetValueOrDefault(coverId);
+            if (coverId.Length > 0 && (cover is null || cover.Kind == "sample"))
+                throw new RpcError(-32602, "ARTWORK_NOT_FOUND", "Choose a registered cover.");
+            if (!p.TryGetProperty("sampleIds", out var ids) || ids.ValueKind != JsonValueKind.Array)
+                throw new RpcError(-32602, "INVALID_PARAMS", "Choose the stills to save.");
+            var locations = new List<string>();
+            foreach (var id in ids.EnumerateArray())
+            {
+                if (id.ValueKind != JsonValueKind.String || !available.TryGetValue(id.GetString()!, out var art) || art.Kind != "sample")
+                    throw new RpcError(-32602, "ARTWORK_NOT_FOUND", "Choose a registered still.");
+                locations.Add(art.Location);
+            }
+            if (cover is not null && !cover.Selected) entry.Job.SelectArtworkSource(cover.CandidateSource!);
+            entry.Job.Metadata.ScreenshotUrls = locations.Distinct().ToArray();
+            InvalidatePlans(entry.Id);
+            return Snapshot(entry);
+        }
+    }
+
     private object SelectArtworkSource(JsonElement p)
     {
         lock (_gate)
@@ -43,7 +69,7 @@ internal sealed partial class Workspace
         string.Equals(MovieIdParser.Normalize(source.Id), MovieIdParser.Normalize(entry.Job.Metadata.Id), StringComparison.OrdinalIgnoreCase);
     private static bool IsCurrentOnlineSource(Entry entry, string source) => entry.Job.SourceResults.Any(metadata =>
         string.Equals(metadata.SourceName, source, StringComparison.OrdinalIgnoreCase) && HasCurrentMovieId(entry, metadata));
-    private static string[] AvailableReviewSources(Entry entry) => new[] { "local", "libredmm", "r18dev" }
+    private static string[] AvailableReviewSources(Entry entry) => new[] { "local", "libredmm", "r18dev", "javlibrary" }
         .Where(source => (source == "local" || IsCurrentOnlineSource(entry, source)) &&
             entry.Job.MetadataReview.Sources.Any(snapshot => NormalizeReviewSource(snapshot.Source.Name) == source)).ToArray();
 
@@ -86,9 +112,15 @@ internal sealed partial class Workspace
             EnsureSnapshotCapacity(additionalBytes: 2L * fields.Sum(field =>
                 System.Text.Encoding.UTF8.GetByteCount(entry.Job.MetadataReview.GetCandidates(field)
                     .First(candidate => candidate.Source.Name == fieldSource).Value)));
-            foreach (var field in fields) entry.Job.MetadataReview.SelectCandidate(field, fieldSource);
-            if (cover is not null) entry.Job.SelectArtworkSource(cover.Source.Name);
-            entry.Job.Metadata.ScreenshotUrls = samples;
+            var metadataOnly = Bool(p, "metadataOnly", false);
+            foreach (var field in fields)
+                if (!metadataOnly || entry.Job.MetadataReview.GetSelectedCandidate(field)?.Source.IsManual != true)
+                    entry.Job.MetadataReview.SelectCandidate(field, fieldSource);
+            if (!metadataOnly)
+            {
+                if (cover is not null) entry.Job.SelectArtworkSource(cover.Source.Name);
+                entry.Job.Metadata.ScreenshotUrls = samples;
+            }
             var provenance = source == "local" ? entry.Job.LocalSourceMetadata : metadata;
             var sourceSnapshot = entry.Job.MetadataReview.Sources.First(snapshot => snapshot.Source.Name == fieldSource);
             entry.Job.Metadata.SourceName = fieldSource;
@@ -117,7 +149,7 @@ internal sealed partial class Workspace
         lock (_gate)
         {
             token.ThrowIfCancellationRequested();
-            if (source.Kind == "fanart" && _jobs.GetValueOrDefault(entry.Id) == entry &&
+            if (source.MeasuresCover && _jobs.GetValueOrDefault(entry.Id) == entry &&
                 entry.Job.ArtworkReview.SelectedCandidate?.Source.Name == source.CandidateSource)
                 entry.Job.TrySetCoverResolution(qualityRevision, new(preview.ResolvedLocation, preview.Width, preview.Height));
         }

@@ -1,6 +1,6 @@
 # macOS 发布检查
 
-macOS **1.0.1 / build52 / macos-v1.0.1** 按以下清单发布。执行命令见 [RELEASING](RELEASING.md) 和 [TESTING](TESTING.md)，已记录范围与限制见 [STATUS](STATUS.md)。
+macOS **1.1.0 / macos-v1.1.0** 按以下清单发布。执行命令见 [RELEASING](RELEASING.md) 和 [TESTING](TESTING.md)，已记录范围与限制见 [STATUS](STATUS.md)。
 
 ## 版本与来源
 

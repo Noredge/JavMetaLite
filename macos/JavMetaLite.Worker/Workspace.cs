@@ -75,8 +75,8 @@ internal sealed partial class Workspace : IAsyncDisposable
             if (!p.TryGetProperty("protocolVersion", out var version) || version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var n) || n != 1)
             { _initialized = false; throw new RpcError(-32010, "PROTOCOL_VERSION_MISMATCH", "Client and bundled engine versions do not match."); }
             _initialized = true;
-            return new { protocolVersion = 1, workerVersion = "1.0.1", sessionId = _sessionId, cacheRoot = _cacheRoot,
-                capabilities = new { readLocal = true, searchLibreDmm = true, writeNfo = true, searchR18Dev = true, writeArtwork = true, organizeVideo = true, manualBrowserImport = true, localArtworkTrash = true, batchSave = true, confirmParts = true, discoverInputs = true, selectReviewSource = true, artworkPreviewLeases = true, transactionRecovery = true },
+            return new { protocolVersion = 1, workerVersion = "1.1.0", sessionId = _sessionId, cacheRoot = _cacheRoot,
+                capabilities = new { lookupById = true, readLocal = true, searchLibreDmm = true, writeNfo = true, searchR18Dev = true, writeArtwork = true, organizeVideo = true, manualBrowserImport = true, localArtworkTrash = true, batchSave = true, confirmParts = true, discoverInputs = true, selectReviewSource = true, artworkPreviewLeases = true, transactionRecovery = true },
                 discoveryLimits = new { maximumTokens = MaximumDiscoveries, maximumItems = MaximumDiscoveryItems, maximumResultBytes = MaximumDiscoveryBytes, expiresAfterSeconds = DiscoveryLifetime.TotalSeconds } };
         }
         if (!_initialized) throw new RpcError(-32010, "NOT_INITIALIZED", "Initialize the engine before sending commands.");
@@ -93,6 +93,9 @@ internal sealed partial class Workspace : IAsyncDisposable
             case "workspace.discoverInputs": return DiscoverInputs(p);
             case "workspace.importDiscovery": return ImportDiscovery(p);
             case "workspace.discardDiscovery": return DiscardDiscovery(p);
+            case "jobs.lookup": return Lookup(p);
+            case "jobs.attachVideo": return await AttachVideo(p);
+            case "artwork.applySelection": return ApplyArtworkSelection(p);
             case "jobs.get": lock (_gate) return Snapshot(GetJob(p));
             case "jobs.applyEdits": return ApplyEdits(p);
             case "jobs.selectCandidate": return SelectCandidate(p);
@@ -209,6 +212,63 @@ internal sealed partial class Workspace : IAsyncDisposable
         catch { job.Dispose(); throw; }
     }
 
+    private object Lookup(JsonElement p)
+    {
+        var id = MovieIdParser.Normalize(Text(p, "id"));
+        if (id.Length is 0 or > 128 || id.Any(char.IsControl)) throw new RpcError(-32602, "INVALID_PARAMS", "Enter a movie ID.");
+        lock (_gate)
+        {
+            EnsureDiscoveryAvailable();
+            var existing = _jobs.Values.FirstOrDefault(e => e.Job.VideoPath is null && MovieIdParser.Normalize(e.Job.Metadata.Id) == id);
+            if (existing is not null) return Snapshot(existing);
+            var job = new MovieJob();
+            job.ChangeReviewedId(id);
+            job.InitializeSaveConfiguration(Configuration(false, _preferences.Preferences.IncludeIdInTitle));
+            var entry = new Entry(job) { SavedRevision = job.ReviewRevision };
+            EnsureSnapshotCapacity(entry);
+            _jobs.Add(entry.Id, entry);
+            QueueChanged();
+            return Snapshot(entry);
+        }
+    }
+
+    private async Task<object> AttachVideo(JsonElement p)
+    {
+        var path = Text(p, "path");
+        if (!Path.IsPathFullyQualified(path) || !VideoFileSupport.IsSupportedExistingFile(path))
+            throw new RpcError(-32602, "INVALID_PARAMS", "Choose an existing movie file.");
+        path = FileSystemPathSemantics.CanonicalizePath(path);
+        var stamp = CaptureDiscoveryStamp(path);
+        Entry entry;
+        lock (_gate)
+        {
+            EnsureDiscoveryAvailable();
+            entry = GetJob(p); EnsureIdle(entry); RequireRevision(entry, p);
+            if (entry.Job.VideoPath is not null) throw new RpcError(-32602, "INVALID_PARAMS", "This review is already associated with a movie.");
+            entry.Busy = true; _importsActive++;
+        }
+        try
+        {
+            using var local = new MovieJob();
+            var result = await MovieJobLoader.LoadAsync(local, new[] { path }, _images);
+            if (result.MetadataError is not null || local.LocalNfoSaveBlocked)
+                throw new RpcError(-32010, "SOURCE_CHANGED", "The local movie metadata could not be read safely.");
+            lock (_gate)
+            {
+                if (_saveActive || CaptureDiscoveryStamp(path) != stamp || _jobs.Values.Any(e => e.Job.VideoPaths.Any(v => SameInput(v, path))))
+                    throw new RpcError(-32010, "SOURCE_CHANGED", "The movie changed or is already in the queue.");
+                EnsureSnapshotCapacity(additionalBytes: JsonSerializer.SerializeToUtf8Bytes(Snapshot(new Entry(local)), JsonDefaults.Options).Length);
+                entry.Job.AttachReviewedVideo(local);
+                entry.Warnings.AddRange(local.LocalMetadataBundle?.Diagnostics ?? []);
+                entry.Warnings.AddRange(result.ArtworkDiscovery?.Diagnostics ?? []);
+                entry.Busy = false;
+                QueueChanged();
+                return Snapshot(entry);
+            }
+        }
+        finally { lock (_gate) { entry.Busy = false; _importsActive--; } }
+    }
+
     private object ApplyEdits(JsonElement p)
     {
         lock (_gate)
@@ -265,7 +325,7 @@ internal sealed partial class Workspace : IAsyncDisposable
     {
         var job = e.Job;
         return new { jobId = e.Id, reviewRevision = job.ReviewRevision,
-            metadata = JsonSerializer.SerializeToElement(job.Metadata, JsonDefaults.Options), videoPaths = job.VideoPaths.ToArray(),
+            lookupOnly = job.VideoPath is null, metadata = JsonSerializer.SerializeToElement(job.Metadata, JsonDefaults.Options), videoPaths = job.VideoPaths.ToArray(),
             localNfoPath = job.LocalMetadataBundle?.Sidecars.NfoPath, searchState = job.SearchState.ToString(), saveState = job.SaveState.ToString(),
             hasUnsavedChanges = job.ReviewRevision != e.SavedRevision, localNfoSaveBlocked = job.LocalNfoSaveBlocked,
             hasFailedSources = job.HasFailedSources, hasPartialSourceFailure = job.HasPartialSourceFailure, hasRateLimitedSource = job.HasRateLimitedSource,
@@ -275,7 +335,7 @@ internal sealed partial class Workspace : IAsyncDisposable
             busy = e.Busy, canReplaceLocalExtrafanart = job.CanReplaceLocalExtrafanart, candidates = FieldMap.SelectMany(pair => job.MetadataReview.GetCandidates(pair.Value).Select(candidate => new
             { field = pair.Key, source = candidate.Source.Name, sourceDisplayName = candidate.Source.DisplayName, value = candidate.Value,
                 selected = job.MetadataReview.GetSelectedCandidate(pair.Value) == candidate })).ToArray(),
-            artwork = ArtworkSources(e).Select(a => new { a.ArtworkId, a.Kind, a.Source, a.Selected, a.CandidateSource, contentKey = ArtworkContentKey(a) }).ToArray() };
+            artwork = ArtworkSources(e).Select(a => new { a.ArtworkId, a.Kind, a.Source, a.Selected, a.CandidateSource, selectionKey = a.Kind == "sample" ? Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(a.Location))) : null, contentKey = ArtworkContentKey(a) }).ToArray() };
     }
 
     // Keep mandatory session snapshots representable within the 8 MiB wire frame.

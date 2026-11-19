@@ -254,7 +254,7 @@ for line in sys.stdin:
     else: raise RuntimeError('A failed request must not be replayed')
     print(json.dumps({'jsonrpc':'2.0','id':frame['id'],'result':result}),flush=True)
 """#.write(to: script, atomically: true, encoding: .utf8)
-        let client = WorkerClient(requestTimeout: .seconds(5))
+        let client = WorkerClient()
         func finish() async {
             try? Data().write(to: release)
             await client.shutdown()
@@ -271,7 +271,9 @@ for line in sys.stdin:
             do {
                 _ = try await client.request("save.execute", params: .object(["planId": .string("must-not-replay")]))
                 Issue.record("Writing to the closed pipe must fail.")
-            } catch { /* EPIPE must be reported without killing this process. */ }
+            } catch let error as RPCFailure {
+                #expect(error.reason == "WORKER_UNAVAILABLE" && error.message.contains("could not be written"))
+            }
             #expect(try String(contentsOf: received, encoding: .utf8) == "initialize\nfixture.closeInput\n")
             await finish()
             #expect(!(await client.isRunning()))
@@ -305,15 +307,16 @@ for line in sys.stdin:
         emit(id,{"shutdown":True});break
 """#
         try source.write(to: script, atomically: true, encoding: .utf8)
-        // Allow Python's cold start on a loaded runner. The save acknowledgement
-        // is withheld until after the timeout, not raced against a short timer.
-        let client = WorkerClient(requestTimeout: .seconds(5))
+        let client = WorkerClient()
         do {
             _ = try await client.start(executable: URL(fileURLWithPath: "/usr/bin/python3"), arguments: [script.path, count.path])
             do {
-                _ = try await client.request("save.execute", params: .object(["planId": .string("fixture-plan")]))
+                // The fixture withholds only this reply. Give startup and subsequent queries their usual timeout.
+                _ = try await client.request("save.execute", params: .object(["planId": .string("fixture-plan")]), timeout: .seconds(1))
                 Issue.record("Delayed save should time out without being automatically retried.")
-            } catch let error as RPCFailure { #expect(error.reason == "WORKER_UNAVAILABLE") }
+            } catch let error as RPCFailure {
+                #expect(error.reason == "WORKER_UNAVAILABLE" && error.message.contains("timed out"))
+            }
             let released = try await client.request("fixture.releaseSave")
             #expect(released["released"].boolValue, "A late save response must not fulfill a different request.")
             let state = try await client.request("operations.get", params: .object(["operationId": .string("delayed-save")]))
@@ -648,16 +651,21 @@ extension WorkerKitTests {
     @Test func cancelingAPartialWriteClosesFramingAndShutdownRemainsBounded() async throws {
         let fixture = try StalledPipeFixture()
         defer { fixture.remove() }
-        let client = WorkerClient(requestTimeout: .seconds(2))
+        let client = WorkerClient(requestTimeout: .seconds(10))
         do {
             let startup = try await fixture.start(client)
             let large = Task { try await client.request("browser.importPage", params: .object(["html": .string(String(repeating: "c", count: 1024 * 1024))])) }
-            try await Task.sleep(for: .milliseconds(100))
-            #expect((await client.requestRetention).bytes > 0)
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while (await client.requestRetention).writtenInCurrentFrame == 0 && ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            try #require((await client.requestRetention).writtenInCurrentFrame > 0, "Cancel only after the pipe has accepted part of the frame.")
             let started = ContinuousClock.now
             large.cancel()
             do { _ = try await large.value; Issue.record("Canceling a partially transmitted request must fail.") }
-            catch let error as RPCFailure { #expect(error.reason == "WORKER_UNAVAILABLE") }
+            catch let error as RPCFailure {
+                #expect(error.reason == "WORKER_UNAVAILABLE" && error.message.contains("canceled"))
+            }
             await client.shutdown()
             #expect(started.duration(to: .now) < .seconds(1), "Cancel and shutdown must not await a stalled pipe.")
             let state = await client.requestRetention

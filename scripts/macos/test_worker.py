@@ -201,6 +201,48 @@ class WorkerTests(unittest.TestCase):
         self.reason({'error': failed[0]['error']}, expected)
         return done
 
+    def test_detached_review_keeps_edits_when_linked_and_only_saves_after_preview(self):
+        with Worker(self.temp.name) as worker:
+            job = worker.request('jobs.lookup', {'id': 'demo001'})['result']
+            self.assertEqual([], job['videoPaths'])
+            self.assertTrue(job['lookupOnly'])
+            job = worker.edit(job, {'rating': '4.2'})
+            job = worker.edit(job, {'title': 'Reviewed title', 'rating': ''})
+            def revision():
+                return {'jobId': job['jobId'], 'expectedReviewRevision': job['reviewRevision']}
+            self.reason(worker.request('save.preview', revision()), 'INVALID_PARAMS')
+            worker.request('jobs.lookup', {'id': 'DEMO-002'})  # Unlinked peers have no paths to protect.
+            video = Path(self.temp.name) / 'DEMO-001.mp4'
+            video.write_bytes(b'original video')
+            nfo = video.with_suffix('.nfo')
+            nfo.write_text('<movie><id>DEMO-001</id><title>Local title</title><rating>8</rating>'
+                           '<director>Local director</director><studio>Local studio</studio>'
+                           '<actor><name>Local actor</name><thumb>actor.jpg</thumb></actor>'
+                           '<plot>Local plot</plot><website>https://example.test/movie</website>'
+                           '<custom>keep</custom></movie>')
+            original = nfo.read_bytes()
+            (video.parent / 'poster.png').write_bytes(synthetic_png(30, 45))
+            job = worker.request('jobs.attachVideo', {**revision(), 'path': str(video)})['result']
+            self.assertFalse(job['lookupOnly'])
+            self.assertEqual('Reviewed title', job['metadata']['title'])
+            self.assertIn('local', job['reviewSources'])
+            cover = next(a for a in job['artwork'] if a['kind'] == 'poster')
+            self.reason(worker.request('artwork.applySelection', {**revision(), 'coverId': cover['artworkId'], 'sampleIds': ['missing']}), 'ARTWORK_NOT_FOUND')
+            job = worker.request('artwork.applySelection', {**revision(), 'coverId': cover['artworkId'], 'sampleIds': []})['result']
+            plan = worker.preview(job)
+            self.assertTrue(plan['canExecute'])
+            self.assertEqual(original, nfo.read_bytes())
+            done = worker.operation(worker.request('save.execute', {'planId': plan['planId']})['result']['operationId'])
+            self.assertEqual([job['jobId']], done['result']['savedJobIds'])
+            saved = ET.parse(nfo)
+            for field, expected in {'title': 'Reviewed title', 'director': 'Local director',
+                                    'studio': 'Local studio', 'actor/name': 'Local actor',
+                                    'actor/thumb': 'actor.jpg', 'plot': 'Local plot',
+                                    'website': 'https://example.test/movie', 'custom': 'keep'}.items():
+                self.assertEqual(expected, saved.findtext(field), field)
+            self.assertIsNone(saved.find('rating'))
+            self.assertEqual(b'original video', video.read_bytes())
+
     def test_01_handshake_fragmented_and_back_to_back(self):
         with Worker(self.temp.name, initialize=False, stderr_bytes=2 * 1024 * 1024) as worker:
             self.reason(worker.request('workspace.getSnapshot'), 'NOT_INITIALIZED')
@@ -1471,6 +1513,7 @@ class WorkerTests(unittest.TestCase):
 
     def test_41_registered_cover_fallback_preserves_bounds_revision_and_source_identity(self):
         image = (ROOT / 'fixtures/macos/synthetic-cover-5x2.png').read_bytes()
+        full_cover = synthetic_png(1600, 1000)
         oversized_pixels = bytearray(image)
         oversized_pixels[16:20] = struct.pack('>I', 40_000_001)
         oversized_pixels[29:33] = struct.pack('>I', zlib.crc32(oversized_pixels[12:29]) & 0xffffffff)
@@ -1484,8 +1527,10 @@ class WorkerTests(unittest.TestCase):
             def do_GET(self):
                 with state_lock:
                     mode = state['mode']; state['requests'].append(self.path)
-                missing = mode == 'missing' or mode == 'fallback' and self.path.endswith('pl.jpg') or mode == 'poster-fallback' and self.path.endswith('ps.jpg')
-                body = b'not an image' if mode == 'invalid' else bytes(oversized_pixels) if mode == 'pixels' else image
+                missing = mode == 'missing' or mode == 'fallback' and self.path.endswith('pl.jpg')
+                body = full_cover if self.path.endswith('pl.jpg') else image
+                if mode == 'invalid': body = b'not an image'
+                if mode == 'pixels': body = bytes(oversized_pixels)
                 self.send_response(404 if missing else 200)
                 self.send_header('Content-Type', 'image/png')
                 self.send_header('Content-Length', str(21 * 1024 * 1024 if mode == 'oversize' else 0 if missing else len(body)))
@@ -1547,13 +1592,21 @@ class WorkerTests(unittest.TestCase):
                 self.reason(worker.request('artwork.getPreview', {**params, 'artworkId': base + '/unregistered'}), 'ARTWORK_NOT_FOUND')
                 self.assertEqual(request_count, len(state['requests']), 'Request-supplied URLs must never be fetched')
 
-                # Poster prioritizes its registered poster URL; then only this source's cover.
-                with state_lock: state.update(mode='poster-fallback', requests=[])
+                # The poster uses the same original as the fanart, even when a small thumbnail is reachable.
+                self.assertEqual(cover['contentKey'], poster['contentKey'])
+                with state_lock: state.update(mode='valid', requests=[])
                 poster_result = preview({**params, 'artworkId': poster['artworkId']})
                 self.assertEqual('completed', poster_result['status'], poster_result)
-                self.assertTrue(poster_result['result']['usedFallback'])
+                self.assertFalse(poster_result['result']['usedFallback'])
                 self.assertEqual(base + '/syntheticpl.jpg', poster_result['result']['resolvedLocation'])
-                self.assertEqual(['/syntheticps.jpg', '/syntheticpl.jpg'], state['requests'])
+                self.assertEqual((1600, 1000), (poster_result['result']['width'], poster_result['result']['height']))
+                self.assertEqual(full_cover, Path(poster_result['result']['path']).read_bytes())
+                self.assertEqual(['/syntheticpl.jpg'], state['requests'])
+                with state_lock: state.update(mode='fallback', requests=[])
+                fallback_poster = preview({**params, 'artworkId': poster['artworkId']})['result']
+                self.assertEqual((5, 2), (fallback_poster['width'], fallback_poster['height']))
+                self.assertTrue(fallback_poster['usedFallback'] and fallback_poster['isLowResolution'])
+                self.assertEqual(['/syntheticpl.jpg', '/syntheticps.jpg'], state['requests'])
 
                 # A rejected size or decoder limit is terminal, even with a usable fallback.
                 for mode in ('oversize', 'invalid', 'pixels'):
@@ -2648,6 +2701,40 @@ class ProviderWorkerTests(unittest.TestCase):
             self.assertEqual(str(production.data), production.request('preferences.get')['result']['dataRoot'])
             self.assertEqual('METHOD_NOT_FOUND', production.request('fixture.configure', {})['error']['data']['reason'])
             self.assertFalse((root / 'forbidden data').exists())
+
+    def test_batch_still_replacement_requires_online_stills_for_each_movie(self):
+        movies = ['TEST-961', 'TEST-962', 'TEST-963']  # Unsearched, no online stills, online stills.
+        stills, videos = [], []
+        original = synthetic_png(24, 16)
+        for movie in movies:
+            folder = Path(self.temp.name) / movie
+            still = folder / 'extrafanart' / 'original.png'
+            still.parent.mkdir(parents=True)
+            still.write_bytes(original)
+            video = folder / (movie + '.mp4')
+            video.write_bytes(b'SYNTHETIC VIDEO')
+            stills.append(still)
+            videos.append(video)
+        ids = self.worker.import_paths(videos)['importedJobIds']
+        self.configure([self.route(self.libre_url(movie), self.ok(self.libre(movie, sample_images=images)))
+                        for movie, images in [(movies[1], []), (movies[2], ['https://example.invalid/still.jpg'])]])
+        jobs = []
+        for job_id in ids:
+            job = self.worker.get_job(job_id)
+            movie = job['metadata']['id']
+            if movie != movies[0]:
+                self.assertEqual('completed', self.search(job, 'libredmm')['result']['outcome'])
+                job = self.worker.get_job(job_id)
+            self.assertEqual(movie == movies[2], job['canReplaceLocalExtrafanart'])
+            jobs.append(self.worker.request('artwork.applySelection', {
+                'jobId': job_id, 'expectedReviewRevision': job['reviewRevision'], 'coverId': '', 'sampleIds': []
+            })['result'])
+        plan = WorkerTests.batch_preview(self, self.worker, jobs, downloadExtrafanart=True, replaceLocalExtrafanart=True)
+        operations = {Path(c['target']): c['operation'] for group in plan['jobs'] for c in group['changes']}
+        self.assertEqual(['KeepFile', 'KeepFile', 'RemoveFile'], [operations[path.resolve()] for path in stills])
+        self.assertEqual('completed', WorkerTests.execute(self, self.worker, plan)['result']['outcome'])
+        self.assertEqual([original, original], [path.read_bytes() for path in stills[:2]])
+        self.assertFalse(stills[2].exists())
 
     def test_63_regression_host_async_artwork_batch_preview_outlives_request_document(self):
         media = Path(self.temp.name) / 'async batch media'; media.mkdir()

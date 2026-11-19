@@ -11,23 +11,25 @@ struct DiscoveryReviewView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(tr("discoveryTitle")).font(.title2.bold()).accessibilityAddTraits(.isHeader)
+            Text(tr("discoveryTitle")).font(.system(size: 26, weight: .semibold, design: .serif)).accessibilityAddTraits(.isHeader)
             Text(tr("discoveryExplanation")).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if let review = store.discoveryReview {
                 HStack {
-                    Button(tr("discoverySelectAll")) { store.selectAllDiscovered() }
-                    Button(tr("discoveryClearSelection")) { store.deselectAllDiscovered() }
-                    Button(tr("discoverySelectRecognized")) { store.selectRecognizedDiscovered() }.disabled(review.recognizedIDs.isEmpty)
+                    Text(String(format: tr("discoverySelectedCount"), review.selectedIDs.count, review.availableIDs.count))
+                        .font(.callout.monospacedDigit()).accessibilityIdentifier("discoverySelectionCount")
                     Spacer()
+                    Menu(tr("discoverySelectionMenu")) {
+                        Button(tr("discoverySelectAll")) { store.selectAllDiscovered() }
+                        Button(tr("discoveryClearSelection")) { store.deselectAllDiscovered() }
+                        Button(tr("discoverySelectRecognized")) { store.selectRecognizedDiscovered() }.disabled(review.recognizedIDs.isEmpty)
+                    }.fixedSize()
                 }.disabled(store.working || store.statusUnconfirmed || review.submitted)
-                Text(String(format: tr("discoverySelectedCount"), review.selectedIDs.count, review.availableIDs.count)).font(.callout.monospacedDigit())
-                    .accessibilityIdentifier("discoverySelectionCount")
                 if review.discovery.items.isEmpty {
                     ContentUnavailableView(tr("discoveryEmpty"), systemImage: "doc.text.magnifyingglass")
                 } else {
                     List(review.discovery.items) { item in
                         discoveryRow(item, review: review)
-                    }.listStyle(.bordered).accessibilityLabel(tr("discoveryTitle"))
+                    }.listStyle(.inset).accessibilityLabel(tr("discoveryTitle"))
                 }
                 if !store.discoveryDetails.isEmpty || !store.discoveryErrorDetails.isEmpty {
                     DisclosureGroup(tr("discoveryWarnings"), isExpanded: $showingDetails) {
@@ -73,7 +75,7 @@ struct DiscoveryReviewView: View {
                 }
             }
         }
-        .padding(22).frame(width: 790, height: 520)
+        .padding(22).frame(width: 740, height: 500).background(FilmDesk.paper).tint(FilmDesk.accent)
         .interactiveDismissDisabled()
     }
 

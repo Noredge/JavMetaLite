@@ -1,0 +1,25 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    paths: &docs_paths
+      - '**/*.md'
+      - 'docs/**'
+      - 'scripts/ci/check_docs.py'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    branches: [main, mac]
+    paths: *docs_paths
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: python3 scripts/ci/check_docs.py

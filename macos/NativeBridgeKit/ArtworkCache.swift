@@ -5,6 +5,7 @@ public struct DecodedArtwork: @unchecked Sendable {
     public let image: NSImage
     public let width: Int
     public let height: Int
+    public let nativeSize: CGSize
     public let decodedCost: Int
 }
 
@@ -24,17 +25,33 @@ public actor ArtworkThumbnailCache {
         if let entry = entries[key] { entries[key] = (entry.image, clock); return entry.image }
         if let task = pending[key] { return await task.value }
         let task = Task.detached(priority: .utility) { () -> DecodedArtwork? in
-            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-                  let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: maximumPixelSize, kCGImageSourceCreateThumbnailWithTransform: !posterCrop, kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else { return nil }
-            // Match Core's raw-pixel, right-half poster contract. Local posters
-            // and the full-cover viewer continue to use the uncropped cache key.
+            guard maximumPixelSize > 0, let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+                  let width = properties[kCGImagePropertyPixelWidth] as? Int, width > 0,
+                  let height = properties[kCGImagePropertyPixelHeight] as? Int, height > 0 else { return nil }
+            let crop = posterCrop && width > height
+            let displayWidth = crop ? width / 2 : width
+            let edge = max(displayWidth, height)
+            let rawEdge = max(width, height)
+            // Budget pixels for the displayed right half, while ImageIO downsamples the entire source.
+            let scale = min(1, Double(maximumPixelSize) / Double(edge))
+            let decodeLimit = Int(ceil(Double(rawEdge) * scale))
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: decodeLimit,
+                kCGImageSourceCreateThumbnailWithTransform: !posterCrop, kCGImageSourceShouldCacheImmediately: true
+            ]
+            guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
             let cg: CGImage
-            if posterCrop && thumbnail.width > thumbnail.height {
+            if crop {
                 let width = max(1, thumbnail.width / 2)
                 guard let cropped = thumbnail.cropping(to: CGRect(x: thumbnail.width - width, y: 0, width: width, height: thumbnail.height)) else { return nil }
                 cg = cropped
             } else { cg = thumbnail }
-            return DecodedArtwork(image: NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height)), width: cg.width, height: cg.height, decodedCost: cg.bytesPerRow * cg.height)
+            let orientation = properties[kCGImagePropertyOrientation] as? Int ?? 1
+            let rotated = !posterCrop && (5...8).contains(orientation)
+            let nativeSize = rotated ? CGSize(width: height, height: width) : CGSize(width: displayWidth, height: height)
+            return DecodedArtwork(image: NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height)),
+                                  width: cg.width, height: cg.height, nativeSize: nativeSize, decodedCost: cg.bytesPerRow * cg.height)
         }
         pending[key] = task
         let decoded = await task.value

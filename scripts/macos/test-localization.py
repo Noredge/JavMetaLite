@@ -114,7 +114,7 @@ extension Bundle {
         let resources = AppLocalization.resources
         if CommandLine.arguments[1] == "missing" {
             precondition(resources.bundleURL == Bundle.main.bundleURL)
-            precondition(AppLocalization.string("missingFixtureKey", preference: "en", resources: resources) == "missingFixtureKey")
+            precondition(AppLocalization.shared.string("missingFixtureKey", preference: "en") == "missingFixtureKey")
             print("PACKAGED LOCALIZATION MISSING-RESOURCE FALLBACK PASS: no build-machine accessor evaluated")
             return
         }
@@ -128,7 +128,7 @@ extension Bundle {
             for (key, entry) in entries {
                 let localizations = entry["localizations"] as! [String: [String: Any]]
                 let unit = localizations[language]!["stringUnit"] as! [String: Any]
-                precondition(AppLocalization.string(key, preference: language, resources: resources) == unit["value"] as! String)
+                precondition(AppLocalization.shared.string(key, preference: language) == unit["value"] as! String)
                 checks += 1
             }
         }

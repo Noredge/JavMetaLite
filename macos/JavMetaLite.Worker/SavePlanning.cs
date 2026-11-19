@@ -53,6 +53,7 @@ internal sealed partial class Workspace
         PreviewEntry[] captured, selected;
         long queueVersion;
         var confirmedParts = Bool(p, "confirmedParts", false);
+        var availableArtworkOnly = Bool(p, "availableArtworkOnly", false);
         lock (_gate)
         {
             token.ThrowIfCancellationRequested();
@@ -61,7 +62,7 @@ internal sealed partial class Workspace
             {
                 if (entry.Job.LocalNfoSaveBlocked) throw new RpcError(-32010, "SOURCE_CHANGED", "The original NFO could not be read safely. Correct it and reimport the movie.");
             }
-            captured = _jobs.Values.Select(entry => CapturePreviewEntry(entry, entries.Contains(entry))).ToArray();
+            captured = _jobs.Values.Where(e => e.Job.VideoPath is not null).Select(entry => CapturePreviewEntry(entry, entries.Contains(entry))).ToArray();
             // Preserve the user's explicit multipart order, not dictionary order.
             selected = entries.Select(entry => captured.Single(item => ReferenceEquals(item.Entry, entry))).ToArray();
             queueVersion = _queueVersion;
@@ -74,7 +75,7 @@ internal sealed partial class Workspace
             {
                 await _beforePreviewRead(token);
                 token.ThrowIfCancellationRequested();
-                return await PreparePreviewItemsAsync(selected, captured, config, confirmedParts, token);
+                return await PreparePreviewItemsAsync(selected, captured, config, confirmedParts, availableArtworkOnly, token);
             }, token);
             lock (_gate)
             {
@@ -109,7 +110,10 @@ internal sealed partial class Workspace
         if (_saveActive) throw new RpcError(-32010, "JOB_BUSY", "Wait for the active save before preparing another preview.");
         RefreshRecoveryWarnings();
         if (_recoveryWarnings.Count > 0) throw new RpcError(-32010, "RECOVERY_REQUIRED", "Inspect unresolved transaction records before saving.", _recoveryWarnings.ToArray());
-        return RequestedEntries(p, requireRevisions: true);
+        var entries = RequestedEntries(p, requireRevisions: true);
+        if (entries.Any(e => e.Job.VideoPath is null))
+            throw new RpcError(-32602, "INVALID_PARAMS", "Associate a movie file before saving.");
+        return entries;
     }
 
     private static PreviewEntry CapturePreviewEntry(Entry entry, bool selected) => new(entry,
@@ -119,7 +123,7 @@ internal sealed partial class Workspace
             : null);
 
     private async Task<PreviewItem[]> PreparePreviewItemsAsync(PreviewEntry[] selected, PreviewEntry[] all,
-        MovieSaveConfiguration config, bool confirmedParts, CancellationToken token)
+        MovieSaveConfiguration config, bool confirmedParts, bool availableArtworkOnly, CancellationToken token)
     {
         if (confirmedParts) ValidateConfirmedParts(selected);
         var inventory = new LocalSidecarInventoryScope((directory, cancellation) =>
@@ -139,13 +143,18 @@ internal sealed partial class Workspace
         var protectedItems = all.Where(captured => !selected.Contains(captured))
             .Select(captured => ProtectedPreviewItem(captured, config, inputs[captured])).ToList();
         token.ThrowIfCancellationRequested();
+        // The workbench offers artwork by default. A movie with no registered cover can still save its NFO.
+        SaveOptions Outputs(PreviewEntry entry) => availableArtworkOnly && entry.Context.SelectedArtwork is null &&
+            string.IsNullOrWhiteSpace(entry.Metadata!.PosterUrl) && string.IsNullOrWhiteSpace(entry.Metadata.CoverUrl) &&
+            string.IsNullOrWhiteSpace(entry.Metadata.FallbackCoverUrl)
+                ? config.SaveOptions with { DownloadPoster = false, DownloadFanart = false } : config.SaveOptions;
         var items = confirmedParts
             ? new[] { CreatePreviewItem(selected[0], selected, FileOrganizationService.BuildConfirmedMultipartPlan(
-                selected.Select(e => e.VideoPaths.Single()), selected[0].Metadata!, config.SaveOptions, config.OrganizationOptions, selected[0].Context)) }
+                selected.Select(e => e.VideoPaths.Single()), selected[0].Metadata!, Outputs(selected[0]), config.OrganizationOptions, selected[0].Context)) }
             : selected.Select(e =>
             {
                 token.ThrowIfCancellationRequested();
-                return CreatePreviewItem(e, [e], FileOrganizationService.BuildPlan(e.VideoPaths, e.Metadata!, config.SaveOptions, config.OrganizationOptions, e.Context));
+                return CreatePreviewItem(e, [e], FileOrganizationService.BuildPlan(e.VideoPaths, e.Metadata!, Outputs(e), config.OrganizationOptions, e.Context));
             }).ToArray();
         if (confirmedParts)
         {
@@ -291,6 +300,7 @@ internal sealed partial class Workspace
     }
     private static IEnumerable<string> Inputs(Entry entry, LocalSidecarPaths? currentSidecars = null)
     {
+        if (entry.Job.VideoPath is null) return [];
         var sidecars = currentSidecars ?? LocateSidecars(entry);
         return entry.Job.VideoPaths.Concat(entry.Job.LocalExtrafanartPaths).Concat(new[] { sidecars.NfoPath, sidecars.PosterPath, sidecars.FanartPath }.OfType<string>()).Concat(sidecars.ExtrafanartPaths).Distinct(FileSystemPathSemantics.PathComparer).ToArray();
     }

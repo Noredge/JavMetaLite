@@ -18,8 +18,9 @@ public actor WorkerClient {
     private let maximumPendingRequests = 128
     private let maximumQueuedBytes = 16 * 1024 * 1024
     // Testable accounting; payloads and deadline tasks leave together on every outcome.
-    var requestRetention: (pending: Int, queued: Int, bytes: Int, timers: Int) {
-        (pending.count, writeQueue.count, queuedBytes, pending.values.filter { $0.timeout != nil }.count)
+    var requestRetention: (pending: Int, queued: Int, bytes: Int, timers: Int, writtenInCurrentFrame: Int) {
+        (pending.count, writeQueue.count, queuedBytes, pending.values.filter { $0.timeout != nil }.count,
+         writeQueue.first.flatMap { pending[$0]?.offset } ?? 0)
     }
     private var nextID = 0
     private var framer = LineFramer()
@@ -97,7 +98,7 @@ public actor WorkerClient {
         // is replayed and a late response to the old request cannot authorize it.
         let generation = sessionGeneration
         let result = try await request("initialize", params: .object([
-            "protocolVersion": .number(1), "clientVersion": .string("1.0.1"),
+            "protocolVersion": .number(1), "clientVersion": .string("1.1.0"),
             "locale": .string(Locale.preferredLanguages.first ?? "en")
         ]))
         guard generation == sessionGeneration, process?.isRunning == true, input != nil else {
@@ -124,7 +125,11 @@ public actor WorkerClient {
     }
 
     public func request(_ method: String, params: JSONValue = .object([:])) async throws -> JSONValue {
-        let deadline = ContinuousClock.now.advanced(by: requestTimeout)
+        try await request(method, params: params, timeout: requestTimeout)
+    }
+
+    func request(_ method: String, params: JSONValue, timeout: Duration) async throws -> JSONValue {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
         guard process?.isRunning == true, input != nil, !shuttingDown || method == "shutdown" else {
             throw unavailable("The metadata engine is unavailable.")
         }

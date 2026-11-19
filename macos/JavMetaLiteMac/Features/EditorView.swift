@@ -6,167 +6,202 @@ import WorkerKit
 struct EditorView: View {
     @EnvironmentObject var store: WorkspaceStore
     let job: MovieJobSnapshot
-    @Binding var tab: String
+    @ViewState private var kind = "poster"
+    @ViewState private var editing = false
+    @ViewState private var focusField: String?
+    @ViewState private var picking = false
+
+    private func value(_ field: String) -> String { store.value(field, job: job) }
+    private var title: String { store.displayTitle(for: job) }
     var body: some View {
-        GeometryReader { viewport in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    header
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text(tr("artwork")).font(.caption).foregroundStyle(.secondary)
-                            Spacer()
-                            ReviewSourcePicker(job: job).frame(maxWidth: 240)
-                        }
-                        HStack(alignment: .top, spacing: 20) {
-                            PrimaryArtworkPreview(job: job, kind: "poster").frame(maxWidth: .infinity)
-                            PrimaryArtworkPreview(job: job, kind: "fanart").frame(maxWidth: .infinity)
-                        }.accessibilityIdentifier("classicArtworkPair")
-                    }
-                    if job.hasFailedSources { sourceFailures }
-                    if !job.warnings.isEmpty {
-                        DisclosureGroup(tr("technicalDetails")) {
-                            ForEach(job.warnings, id: \.self) { warning in Label(warning, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange).textSelection(.enabled) }
-                        }
-                    }
-                    Picker(tr("workspaceTab"), selection: $tab) {
-                        Text(tr("metadata")).tag("metadata")
-                        Text(tr("artwork")).tag("artwork")
-                    }.pickerStyle(.segmented).frame(maxWidth: 270)
-                    if tab == "artwork" { artworkPage(viewportWidth: viewport.size.width) }
-                    else {
-                        metadataSection("metadataTitles", fields: ["title", "originalTitle"], columns: 1)
-                        metadataSection("metadataBasics", fields: ["id", "releaseDate", "runtimeMinutes", "rating"], columns: viewport.size.width < 500 ? 1 : 2)
-                        metadataSection("metadataPeople", fields: ["actorsText", "genresText", "director", "maker", "label"], columns: viewport.size.width < 500 ? 1 : 2)
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack { Text(tr("field.plot")).font(.callout).foregroundStyle(.secondary); Spacer(); CandidateButton(field: "plot", job: job) }
-                            NativeMetadataEditor(session: store.editorSession(field: "plot", jobID: job.jobID), value: store.value("plot", job: job), label: tr("field.plot"), editable: !store.working && !store.statusUnconfirmed && !job.busy, multiline: true) { store.edit("plot", value: $0, job: job) }
-                                .id(job.jobID + "/plot").frame(minHeight: 150)
-                        }.disabled(store.working || job.busy)
-                        sourceInfo
-                    }
-                    ForEach(job.videoPaths, id: \.self) { path in
-                        Button { store.reveal(path) } label: {
-                            Label(URL(fileURLWithPath: path).lastPathComponent, systemImage: "doc")
-                                .font(.caption).lineLimit(1).truncationMode(.middle)
-                        }.buttonStyle(.link).help(path)
-                    }
-                }.padding(20).frame(maxWidth: 1050, alignment: .leading).frame(maxWidth: .infinity)
-            }
-        }
-    }
-    private func metadataSection(_ title: String, fields: [String], columns: Int) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if title != "metadataTitles" { Text(tr(title)).font(.caption).foregroundStyle(.secondary) }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 120), spacing: 18), count: columns), alignment: .leading, spacing: 16) {
-                ForEach(fields, id: \.self) { field in MetadataFieldView(field: field, job: job) }
-            }.disabled(store.working || job.busy)
-        }
-    }
-    private var sourceFailures: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(job.searchAttempts.filter { !$0["success"].boolValue }.enumerated()), id: \.offset) { _, attempt in
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(attempt["displayName"].stringValue.isEmpty ? attempt["source"].stringValue : attempt["displayName"].stringValue).font(.headline)
-                    let key = "error." + attempt["error"]["reason"].stringValue
-                    Text(tr(key) == key ? tr("operationFailed") : tr(key)).font(.callout)
-                    DisclosureGroup(tr("technicalDetails")) { Text(attempt["error"]["message"].stringValue).font(.caption).textSelection(.enabled) }
-                    if ["libredmm", "r18dev"].contains(attempt["source"].stringValue) {
-                        Button(tr("retrySources")) { store.search(retry: true, sourceOverride: attempt["source"].stringValue) }.disabled(!store.canRetrySources)
-                    }
-                }
-            }
-        }
-    }
-    private var header: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(job.metadata["id"].stringValue.isEmpty ? tr("unknownID") : job.metadata["id"].stringValue).font(.title2).fontWeight(.semibold).textSelection(.enabled)
-                Text(store.value("title", job: job).isEmpty ? tr("untitledMovie") : store.value("title", job: job)).font(.headline).lineLimit(2)
-                Label(store.status(job), systemImage: job.saveState == "Completed" ? "checkmark.circle" : "pencil.line").font(.callout).foregroundStyle(.secondary)
-                if store.hasLowResolutionCover(job) {
-                    Label(tr("artworkLowResolution"), systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
-                    if job.coverQuality["width"].intValue > 0 && job.coverQuality["height"].intValue > 0 { Text(String(format: tr("artworkDimensions"), job.coverQuality["width"].intValue, job.coverQuality["height"].intValue)).font(.caption).foregroundStyle(.secondary) }
-                }
-            }
-            Spacer(minLength: 0)
-        }
-    }
-    private var sourceInfo: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Divider()
-            HStack {
-                Text(tr("source")).foregroundStyle(.secondary)
-                Text(metadataSourceLabel(source: job.metadata["sourceName"].stringValue, displayName: job.metadata["sourceDisplayName"].stringValue))
-                Spacer()
-                if let url = URL(string: job.metadata["sourceUrl"].stringValue), ["http", "https"].contains(url.scheme?.lowercased() ?? "") { Link(tr("openSource"), destination: url) }
-            }.font(.caption)
-            Text(tr("rawValuesNote")).font(.caption).foregroundStyle(.secondary)
-        }
-    }
-    private func artworkPage(viewportWidth: CGFloat) -> some View {
-        // Measure from the outer viewport, not a card's intrinsic image/control
-        // size. Each lazy row receives finite, fixed-width card proposals.
-        let contentWidth = max(1, min(viewportWidth.isFinite ? viewportWidth : 0, 1050) - 40)
-        let columnCount = max(1, Int((contentWidth + 18) / (180 + 18)))
-        let columnWidth = max(1, (contentWidth - CGFloat(columnCount - 1) * 18) / CGFloat(columnCount))
-        let artwork = store.visibleArtwork(job)
-        let rows = stride(from: 0, to: artwork.count, by: columnCount).map {
-            Array(artwork[$0..<min($0 + columnCount, artwork.count)])
-        }
-        return VStack(alignment: .leading, spacing: 18) {
-            Text(tr(store.supportsArtwork ? "artworkSelectionNote" : "artworkReadOnlyNote")).font(.callout).foregroundStyle(.secondary)
-            ArtworkSourcePicker(job: job)
-            if job.artwork.isEmpty { ContentUnavailableView(tr("noArtwork"), systemImage: "photo.on.rectangle", description: Text(tr("noArtworkMessage"))) }
-            LazyVStack(alignment: .leading, spacing: 18) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    HStack(alignment: .top, spacing: 18) {
-                        ForEach(row, id: \.artworkIdentity) { art in
-                            let id = store.artworkKey(art, jobID: job.jobID)
-                            VStack(alignment: .leading, spacing: 8) {
-                                if let url = store.artworkPaths[id] {
-                                    Button { store.openArtwork(art, job: job) } label: { CachedArtwork(url: url).frame(width: columnWidth, height: 200).background(Color(nsColor: .controlBackgroundColor)) }.buttonStyle(.plain).accessibilityLabel(tr("viewArtwork"))
-                                } else if let error = store.artworkErrors[id] { VStack { Text(tr("artworkPreviewFailed")); DisclosureGroup(tr("technicalDetails")) { Text(error).textSelection(.enabled) } }.font(.caption).foregroundStyle(.secondary).frame(width: columnWidth, height: 200) }
-                                else { ProgressView().frame(width: columnWidth, height: 200) }
-                                Text(tr("artwork." + art["kind"].stringValue)).font(.headline)
-                                Text(art["source"].stringValue == "local" ? tr("localSource") : art["source"].stringValue).font(.caption).foregroundStyle(.secondary)
-                                if let dimensions = store.artworkDimensions[id] { Text(String(format: tr("artworkDimensions"), Int(dimensions.width), Int(dimensions.height))).font(.caption2).foregroundStyle(.secondary) }
-                                if store.artworkLowResolution.contains(id) { Label(tr("artworkLowResolution"), systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange) }
-                                if art["source"].stringValue == "local" { Button(tr("trashArtwork")) { store.trashArtwork(art, jobID: job.jobID) }.font(.caption) }
-                                if store.supportsArtwork {
-                                    if art["kind"].stringValue == "sample" {
-                                        Toggle(tr("selectedSample"), isOn: Binding(get: { store.artworkSelected(art, jobID: job.jobID) }, set: { store.selectArtwork(art, jobID: job.jobID, selected: $0) })).toggleStyle(.checkbox)
-                                    } else {
-                                        Button(art["selected"].boolValue ? tr("selectedCoverSource") : tr("useCoverSource")) { store.selectArtworkSource(art["source"].stringValue, jobID: job.jobID) }.disabled(art["selected"].boolValue)
-                                    }
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    QuerySourcePicker().fixedSize().disabled(!store.canAct)
+                    Button(tr("searchMetadata")) { store.searchActionTargets() }
+                        .buttonStyle(.borderedProminent).disabled(!store.canSearchActionTargets)
+                    Spacer(minLength: 2)
+                    Button {
+                        if editing {
+                            store.perform { try await store.flush(job.jobID); editing = false }
+                        } else { beginEditing() }
+                    } label: {
+                        Label(tr(editing ? "doneReview" : "editDetails"), systemImage: editing ? "checkmark" : "square.and.pencil")
+                    }.disabled(!store.canAct)
+                    Menu {
+                        Button(tr("manualBrowserShort")) { store.openBrowser() }.disabled(!store.canOpenBrowser)
+                        Button(tr("configureSources")) { store.showingSourceProfile = true }
+                            .disabled(!store.capabilities["searchR18Dev"].boolValue)
+                    } label: { Image(systemName: "ellipsis.circle") }
+                        .fixedSize().accessibilityLabel(tr("queryOptions")).disabled(!store.canAct)
+                }.padding(.horizontal, 24).padding(.vertical, 15)
+                ScrollView {
+                    HStack(alignment: .top, spacing: geometry.size.width < 540 ? 18 : 30) {
+                        let width = min(260, max(124, geometry.size.width * 0.33))
+                        VStack(spacing: 10) {
+                            Button { picking = true } label: {
+                                DeskArtwork(job: job, art: ArtworkReviewPolicy.primary(job.artwork, kind: kind), height: width * 1.36, crop: kind == "poster")
+                            }.buttonStyle(.plain).accessibilityLabel(tr("chooseImages")).disabled(job.artwork.isEmpty || !store.canAct)
+                            .contextMenu {
+                                if let art = ArtworkReviewPolicy.primary(job.artwork, kind: kind) {
+                                    Button(tr("viewArtwork")) { store.openArtwork(art, job: job) }
                                 }
-                            }.frame(width: columnWidth, alignment: .leading).disabled(store.working || store.statusUnconfirmed).modifier(ArtworkReadLifetime(artwork: art, job: job))
-                        }
-                    }.frame(width: contentWidth, alignment: .leading)
+                            }
+                            Picker(tr("artwork"), selection: $kind) {
+                                Text(tr("artwork.poster")).tag("poster")
+                                Text(tr("artwork.fanart")).tag("fanart")
+                            }.labelsHidden().pickerStyle(.segmented)
+                            Button(tr("chooseImages")) { picking = true }.buttonStyle(.link)
+                                .disabled(job.artwork.isEmpty || !store.canAct)
+                        }.frame(width: width)
+                        VStack(alignment: .leading, spacing: 12) {
+                            if editing {
+                                ForEach(["id", "title", "originalTitle"], id: \.self) { field in editor(field) }
+                            } else {
+                                editableText("id", value("id").isEmpty ? tr("unknownID") : value("id"))
+                                    .font(.system(.callout, design: .monospaced).weight(.semibold)).foregroundStyle(FilmDesk.accent)
+                                editableText("title", title)
+                                    .font(.system(size: geometry.size.width < 560 ? 24 : 32, weight: .semibold))
+                                if !value("originalTitle").isEmpty && value("originalTitle") != title {
+                                    editableText("originalTitle", value("originalTitle"))
+                                        .font(.system(.title3, design: .serif).italic()).foregroundStyle(.secondary)
+                                }
+                            }
+                            if !job.reviewSources.isEmpty { cachedResults }
+                            Divider()
+                            fieldGrid(["actorsText", "maker", "releaseDate", "runtimeMinutes"])
+                            Divider()
+                            if editing {
+                                editor("plot")
+                            } else {
+                                Text(tr("field.plot")).font(.caption).foregroundStyle(.secondary)
+                                editableText("plot", value("plot")).font(.callout).lineSpacing(3)
+                            }
+                            Divider()
+                            fieldGrid(["director", "label", "genresText", "rating"] + (value("series").isEmpty ? [] : ["series"]))
+                            if let url = URL(string: value("sourceUrl")), ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+                                Link(tr("openSource"), destination: url).font(.callout)
+                            }
+                            if job.hasFailedSources || value("id").isEmpty {
+                                HStack {
+                                    Button(tr(value("id").isEmpty ? "field.id" : "retrySources")) {
+                                        if value("id").isEmpty { beginEditing("id") } else { store.search(retry: true) }
+                                    }.disabled(!store.canAct)
+                                    Button(tr("manualBrowserShort")) { store.openBrowser() }.disabled(!store.canOpenBrowser)
+                                }
+                            }
+                            if store.hasLowResolutionCover(job) { Label(tr("artworkLowResolution"), systemImage: "exclamationmark.triangle").foregroundStyle(.orange).font(.caption) }
+                            if !job.warnings.isEmpty {
+                                DisclosureGroup(tr("technicalDetails")) {
+                                    Text(job.warnings.joined(separator: "\n")).font(.caption).textSelection(.enabled)
+                                }
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }.padding(.horizontal, 24).padding(.vertical, 10)
                 }
-            }.frame(width: contentWidth, alignment: .leading)
+                Divider()
+                HStack(spacing: 10) {
+                    Image(systemName: job.lookupOnly ? "magnifyingglass" : "film").foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(tr(job.lookupOnly ? "lookupByID" : "videoFile")).font(.caption).foregroundStyle(.secondary)
+                        if let path = job.videoPaths.first {
+                            Menu {
+                                ForEach(job.videoPaths, id: \.self) { path in
+                                    Button(URL(fileURLWithPath: path).lastPathComponent) { store.reveal(path) }
+                                }
+                            } label: { Text(URL(fileURLWithPath: path).lastPathComponent).lineLimit(1).truncationMode(.middle) }
+                                .menuStyle(.borderlessButton).fixedSize(horizontal: false, vertical: true).help(tr("showFinder"))
+                        } else { Text(tr("unlinkedMovie")).font(.callout) }
+                    }
+                    Spacer()
+                    Button { store.inspectorVisible.toggle() } label: { Image(systemName: "slider.horizontal.3") }
+                        .help(tr("saveSettings")).accessibilityLabel(tr("saveSettings"))
+                    if job.lookupOnly {
+                        Button(tr("attachVideo")) { store.attachVideo(to: job.jobID) }.disabled(!store.canAct)
+                    } else {
+                        Button(store.saveActionLabel) { store.saveActionTargets() }.buttonStyle(.borderedProminent)
+                            .disabled(!store.canPreviewActionTargets)
+                    }
+                }.padding(.horizontal, 22).padding(.vertical, 14)
+            }.background(FilmDesk.paper)
         }
+        .sheet(isPresented: $picking) { GalleryPicker(job: job, initialKind: kind) }
+    }
+
+    private func beginEditing(_ field: String? = nil) {
+        guard store.canAct else { return }
+        focusField = field
+        editing = true
+    }
+
+    private func editableText(_ field: String, _ text: String) -> some View {
+        Button { beginEditing(field) } label: {
+            Text(text.isEmpty ? "—" : text).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+        }
+        .buttonStyle(.plain).disabled(!store.canAct)
+        .accessibilityLabel(tr("field." + field)).accessibilityValue(text)
+        .help(tr("editDetails") + " · " + tr("field." + field))
+    }
+
+    private func editor(_ field: String) -> some View {
+        MetadataFieldView(field: field, job: job)
+            .onAppear {
+                guard focusField == field else { return }
+                DispatchQueue.main.async {
+                    guard focusField == field, editing, store.selectedID == job.jobID else { return }
+                    let view = store.editorSession(field: field, jobID: job.jobID).textView
+                    view.window?.makeFirstResponder(view)
+                    focusField = nil
+                }
+            }
+    }
+
+    private func fieldGrid(_ fields: [String]) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 12) {
+            ForEach(fields, id: \.self) { field in
+                let readOnly = field == "series"
+                if editing && !readOnly {
+                    editor(field)
+                } else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(tr("field." + field)).font(.caption).foregroundStyle(.secondary)
+                        if readOnly { Text(value(field)).font(.callout).textSelection(.enabled) }
+                        else { editableText(field, value(field)).font(.callout) }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    private var cachedResults: some View {
+        let current = store.reviewSource(job)
+        return Menu {
+            ForEach(job.reviewSources, id: \.self) { source in
+                Button {
+                    store.selectReviewSource(source, jobID: job.jobID, metadataOnly: true)
+                } label: {
+                    if current == source { Label(sourceName(source), systemImage: "checkmark") }
+                    else { Text(sourceName(source)) }
+                }.disabled(current == source)
+            }
+        } label: {
+            Text(tr("resultSource") + " · " + (current.isEmpty ? tr("reviewSourceMixed") : sourceName(current)))
+        }.menuStyle(.borderlessButton).fixedSize().font(.caption).help(tr("reviewSourceHelp")).disabled(!store.canAct)
+    }
+}
+
+func sourceName(_ name: String) -> String {
+    switch name {
+    case "local", "local-nfo": tr("localSource")
+    case "libredmm": "LibreDMM"
+    case "r18dev": "R18.dev"
+    case "javlibrary": "JAVLibrary"
+    default: name
     }
 }
 
 extension JSONValue {
     var artworkIdentity: String { self["artworkId"].stringValue }
-}
-
-struct ReviewSourcePicker: View {
-    @EnvironmentObject var store: WorkspaceStore
-    let job: MovieJobSnapshot
-    var body: some View {
-        Picker(tr("source"), selection: Binding(get: { store.reviewSource(job) }, set: { store.selectReviewSource($0, jobID: job.jobID) })) {
-            Text(tr("reviewSourceMixed")).tag("").disabled(true)
-            ForEach(job.reviewSources, id: \.self) { source in
-                Text(source == "local" ? tr("reviewSourceLocal") : source == "libredmm" ? "LibreDMM" : "R18.dev").tag(source)
-            }
-        // AppKit's popup can retain its selected label across a live language
-        // change even after the menu items update. Recreate only the control.
-        }.id(store.language).help(tr("reviewSourceHelp")).accessibilityIdentifier("reviewSourcePicker")
-            .disabled(job.reviewSources.isEmpty || !store.canAct)
-    }
 }
 
 struct ArtworkSourcePicker: View {
@@ -193,10 +228,9 @@ struct MetadataFieldView: View {
     let job: MovieJobSnapshot
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack { Text(tr("field." + field)).font(.callout).foregroundStyle(.secondary); Spacer(); CandidateButton(field: field, job: job) }
-            NativeMetadataEditor(session: store.editorSession(field: field, jobID: job.jobID), value: store.value(field, job: job), label: tr("field." + field), editable: field != "series" && field != "contentId" && !store.working && !store.statusUnconfirmed && !job.busy) { store.edit(field, value: $0, job: job) }
-                .id(job.jobID + "/" + field).frame(height: field == "title" || field == "originalTitle" ? 40 : 31)
-            if field == "series" || field == "contentId" { Text(tr("preservedField")).font(.caption2).foregroundStyle(.secondary) }
+            HStack { Text(tr("field." + field)).font(.caption.weight(.medium)).foregroundStyle(.secondary); Spacer(); CandidateButton(field: field, job: job) }
+            NativeMetadataEditor(session: store.editorSession(field: field, jobID: job.jobID), value: store.value(field, job: job), label: tr("field." + field), editable: store.canAct, multiline: field == "plot") { store.edit(field, value: $0, job: job) }
+                .fieldSurface().id(job.jobID + "/" + field).frame(height: field == "plot" ? 100 : field == "title" ? 48 : 32)
         }
     }
 }

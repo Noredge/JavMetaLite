@@ -29,11 +29,11 @@ run_logged() {
 }
 run_logged localization python3 "$SCRIPT_DIR/test-localization.py"
 if [ "$TEST_PROFILE" = full ]; then
+  run_logged ci-tools python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
   run_logged release-tools python3 "$SCRIPT_DIR/test_release_tools.py"
   run_logged release-manifest python3 "$SCRIPT_DIR/test_release_manifest.py"
   run_logged lifecycle-measurement python3 "$SCRIPT_DIR/test_lifecycle_measurement.py"
 fi
-run_logged ci-tools python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
 run_logged portable "$DOTNET" run --project shared/JavMetaLite.PortableTests/JavMetaLite.PortableTests.csproj -c "$CONFIGURATION"
 run_logged worker-build "$DOTNET" build macos/JavMetaLite.Worker/JavMetaLite.Worker.csproj -c "$CONFIGURATION"
 run_logged search-host-build "$DOTNET" build macos/JavMetaLite.Worker.RegressionHost/JavMetaLite.Worker.RegressionHost.csproj -c "$CONFIGURATION"
@@ -54,8 +54,6 @@ run_logged swift "${SWIFT_TEST_COMMAND[@]}"
 XCODE_ARGUMENTS=(--arch "$SWIFT_ARCH")
 if [ "$TEST_PROFILE" = core ]; then XCODE_ARGUMENTS+=(--check-only); fi
 run_logged xcode-sources python3 "$SCRIPT_DIR/test_xcode_sources.py" "${XCODE_ARGUMENTS[@]}"
-if [ -f "$SCRIPT_DIR/test_worker.py" ]; then
-  python3 "$SCRIPT_DIR/run_worker_suites.py" --mode development --profile "$TEST_PROFILE" --worker "$WORKER" --log-dir "$LOG_DIR" --jobs 2
-fi
+python3 "$SCRIPT_DIR/run_worker_suites.py" --profile "$TEST_PROFILE" --worker "$WORKER" --log-dir "$LOG_DIR" --jobs 2
 printf 'Automated test logs: %s\n' "$LOG_DIR"
 echo 'Interactive native UI, IME/VoiceOver, real removable volumes, SMB, live providers and notarization require separate recorded checks.'

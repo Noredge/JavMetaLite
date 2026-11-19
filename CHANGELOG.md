@@ -1,5 +1,13 @@
 # Changelog
 
+## macOS 1.1.0
+
+- Review and edit movie details in the main window. Drop a movie to read its local metadata, then choose a source and click Search when ready.
+- Look up a catalog number directly and link the movie later. Saving preserves untouched fields in its existing NFO and respects fields cleared during review.
+- Compare posters and landscape covers, choose stills, and control which artwork gets saved. Generate a high-resolution poster from the full cover when available.
+
+[macOS release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0)
+
 ## Windows 1.2.4 and macOS 1.0.1 (build 52)
 
 - Restore LibreDMM metadata and artwork lookup through the v1 movie API for single and batch searches.
