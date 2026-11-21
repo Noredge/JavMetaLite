@@ -7,6 +7,13 @@ on:
   pull_request:
     branches: [main, mac]
   workflow_dispatch:
+    inputs:
+      validation:
+        description: Run the complete Windows release gate
+        type: choice
+        options: [full]
+        default: full
+        required: true
 
 permissions:
   contents: read
@@ -32,6 +39,16 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v7
+        with:
+          ref: da11270c059ee5498ecc5c956e6855bce0ebf011
+          persist-credentials: false
+
+      - name: Verify the Windows 1.2.4 hotfix source
+        shell: pwsh
+        run: |
+          $commit = git rev-parse HEAD
+          if ($commit -ne 'da11270c059ee5498ecc5c956e6855bce0ebf011') { throw "Unexpected checkout: $commit" }
+          Write-Host "Building Windows hotfix commit $commit"
 
       - name: Set up the reviewed .NET SDK
         uses: actions/setup-dotnet@v6
