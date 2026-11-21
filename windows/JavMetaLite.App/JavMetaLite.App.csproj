@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>JavMetaLite</AssemblyName>
     <RootNamespace>JavMetaLite.App</RootNamespace>
-    <Version>1.2.4</Version>
+    <Version>1.2.4-hotfix.1</Version>
     <FileVersion>1.2.4.0</FileVersion>
     <InformationalVersion>$(Version)</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>

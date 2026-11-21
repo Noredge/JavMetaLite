@@ -1,9 +1,11 @@
+using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using JavMetaLite.Core.Models;
 using JavMetaLite.Core.Services;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 
 namespace JavMetaLite.App;
 
@@ -25,6 +27,11 @@ public partial class BrowserWindow : Window
     {
         ArgumentNullException.ThrowIfNull(target);
         InitializeComponent();
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        Browser.CreationProperties = new CoreWebView2CreationProperties
+        {
+            UserDataFolder = Path.Combine(Path.GetFullPath(localAppData), "JavMetaLite", "WebView2")
+        };
         WindowVisualTheme.ApplyDarkTitleBar(this);
         _target = target;
         Title = LocalizationService.Get("Browser.SourceTitle", target.DisplayName);
