@@ -187,7 +187,7 @@
     <sys:String x:Key="ArtworkViewer.LoadFailed">画像を読み込めません。戻ると再試行できます</sys:String>
     <sys:String x:Key="ArtworkViewer.Dimensions">画像サイズ：{0} × {1}</sys:String>
     <sys:String x:Key="Main.ReplaceLocalExtrafanart">ローカルのスチル画像を置換</sys:String>
-    <sys:String x:Key="Main.ReplaceLocalExtrafanartTooltip">今回の検索でオンラインスチル画像を取得した場合のみ有効です。未検索またはスチル画像なしの場合はローカル画像を保持します</sys:String>
+    <sys:String x:Key="Main.ReplaceLocalExtrafanartTooltip">今回の検索でオンラインのスチルが見つかった場合、または同じ作品の以前の検索結果からスチルを選んだ場合に、ローカル画像を置き換えます。</sys:String>
     <sys:String x:Key="ArtworkViewer.IncludeSample">このスチル画像を保存</sys:String>
     <sys:String x:Key="ArtworkViewer.DeleteLocal">ローカル画像を削除</sys:String>
     <sys:String x:Key="ArtworkViewer.DeleteLocalTitle">ローカル画像の削除確認</sys:String>

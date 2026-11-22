@@ -57,7 +57,7 @@
     <sys:String x:Key="Main.DownloadExtrafanart">保存所选剧照</sys:String>
     <sys:String x:Key="Main.DownloadExtrafanartTooltip">在图片查看器中管理本地与在线剧照，并同步到 extrafanart 文件夹</sys:String>
     <sys:String x:Key="Main.ReplaceLocalExtrafanart">替换本地剧照</sys:String>
-    <sys:String x:Key="Main.ReplaceLocalExtrafanartTooltip">仅在本次搜索取得在线剧照后生效；未搜索或没有在线剧照时保留本地图片</sys:String>
+    <sys:String x:Key="Main.ReplaceLocalExtrafanartTooltip">本次搜索找到在线剧照，或勾选了这部影片之前查到的剧照时，才会替换本地剧照。</sys:String>
     <sys:String x:Key="Main.SaveMode">保存方式</sys:String>
     <sys:String x:Key="Main.RenameVideo">影片重命名为番号</sys:String>
     <sys:String x:Key="Main.RenameVideoTooltip">只改变影片文件名，不改变扩展名</sys:String>

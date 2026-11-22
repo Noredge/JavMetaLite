@@ -24,6 +24,7 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
     private string _movieFileGroupKey = string.Empty;
     private string _sidecarBaseName = string.Empty;
     private string? _onlineExtrafanartCandidateId;
+    private bool _hasFreshOnlineSamples;
     private bool _disposed;
     private readonly HashSet<MetadataField> _reviewedFields = [];
     private bool _applyingAutomaticSelection;
@@ -167,12 +168,16 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
 
     public bool LocalNfoSaveBlocked { get; private set; }
 
+    // After a search without stills, retained candidates authorize output only if selected.
+    // Merely having an older candidate must not clear the local folder in replacement mode.
     public bool CanReplaceLocalExtrafanart =>
         !string.IsNullOrWhiteSpace(_onlineExtrafanartCandidateId) &&
         string.Equals(
             _onlineExtrafanartCandidateId,
             MovieIdParser.Normalize(Metadata.Id),
-            StringComparison.OrdinalIgnoreCase);
+            StringComparison.OrdinalIgnoreCase) &&
+        (_hasFreshOnlineSamples || Metadata.ScreenshotUrls.Intersect(AvailableScreenshotUrls, StringComparer.OrdinalIgnoreCase)
+            .Any(IsOnlineSample));
 
     public MovieSearchState SearchState
     {
@@ -624,8 +629,9 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
         }
 
         MergeAvailableScreenshotUrls([onlineSource]);
-        if (HasOnlineExtrafanartCandidates([onlineSource]))
+        if (onlineSource.ScreenshotUrls.Any(IsOnlineSample))
         {
+            _hasFreshOnlineSamples = true;
             _onlineExtrafanartCandidateId = MovieIdParser.Normalize(Metadata.Id);
             OnPropertyChanged(nameof(CanReplaceLocalExtrafanart));
         }
@@ -896,16 +902,15 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
 
     private void MarkOnlineExtrafanartCandidates(IEnumerable<MovieMetadata> sources)
     {
-        _onlineExtrafanartCandidateId = HasOnlineExtrafanartCandidates(sources)
+        _hasFreshOnlineSamples = sources.SelectMany(source => source.ScreenshotUrls).Any(IsOnlineSample);
+        _onlineExtrafanartCandidateId = AvailableScreenshotUrls.Any(IsOnlineSample)
             ? MovieIdParser.Normalize(Metadata.Id)
             : null;
         OnPropertyChanged(nameof(CanReplaceLocalExtrafanart));
     }
 
-    private static bool HasOnlineExtrafanartCandidates(IEnumerable<MovieMetadata> sources) =>
-        sources.SelectMany(source => source.ScreenshotUrls).Any(location =>
-            ArtworkLocationHelper.IsSupported(location) &&
-            !ArtworkLocationHelper.TryGetLocalPath(location, out _));
+    private static bool IsOnlineSample(string location) =>
+        ArtworkLocationHelper.IsSupported(location) && !ArtworkLocationHelper.TryGetLocalPath(location, out _);
 
     private void ReplaceMetadata(
         MovieMetadata metadata,
@@ -1059,9 +1064,10 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
         if (!_changingEquivalentId && eventArgs.PropertyName is nameof(MovieMetadata.Id) or nameof(MovieMetadata.CoverUrl) or
             nameof(MovieMetadata.FallbackCoverUrl) or nameof(MovieMetadata.PosterUrl))
             InvalidateCoverResolution();
-        if (eventArgs.PropertyName == nameof(MovieMetadata.ScreenshotUrls) && !_applyingAutomaticSelection)
+        if (eventArgs.PropertyName == nameof(MovieMetadata.ScreenshotUrls))
         {
-            _artworkReviewed = true;
+            if (!_applyingAutomaticSelection) _artworkReviewed = true;
+            OnPropertyChanged(nameof(CanReplaceLocalExtrafanart));
         }
         if (!_changingEquivalentId && eventArgs.PropertyName == nameof(MovieMetadata.Id) && SearchState is not MovieSearchState.Searching)
         {

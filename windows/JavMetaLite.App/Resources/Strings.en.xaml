@@ -182,7 +182,7 @@
     <sys:String x:Key="ArtworkViewer.LoadFailed">Image could not be loaded; return to retry</sys:String>
     <sys:String x:Key="ArtworkViewer.Dimensions">Image size: {0} × {1}</sys:String>
     <sys:String x:Key="Main.ReplaceLocalExtrafanart">Replace local stills</sys:String>
-    <sys:String x:Key="Main.ReplaceLocalExtrafanartTooltip">Takes effect only after this search finds online stills; local images are preserved when no search was run or no stills were found</sys:String>
+    <sys:String x:Key="Main.ReplaceLocalExtrafanartTooltip">Replace local stills when this search finds online stills or you select a still from an earlier search for the same movie.</sys:String>
     <sys:String x:Key="ArtworkViewer.IncludeSample">Save this still</sys:String>
     <sys:String x:Key="ArtworkViewer.DeleteLocal">Delete local image</sys:String>
     <sys:String x:Key="ArtworkViewer.DeleteLocalTitle">Confirm local image deletion</sys:String>

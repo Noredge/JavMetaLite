@@ -191,7 +191,7 @@
     <sys:String x:Key="ArtworkViewer.LoadFailed">圖片載入失敗；切換回來可重試</sys:String>
     <sys:String x:Key="ArtworkViewer.Dimensions">圖片尺寸：{0} × {1}</sys:String>
     <sys:String x:Key="Main.ReplaceLocalExtrafanart">取代本機劇照</sys:String>
-    <sys:String x:Key="Main.ReplaceLocalExtrafanartTooltip">僅在本次搜尋取得線上劇照後生效；未搜尋或沒有線上劇照時保留本機圖片</sys:String>
+    <sys:String x:Key="Main.ReplaceLocalExtrafanartTooltip">本次搜尋找到線上劇照，或勾選了這部影片先前查到的劇照時，才會取代本機劇照。</sys:String>
     <sys:String x:Key="ArtworkViewer.IncludeSample">儲存這張劇照</sys:String>
     <sys:String x:Key="ArtworkViewer.DeleteLocal">刪除本機圖片</sys:String>
     <sys:String x:Key="ArtworkViewer.DeleteLocalTitle">確認刪除本機圖片</sys:String>

@@ -121,11 +121,14 @@ internal static class BatchSourceRoutingTests
         await BatchMetadataSearchCoordinator.SearchAsync([job], libre, r18, sourceMode: "libredmm");
         Check(job.SourceResults.Any(source => source.SourceName == "r18dev") &&
             job.AvailableScreenshotUrls.Contains(screenshot), "A retained source lost its available stills.");
+        job.Metadata.ScreenshotUrls = [screenshot];
+        Check(job.CanReplaceLocalExtrafanart, "Selecting a retained still did not enable saving it.");
 
         r18Fails = true;
         var result = await BatchMetadataSearchCoordinator.SearchAsync([job], libre, r18, sourceMode: "custom");
         Check(result.PartialCount == 1 && job.SourceResults.All(source => source.SourceName != "r18dev") &&
             !job.AvailableScreenshotUrls.Contains(screenshot), "A failed provider supplied stale review candidates.");
+        Check(!job.CanReplaceLocalExtrafanart, "A failed source still authorizes local image replacement.");
     }
 
     public static async Task SingleSourceCancellation()
