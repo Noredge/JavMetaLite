@@ -7,14 +7,13 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping improve JavMetaLite. Do not upload movie files, explicit artwork, account information, or private paths. You can open the local log folder from the app, but review and redact a log before attaching it.
+        Thanks for helping improve JavMetaLite. Do not upload movie files, explicit artwork, account information, or private paths. Review and redact any log before attaching it.
 
   - type: input
     id: version
     attributes:
       label: JavMetaLite version
-      description: Shown in the lower-right corner of the application.
-      placeholder: v1.0.0
+      description: On Windows, see the lower-right corner. On macOS, choose About JavMetaLite in the app menu.
     validations:
       required: true
 
@@ -52,10 +51,10 @@ body:
       required: true
 
   - type: input
-    id: windows
+    id: operating-system
     attributes:
-      label: Windows version
-      placeholder: Windows 11 24H2 x64
+      label: Operating system and architecture
+      placeholder: e.g. Windows 11 x64 or macOS 15 on Apple Silicon
     validations:
       required: true
 

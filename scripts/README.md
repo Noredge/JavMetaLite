@@ -9,14 +9,14 @@ Run public entry points from the repository root. Paths and CLI options are reta
 | File | Caller or purpose |
 | --- | --- |
 | [Test-Automated.ps1](Test-Automated.ps1) | Windows CI → Core smoke, file transactions, WPF UI and package-definition gates. |
-| [New-ReleasePackage.ps1](New-ReleasePackage.ps1) | Windows CI and release guide → self-contained portable EXE, ZIP and checksums. |
+| [New-ReleasePackage.ps1](New-ReleasePackage.ps1) | Windows CI and release guide → self-contained portable EXE and ZIP. |
 | [Test-PortablePackage.ps1](Test-PortablePackage.ps1) | Windows CI → verify the actual portable ZIP, identity and notices. |
 | [Test-ReleasePackage.ps1](Test-ReleasePackage.ps1) | Called by `Test-Automated.ps1`; negative tests for release/package rules. |
 | [ci/check_docs.py](ci/check_docs.py) | Called by `docs.yml` to validate tracked Markdown links. |
 | [ci/test_ci_tools.py](ci/test_ci_tools.py) | Called by full Mac tests for link and suite-runner regressions. |
 | [macos/test.sh](macos/test.sh) | macOS CI → localization, portable, Swift, protocol, queue, retention and cache tests. |
 | [macos/build.sh](macos/build.sh) | Called by `package.sh`; locked Worker restore, Swift build, bundle, sign and verify. |
-| [macos/package.sh](macos/package.sh) | macOS CI and release guide → signed ZIP, extracted-payload checks and checksums. |
+| [macos/package.sh](macos/package.sh) | macOS CI and release guide → package and test the signed app ZIP. |
 | [macos/verify-package.sh](macos/verify-package.sh) | Called by build/package/notarization tools and used for independent verification. |
 | [macos/sign.sh](macos/sign.sh) | Called by `build.sh`; signing entry point. |
 | [macos/notarize.sh](macos/notarize.sh) | Documented optional Developer ID release flow; not used by ad-hoc CI. |
@@ -76,7 +76,3 @@ swift scripts/macos/compare-image-output.swift --source reference.jpg --output p
 ```
 
 Measurement/live tools accept explicit inputs; inspect their `--help` before running. They may access real providers when opted in and are not release-pass evidence by themselves. The synthetic UI demo generator remains in [fixtures/macos](../fixtures/macos/README.md).
-
-## Removal decision
-
-All 46 existing files under `scripts/` are retained. No script is confirmed obsolete: build/release helpers have callers, optional measurements and live checks have documented uses, and the image comparison tool supplies a distinct manual check. No script has been moved merely to reduce the top-level file count, avoiding wrapper duplication and changes to release entry points.

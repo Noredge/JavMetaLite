@@ -18,13 +18,15 @@
 | Windows **1.3.0** | Windows 10/11 x64 | [便携 ZIP](https://github.com/Noredge/JavMetaLite/releases/download/v1.3.0/JavMetaLite-v1.3.0-win-x64-portable.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/v1.3.0) |
 | macOS **1.1.0** | Apple Silicon · macOS 15+ | [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.1.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0) |
 
-打开前请核对 Release 的 SHA-256。Windows 内置浏览器需要 WebView2；macOS 包使用 ad-hoc 签名、未公证，详见[首次启动指南](macos/README.md#first-launch)。Intel 尚未验证。
+Windows 内置浏览器需要 WebView2；macOS 包使用 ad-hoc 签名、未公证，详见[首次启动指南](macos/README.md#first-launch)。Intel 尚未验证。
 
 Windows 版支持一起拖入影片和文件夹，导入时可只选已识别的影片。封面、完整封套和资料在同一页展示，需要更多空间时可以收起队列。
 
-![Windows 1.3.0 的影片队列、封面、完整封套和资料](docs/images/windows-1.3.0-workspace.zh-Hans.png)
+![Windows 1.3.0 的影片队列、封面、完整封套和资料](docs/images/windows-1.3.0-workspace.zh-Hans.png)<br>
+<sub>Windows 1.3.0</sub>
 
-![macOS 1.1.0 影片资料与保存设置](docs/images/macos-1.1.0-workspace.zh-Hans.png)
+![macOS 1.1.0 影片资料与保存设置](docs/images/macos-1.1.0-workspace.zh-Hans.png)<br>
+<sub>macOS 1.1.0</sub>
 
 [更多截图](docs/SCREENSHOTS.md) · 图片与资料均为合成演示。
 

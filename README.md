@@ -18,13 +18,15 @@ A Windows and macOS app for reviewing and organizing local movie metadata, indiv
 | Windows **1.3.0** | Windows 10/11 x64 | [Portable ZIP](https://github.com/Noredge/JavMetaLite/releases/download/v1.3.0/JavMetaLite-v1.3.0-win-x64-portable.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/v1.3.0) |
 | macOS **1.1.0** | Apple Silicon · macOS 15+ | [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.1.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0) |
 
-Verify the release SHA-256 before opening. Windows needs WebView2 for the embedded browser. The macOS package is ad-hoc signed and not notarized; see the [first-launch guide](macos/README.md#first-launch). Intel is unverified.
+Windows needs WebView2 for the embedded browser. The macOS package is ad-hoc signed and not notarized; see the [first-launch guide](macos/README.md#first-launch). Intel is unverified.
 
 On Windows, drop files and folders together and choose which recognized movies to import. Review the poster, full cover and metadata side by side. Hide the queue when you need more room.
 
-![Windows 1.3.0 queue, poster, full cover and movie details](docs/images/windows-1.3.0-workspace.en.png)
+![Windows 1.3.0 queue, poster, full cover and movie details](docs/images/windows-1.3.0-workspace.en.png)<br>
+<sub>Windows 1.3.0</sub>
 
-![macOS 1.1.0 movie review and save settings](docs/images/macos-1.1.0-workspace.en.png)
+![macOS 1.1.0 movie review and save settings](docs/images/macos-1.1.0-workspace.en.png)<br>
+<sub>macOS 1.1.0</sub>
 
 [More screenshots](docs/SCREENSHOTS.md) · Synthetic demo data.
 

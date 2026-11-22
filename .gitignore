@@ -32,15 +32,8 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
-# Private historical screenshots stay local and must not enter public history.
-docs/images/javmetalite-v1.2.0-preview.42-main.en.png
-docs/images/javmetalite-v1.2.0-preview.42-artwork-viewer.en.png
-
-# Superseded synthetic captures remain local; retain two documented state examples.
-docs/images/javmetalite-v1.2.0-preview.55-*.png
-!docs/images/javmetalite-v1.2.0-preview.55-cover-warning.zh-Hans.png
-!docs/images/javmetalite-v1.2.0-preview.55-deferred.zh-Hans.png
-docs/images/javmetalite-v1.2.0-preview.56-*.png
+# Keep retired Windows 1.2.0 preview screenshots out of version control.
+docs/images/javmetalite-v1.2.0-preview.*.png
 
 # Native macOS local build and editor state
 macos/.build/

@@ -6,13 +6,14 @@ A native editor for reviewing movie metadata and artwork, editing local NFO file
 
 Download the published [macOS 1.1.0](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0), extract the [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.1.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) and open `JavMetaLite.app`. Apple Silicon and macOS 15+ are required; no .NET installation is needed. The package is ad-hoc signed, without Developer ID or notarization; Gatekeeper acceptance is not established. Intel is unverified. This is the project’s GitHub distribution format; it does not mean Apple has verified the publisher or scanned the app.
 
-![macOS 1.1.0 workbench with local movie metadata and save settings](../docs/images/macos-1.1.0-workspace.en.png)
+![macOS 1.1.0 workbench with local movie metadata and save settings](../docs/images/macos-1.1.0-workspace.en.png)<br>
+<sub>macOS 1.1.0</sub>
 
 [Artwork selection and other languages](../docs/SCREENSHOTS.md#macos-110)
 
 ## First launch
 
-1. Download the ZIP and matching SHA-256 from the project's GitHub Release, compare the checksum, extract the complete app and move `JavMetaLite.app` to Applications. Keep its internal Contents folder intact.
+1. Download the ZIP from the project's GitHub Release, extract the complete app and move `JavMetaLite.app` to Applications. Keep its internal Contents folder intact.
 2. Try opening the app. If macOS blocks this trusted download because the developer cannot be verified or Apple cannot check it, use **System Settings → Privacy & Security → Open Anyway**, then confirm Open for JavMetaLite. This is an exception for this app. Follow [Apple's instructions](https://support.apple.com/en-us/102445); do not use the procedure for damaged-app or malware alerts.
 3. When macOS asks for access to a folder you selected, allow access if you intend to work there. Folder privacy permission is separate from Gatekeeper approval. Start with disposable media and review the save preview before confirming changes.
 
