@@ -10,7 +10,7 @@ Use Windows and the .NET SDK pinned in `global.json`.
 
 This runs Core smoke tests, file-transaction regressions, WPF UI tests and package-definition checks. Tests use synthetic media and mocked website responses, not your media library or live scraper services.
 
-The current suite includes 46 Core tests and 65 transaction cases, plus WPF checks for source selection, queue navigation, image preview, four-language layout and save safety. Cleanup regressions cover single/CD saves, both verification modes, cancellation, simulated device loss, locked temporary files and committed saves with cleanup warnings. Confirmed-part tests cover explicit ordering, unchanged automatic discovery, atomic saving, cancellation and existing-video protection. WPF checks cover choosing one duplicate, skipping, canceling, forced save preview, part ordering and dark list colors. Run a transaction category separately with:
+WPF tests cover source selection, queue navigation, image preview, four-language layout and save safety. Cleanup regressions cover single/CD saves, both verification modes, cancellation, simulated device loss, locked temporary files and committed saves with cleanup warnings. Confirmed-part tests cover explicit ordering, unchanged automatic discovery, atomic saving, cancellation and existing-video protection. WPF checks cover choosing one duplicate, skipping, canceling, forced save preview, part ordering and dark list colors. Run a transaction category separately with:
 
 ```powershell
 dotnet run --project windows/JavMetaLite.RegressionTests -c Release -- --category folder-sidecar
@@ -23,7 +23,7 @@ dotnet run --project windows/JavMetaLite.RegressionTests -c Release -- --categor
 ./scripts/Test-PortablePackage.ps1
 ```
 
-The package check verifies the actual ZIP inventory, EXE version, README, licenses and SHA-256. CI runs both scripts and uploads the verified package. Validate the artifact from the release commit rather than substituting an older local ZIP.
+The package check verifies the actual ZIP inventory, EXE version, README, licenses and SHA-256. Windows CI runs both packaging scripts and uploads the verified ZIP for version tags and manual runs with packaging enabled. Validate the artifact from the release commit rather than substituting an older local ZIP.
 
 ## Optional performance checks
 

@@ -18,13 +18,15 @@
 | Windows **1.3.0** | Windows 10/11 x64 | [ポータブル ZIP](https://github.com/Noredge/JavMetaLite/releases/download/v1.3.0/JavMetaLite-v1.3.0-win-x64-portable.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/v1.3.0) |
 | macOS **1.1.0** | Apple Silicon · macOS 15 以降 | [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.1.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0) |
 
-起動前に Release の SHA-256 を確認してください。Windows の内蔵ブラウザーには WebView2 が必要です。macOS 版はアドホック署名のみで未公証です。[初回起動ガイド](macos/README.md#first-launch)を参照してください。Intel は未検証です。
+Windows の内蔵ブラウザーには WebView2 が必要です。macOS 版はアドホック署名のみで未公証です。[初回起動ガイド](macos/README.md#first-launch)を参照してください。Intel は未検証です。
 
 Windows 版では動画とフォルダーをまとめてドロップし、品番を認識できた作品だけを取り込めます。ポスター、ジャケット全体、作品情報を同じ画面で確認でき、キューを閉じると表示領域が広がります。
 
-![Windows 1.3.0 のキュー、ポスター、ジャケット全体、作品情報](docs/images/windows-1.3.0-workspace.ja.png)
+![Windows 1.3.0 のキュー、ポスター、ジャケット全体、作品情報](docs/images/windows-1.3.0-workspace.ja.png)<br>
+<sub>Windows 1.3.0</sub>
 
-![macOS 1.1.0 の作品情報と保存設定](docs/images/macos-1.1.0-workspace.ja.png)
+![macOS 1.1.0 の作品情報と保存設定](docs/images/macos-1.1.0-workspace.ja.png)<br>
+<sub>macOS 1.1.0</sub>
 
 [その他のスクリーンショット](docs/SCREENSHOTS.md) · 画像とデータは合成デモです。
 
