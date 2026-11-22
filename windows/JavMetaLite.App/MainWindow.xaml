@@ -642,8 +642,18 @@
                             </Grid>
                             <TextBlock DockPanel.Dock="Left" Text="{Binding Id}" FontFamily="Consolas" FontSize="14" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TabBrush}" VerticalAlignment="Center" Margin="0,0,12,0" />
-                            <TextBlock Text="{Binding SourceDisplayName}" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}"
-                                       FontSize="12" TextTrimming="CharacterEllipsis" />
+                            <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" FontSize="12" TextTrimming="CharacterEllipsis">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="{Binding SourceDisplayName}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SourceName}" Value="local-nfo">
+                                                <Setter Property="Text" Value="{DynamicResource Source.LocalNfo}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                         </DockPanel>
                     </Border>
                     <ScrollViewer x:Name="MetadataScrollViewer"

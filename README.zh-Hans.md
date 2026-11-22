@@ -7,7 +7,7 @@
 [![Windows CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 [![macOS CI](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml)
 
-> Windows **1.2.4** · macOS **1.1.0**。
+> Windows **1.3.0** · macOS **1.1.0**。
 
 用于本地影片资料审核与整理的 Windows／macOS 工具，支持单片编辑、批量处理和 Jellyfin 兼容输出。
 
@@ -15,14 +15,16 @@
 
 | 平台 | 要求 | 下载 |
 | --- | --- | --- |
-| Windows **1.2.4** | Windows 10/11 x64 | [便携 ZIP](https://github.com/Noredge/JavMetaLite/releases/download/v1.2.4/JavMetaLite-v1.2.4-win-x64-portable.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/v1.2.4) |
+| Windows **1.3.0** | Windows 10/11 x64 | [便携 ZIP](https://github.com/Noredge/JavMetaLite/releases/download/v1.3.0/JavMetaLite-v1.3.0-win-x64-portable.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/v1.3.0) |
 | macOS **1.1.0** | Apple Silicon · macOS 15+ | [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.1.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0) |
 
 打开前请核对 Release 的 SHA-256。Windows 内置浏览器需要 WebView2；macOS 包使用 ad-hoc 签名、未公证，详见[首次启动指南](macos/README.md#first-launch)。Intel 尚未验证。
 
-![macOS 1.1.0 影片资料与保存设置](docs/images/macos-1.1.0-workspace.zh-Hans.png)
+Windows 版支持一起拖入影片和文件夹，导入时可只选已识别的影片。封面、完整封套和资料在同一页展示，需要更多空间时可以收起队列。
 
-![Windows 单片工作区，v1.2.0](docs/images/javmetalite-v1.2.0-main-single.zh-Hans.png)
+![Windows 1.3.0 的影片队列、封面、完整封套和资料](docs/images/windows-1.3.0-workspace.zh-Hans.png)
+
+![macOS 1.1.0 影片资料与保存设置](docs/images/macos-1.1.0-workspace.zh-Hans.png)
 
 [更多截图](docs/SCREENSHOTS.md) · 图片与资料均为合成演示。
 

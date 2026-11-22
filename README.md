@@ -7,7 +7,7 @@
 [![Windows CI](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/ci.yml)
 [![macOS CI](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/Noredge/JavMetaLite/actions/workflows/macos.yml)
 
-> Windows **1.2.4** · macOS **1.1.0**.
+> Windows **1.3.0** · macOS **1.1.0**.
 
 A Windows and macOS app for reviewing and organizing local movie metadata, individually or in batches, with Jellyfin-compatible output.
 
@@ -15,14 +15,16 @@ A Windows and macOS app for reviewing and organizing local movie metadata, indiv
 
 | Platform | Requirements | Download |
 | --- | --- | --- |
-| Windows **1.2.4** | Windows 10/11 x64 | [Portable ZIP](https://github.com/Noredge/JavMetaLite/releases/download/v1.2.4/JavMetaLite-v1.2.4-win-x64-portable.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/v1.2.4) |
+| Windows **1.3.0** | Windows 10/11 x64 | [Portable ZIP](https://github.com/Noredge/JavMetaLite/releases/download/v1.3.0/JavMetaLite-v1.3.0-win-x64-portable.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/v1.3.0) |
 | macOS **1.1.0** | Apple Silicon · macOS 15+ | [App ZIP](https://github.com/Noredge/JavMetaLite/releases/download/macos-v1.1.0/JavMetaLite-macOS-arm64-Release-adhoc.zip) · [Release](https://github.com/Noredge/JavMetaLite/releases/tag/macos-v1.1.0) |
 
 Verify the release SHA-256 before opening. Windows needs WebView2 for the embedded browser. The macOS package is ad-hoc signed and not notarized; see the [first-launch guide](macos/README.md#first-launch). Intel is unverified.
 
-![macOS 1.1.0 movie review and save settings](docs/images/macos-1.1.0-workspace.en.png)
+On Windows, drop files and folders together and choose which recognized movies to import. Review the poster, full cover and metadata side by side. Hide the queue when you need more room.
 
-![Windows single-movie workspace, v1.2.0](docs/images/javmetalite-v1.2.0-main-single.en.png)
+![Windows 1.3.0 queue, poster, full cover and movie details](docs/images/windows-1.3.0-workspace.en.png)
+
+![macOS 1.1.0 movie review and save settings](docs/images/macos-1.1.0-workspace.en.png)
 
 [More screenshots](docs/SCREENSHOTS.md) · Synthetic demo data.
 
