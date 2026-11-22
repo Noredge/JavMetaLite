@@ -403,6 +403,7 @@ public sealed class FileOrganizationService
         var nfoContext = outputOptions.WriteNfo
             ? new NfoWriteContext(localBundle, updatePosterReference, posterReference, updateFanartReference, fanartReference)
             : null;
+        var crossVolume = videoTransfers.Any(transfer => transfer.WillMove && transfer.RequiresVerifiedCopy);
         return new SavePlan(
             sourceVideoPath,
             targetVideoPath,
@@ -427,8 +428,10 @@ public sealed class FileOrganizationService
                 .ToArray(),
             SourcePathsToRetire = retirePaths.Distinct(FileSystemPathSemantics.PathComparer).ToArray(),
             ExtrafanartSourceLocations = extrafanartSourceLocations,
-            RequiresVerifiedVideoCopy = videoTransfers.Any(transfer =>
-                transfer.WillMove && transfer.RequiresVerifiedCopy)
+            RequiresVerifiedVideoCopy = crossVolume,
+            CrossVolumeVideoBytes = crossVolume
+                ? videoTransfers.Where(transfer => transfer.WillMove).Sum(transfer => new FileInfo(transfer.SourcePath).Length)
+                : 0
         };
     }
 
@@ -732,7 +735,7 @@ public sealed class FileOrganizationService
                         "movie",
                         Path.GetFileName(plan.SourceVideoPath));
                     Directory.CreateDirectory(Path.GetDirectoryName(sourceVideoBackupPath)!);
-                    await ValidateCopiedSourceAsync(plan.SourceVideoPath, copiedSourceSha256, cancellationToken);
+                    await ValidateCopiedSourceAsync(plan.SourceVideoPath, copiedSourceSha256, progress, cancellationToken);
                     await FileSharingRetry.MoveAsync(plan.SourceVideoPath, sourceVideoBackupPath, cancellationToken);
                     sourceVideoRetired = true;
                 }
@@ -1119,7 +1122,7 @@ public sealed class FileOrganizationService
                         "movie",
                         $"{index:D2}-{Path.GetFileName(transfer.SourcePath)}");
                     Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
-                    await ValidateCopiedSourceAsync(transfer.SourcePath, copiedSourceHashes.GetValueOrDefault(transfer.SourcePath), cancellationToken);
+                    await ValidateCopiedSourceAsync(transfer.SourcePath, copiedSourceHashes.GetValueOrDefault(transfer.SourcePath), progress, cancellationToken);
                     await FileSharingRetry.MoveAsync(transfer.SourcePath, backupPath, cancellationToken);
                     retiredVideoSources.Add((backupPath, transfer.SourcePath));
                 }
@@ -1464,11 +1467,11 @@ public sealed class FileOrganizationService
     }
 
     private static async Task ValidateCopiedSourceAsync(string sourcePath, string? copiedSha256,
-        CancellationToken cancellationToken)
+        IProgress<FileTransactionProgress>? progress, CancellationToken cancellationToken)
     {
         FileSystemPathSemantics.ValidateCanonicalPath(sourcePath);
         if (!File.Exists(sourcePath) || copiedSha256 is not null &&
-            !string.Equals(await ComputeSha256Async(sourcePath, null, cancellationToken), copiedSha256,
+            !string.Equals(await ComputeSha256Async(sourcePath, progress, cancellationToken, FileTransactionStage.VerifyingSource), copiedSha256,
                 StringComparison.OrdinalIgnoreCase))
             throw new IOException($"来源影片在复制后发生变化，未移除来源：{sourcePath}");
     }
@@ -1552,6 +1555,7 @@ public sealed class FileOrganizationService
         var buffer = GC.AllocateUninitializedArray<byte>(bufferSize);
         var totalBytes = source.Length;
         long copiedBytes = 0;
+        long lastReportedBytes = 0;
         var lastPercentage = -1;
         ReportProgress(FileTransactionStage.CopyingMovie, "正在复制影片到目标临时区…", 0, totalBytes, destinationPath);
 
@@ -1577,6 +1581,7 @@ public sealed class FileOrganizationService
                     copiedBytes,
                     totalBytes,
                     destinationPath);
+                lastReportedBytes = copiedBytes;
             }
         }
 
@@ -1594,13 +1599,14 @@ public sealed class FileOrganizationService
                 message,
                 bytesProcessed,
                 bytesTotal,
-                temporaryPath));
+                temporaryPath) { BytesAdvanced = bytesProcessed - lastReportedBytes });
     }
 
     private static async Task<string> ComputeSha256Async(
         string path,
         IProgress<FileTransactionProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        FileTransactionStage stage = FileTransactionStage.VerifyingMovie)
     {
         const int bufferSize = 1024 * 1024;
         await using var stream = new FileStream(
@@ -1614,6 +1620,7 @@ public sealed class FileOrganizationService
         var buffer = GC.AllocateUninitializedArray<byte>(bufferSize);
         var totalBytes = stream.Length;
         long processedBytes = 0;
+        long lastReportedBytes = 0;
         var lastPercentage = -1;
 
         while (true)
@@ -1632,11 +1639,12 @@ public sealed class FileOrganizationService
             {
                 lastPercentage = percentage;
                 progress?.Report(new FileTransactionProgress(
-                    FileTransactionStage.VerifyingMovie,
-                    $"正在校验目标影片 SHA-256… {percentage}%",
+                    stage,
+                    stage == FileTransactionStage.VerifyingSource ? "正在复核来源影片…" : $"正在校验目标影片 SHA-256… {percentage}%",
                     processedBytes,
                     totalBytes,
-                    path));
+                    stage == FileTransactionStage.VerifyingMovie ? path : null) { BytesAdvanced = processedBytes - lastReportedBytes });
+                lastReportedBytes = processedBytes;
             }
         }
 

@@ -42,11 +42,12 @@ public partial class MovieDiscoveryWindow : Window
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         _initialResult = initialResult;
         InitializeComponent();
-        WindowVisualTheme.ApplyDarkTitleBar(this);
+        WindowVisualTheme.Attach(this);
         IncludeSubdirectoriesCheckBox.IsChecked = includeSubdirectories;
         RootPathText.Text = string.Join(Environment.NewLine, _inputPaths);
         RootPathText.ToolTip = RootPathText.Text;
         MovieGroupsList.ItemsSource = Items;
+        UpdateSelectionState();
     }
 
     public ObservableCollection<MovieDiscoveryItem> Items { get; } = [];
@@ -83,11 +84,8 @@ public partial class MovieDiscoveryWindow : Window
         _scanCancellation?.Dispose();
         var cancellation = new CancellationTokenSource();
         _scanCancellation = cancellation;
-        AddButton.IsEnabled = false;
-        SelectAllButton.IsEnabled = false;
-        SelectRecognizedButton.IsEnabled = false;
-        SelectNoneButton.IsEnabled = false;
         Items.Clear();
+        UpdateSelectionState();
         DiagnosticsText.Text = string.Empty;
         _diagnosticDetails = string.Empty;
         DiagnosticsDetailsButton.Visibility = Visibility.Collapsed;
@@ -207,7 +205,9 @@ public partial class MovieDiscoveryWindow : Window
     private void UpdateSelectionState()
     {
         var hasSelectableItems = Items.Any(item => item.CanSelect);
-        AddButton.IsEnabled = Items.Any(item => item.CanSelect && item.IsSelected);
+        var selectedCount = Items.Count(item => item.IsSelected);
+        AddButton.Content = LocalizationService.Get("Discovery.AddFound", selectedCount);
+        AddButton.IsEnabled = selectedCount > 0;
         SelectAllButton.IsEnabled = hasSelectableItems;
         SelectRecognizedButton.IsEnabled = Items.Any(item => item.CanSelect && item.HasRecognizedId);
         SelectNoneButton.IsEnabled = hasSelectableItems;

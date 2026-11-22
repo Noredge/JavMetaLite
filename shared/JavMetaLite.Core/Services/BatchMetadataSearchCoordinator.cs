@@ -45,7 +45,8 @@ public static class BatchMetadataSearchCoordinator
         MetadataSourcePreferenceProfile? sourceProfile = null,
         Func<IReadOnlyList<MovieMetadata>, CancellationToken, Task<string?>>? bestArtworkSourceResolver = null,
         bool retryFailedSourcesOnly = false,
-        string sourceMode = MetadataSearchSourceModes.LibreDmm)
+        string sourceMode = MetadataSearchSourceModes.LibreDmm,
+        IProgress<int>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(jobs);
         ArgumentNullException.ThrowIfNull(primaryProvider);
@@ -91,6 +92,7 @@ public static class BatchMetadataSearchCoordinator
 
         var results = new BatchMetadataSearchItemResult?[candidates.Length];
         var nextIndex = -1;
+        var processed = 0;
         var workerCount = Math.Min(maxConcurrentJobs, candidates.Length);
         var workers = Enumerable.Range(0, workerCount)
             .Select(_ => RunWorkerAsync())
@@ -201,6 +203,11 @@ public static class BatchMetadataSearchCoordinator
                         BatchMetadataSearchItemStatus.Failed,
                         attempts,
                         exception);
+                }
+                finally
+                {
+                    if (progress is not null && !cancellationToken.IsCancellationRequested)
+                        progress.Report((int)(100L * Interlocked.Increment(ref processed) / candidates.Length));
                 }
             }
         }

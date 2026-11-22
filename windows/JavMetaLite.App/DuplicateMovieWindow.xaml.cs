@@ -30,7 +30,7 @@ public partial class DuplicateMovieWindow : Window
         CandidatesList.ItemsSource = _candidates;
         ConfirmPartsCheckBox.IsEnabled = _canCombine;
         RefreshButtons();
-        WindowVisualTheme.ApplyDarkTitleBar(this);
+        WindowVisualTheme.Attach(this);
     }
 
     private void Selection_Changed(object sender, RoutedEventArgs e) => RefreshButtons();

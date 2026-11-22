@@ -26,7 +26,7 @@ internal static partial class Program
             window.Show();
             try
             {
-                ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                SetQueueOpen(window, true);
                 var options = new SaveOptions(true, false, false, false, false, false);
                 var organization = new OrganizationOptions(OrganizationTargetMode.CustomRootNumberFolder, true, target);
                 MovieJob Add(string suffix)
@@ -70,7 +70,7 @@ internal static partial class Program
                     var row = (ListBoxItem)candidates.ItemContainerGenerator.ContainerFromIndex(0);
                     row.ApplyTemplate();
                     var border = (Border)row.Template.FindName("RowBorder", row);
-                    CoverAssert(((SolidColorBrush)border.Background).Color == Color.FromRgb(32, 61, 104),
+                    CoverAssert(((SolidColorBrush)border.Background).Color == ((SolidColorBrush)window.FindResource("SelectionBrush")).Color,
                         "Selected row must also stay dark.");
                     var bitmap = new RenderTargetBitmap((int)chooser.ActualWidth, (int)chooser.ActualHeight, 96, 96, PixelFormats.Pbgra32);
                     bitmap.Render(chooser);

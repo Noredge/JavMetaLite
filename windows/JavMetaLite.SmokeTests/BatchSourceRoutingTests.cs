@@ -104,6 +104,33 @@ internal static class BatchSourceRoutingTests
         Check(noAutomaticFailures.Items.Count == 0 && r18.Calls == 1, "legacy JAVLibrary failure is never an automatic retry candidate");
     }
 
+    public static async Task RequeryKeepsOnlyCurrentCandidates()
+    {
+        using var job = Job(1);
+        using var libre = new Provider("libredmm");
+        var screenshot = "https://example.invalid/r18-still.jpg";
+        var r18Fails = false;
+        using var r18 = new Provider("r18dev", (id, _) =>
+        {
+            if (r18Fails) throw new IOException("synthetic source failure");
+            var metadata = Metadata(id, "r18dev");
+            metadata.ScreenshotUrls = [screenshot];
+            return Task.FromResult(metadata);
+        });
+        await BatchMetadataSearchCoordinator.SearchAsync([job], libre, r18, sourceMode: "r18dev");
+        await BatchMetadataSearchCoordinator.SearchAsync([job], libre, r18, sourceMode: "libredmm");
+        Check(job.SourceResults.Any(source => source.SourceName == "r18dev") &&
+            job.AvailableScreenshotUrls.Contains(screenshot), "A retained source lost its available stills.");
+        job.Metadata.ScreenshotUrls = [screenshot];
+        Check(job.CanReplaceLocalExtrafanart, "Selecting a retained still did not enable saving it.");
+
+        r18Fails = true;
+        var result = await BatchMetadataSearchCoordinator.SearchAsync([job], libre, r18, sourceMode: "custom");
+        Check(result.PartialCount == 1 && job.SourceResults.All(source => source.SourceName != "r18dev") &&
+            !job.AvailableScreenshotUrls.Contains(screenshot), "A failed provider supplied stale review candidates.");
+        Check(!job.CanReplaceLocalExtrafanart, "A failed source still authorizes local image replacement.");
+    }
+
     public static async Task SingleSourceCancellation()
     {
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

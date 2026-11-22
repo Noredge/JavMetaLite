@@ -16,7 +16,7 @@ internal static partial class Program
     private static void TestBatchSourceRoutingUi()
     {
         // Exercise the actual queue button with fake HTTP transports, not just the coordinator.
-        var window = new MainWindow();
+        var window = new MainWindow(TestPreferences());
         using var libreHandler = new RoutingHandler();
         using var r18Handler = new RoutingHandler();
         using var javHandler = new RoutingHandler();
@@ -77,7 +77,8 @@ internal static partial class Program
             {
                 throw new InvalidOperationException("Retired automatic sources are still exposed.");
             }
-            ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SetQueueOpen(window, true);
+
             var many = Add(71);
             Search("libredmm", many, changedModeDuringRun: "r18dev");
             if (libreHandler.Calls != 71 || r18Handler.Calls != 0 || javHandler.Calls != 0 ||
@@ -85,32 +86,39 @@ internal static partial class Program
             {
                 throw new InvalidOperationException("71-movie LibreDMM UI search contacted an unselected source or reported partial success.");
             }
-            var r18Jobs = Add(2);
-            Search("r18dev", r18Jobs);
-            if (libreHandler.Calls != 71 || r18Handler.Calls != 2) throw new InvalidOperationException("R18-only queue searched LibreDMM.");
-            var defaultCustomJobs = Add(2);
-            Search("custom", defaultCustomJobs);
+            var checkedMovies = many[..2];
+            foreach (var job in many.Skip(2)) job.IsSelectedForBatch = false;
+            WaitForCondition(() => search.IsEnabled &&
+                Equals(search.Content, LocalizationService.Get("Desk.SearchCheckedCount", 2)),
+                "Completed checked movies disappeared from the batch count.");
+            Search("r18dev", checkedMovies);
+            if (libreHandler.Calls != 71 || r18Handler.Calls != 2 ||
+                checkedMovies.Any(job => job.Metadata.Title != "R18 fixture") ||
+                many.Skip(2).Any(job => job.Metadata.Title != "Libre fixture"))
+                throw new InvalidOperationException("Repeat lookup did not apply R18 only to the checked movies.");
+            foreach (var job in checkedMovies)
+            {
+                if (job.MetadataReview.GetCandidates(MetadataField.Title).Count != 2 ||
+                    !job.MetadataReview.SelectCandidate(MetadataField.Title, "libredmm") || job.Metadata.Title != "Libre fixture" ||
+                    !job.MetadataReview.SelectCandidate(MetadataField.Title, "r18dev") || job.Metadata.Title != "R18 fixture")
+                    throw new InvalidOperationException("The previous provider was lost after a second single-source lookup.");
+            }
+            Search("custom", checkedMovies);
             if (libreHandler.Calls != 73 || r18Handler.Calls != 4) throw new InvalidOperationException("Custom queue did not request both sources.");
             typeof(MainWindow).GetField("_customSourceProfile", flags)!.SetValue(window,
                 new MetadataSourcePreferenceProfile { TitleSource = "r18dev" });
-            var customJobs = Add(2);
-            Search("custom", customJobs);
-            if (libreHandler.Calls != 75 || r18Handler.Calls != 6 || customJobs.Any(job => job.Metadata.Title != "R18 fixture"))
+            Search("custom", checkedMovies);
+            if (libreHandler.Calls != 75 || r18Handler.Calls != 6 || checkedMovies.Any(job => job.Metadata.Title != "R18 fixture"))
             {
                 throw new InvalidOperationException("Custom queue routing or preferred field selection failed.");
             }
 
-            var manualJob = Add(1)[0];
-            Select("manual");
-            if (search.IsEnabled) throw new InvalidOperationException("Manual mode enables automatic queue search.");
-            search.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); // Guard even programmatic invocation.
-            if (manualJob.SearchState != MovieSearchState.Searchable || libreHandler.Calls != 75 || r18Handler.Calls != 6)
-                throw new InvalidOperationException("Manual mode changed a queue item or made network requests.");
-
+            if (source.Items.OfType<ComboBoxItem>().Any(item => Equals(item.Tag, "manual")))
+                throw new InvalidOperationException("Manual-only source is still visible.");
             // Previous R18 failures cannot be silently retried after selecting LibreDMM.
             var failed = new MetadataSourceSearchAttempt("r18dev", "R18.dev", TimeSpan.Zero, null,
                 new MetadataSourceRateLimitException(DateTimeOffset.UtcNow.AddMinutes(1)), 0);
-            var prior = many[0].LastSearchAttempts[0];
+            var prior = many[0].LastSearchAttempts.Single(attempt => attempt.SourceName == "libredmm");
             many[0].ApplyOnlineSources(prior.Metadata!, [prior.Metadata!], [prior, failed]);
             Select("libredmm");
             if (retry.Visibility != Visibility.Collapsed) throw new InvalidOperationException("DMM-only mode offers automatic R18 retry.");
@@ -124,13 +132,10 @@ internal static partial class Program
 
             var active = (MovieJob)typeof(MainWindow).GetField("_activeJob", flags)!.GetValue(window)!;
             active.Metadata.Id = "IPX-999";
-            Select("manual");
-            var browser = (Button)window.FindName("BrowserImportButton");
-            browser.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            if (browser.ContextMenu?.Items.OfType<MenuItem>().Select(item => item.Tag).OfType<BrowserImportTarget>()
-                .Any(target => target.SourceName == "javlibrary") != true)
+            var websites = OpenManualWebsites(window);
+            if (!websites.Any(item => Equals(item.Tag, "javlibrary")))
                 throw new InvalidOperationException("Manual current-movie JAVLibrary lookup disappeared.");
-            browser.ContextMenu.IsOpen = false;
+            source.IsDropDownOpen = false;
             active.ApplyManualWebSource(new MovieMetadata { Id = active.Metadata.Id, Rating = "8.5", SourceName = "javlibrary", SourceDisplayName = "JAVLibrary" });
             if (active.Metadata.Rating != "8.5" || queue.Cast<MovieJob>().Where(job => !ReferenceEquals(job, active)).Any(job => job.Metadata.Rating == "8.5"))
                 throw new InvalidOperationException("Manual JAVLibrary import affected more than the current movie.");
@@ -141,54 +146,73 @@ internal static partial class Program
                 "Current-movie LibreDMM search did not complete.");
             if (libreHandler.Calls != 76 || r18Handler.Calls != 7 || active.LastSearchAttempts.Count != 1)
                 throw new InvalidOperationException("Single-movie and batch source routing disagree.");
-            Select("manual");
-            ((Button)window.FindName("SearchButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            if (libreHandler.Calls != 76 || r18Handler.Calls != 7 || javHandler.Calls != 0)
-                throw new InvalidOperationException("Manual single-movie action made automatic requests.");
-            typeof(MainWindow).GetMethod("ApplyPreferences", flags)!.Invoke(window,
-                [new AppPreferences { RememberSavePreferences = true, SearchSourceMode = "javlibrary" }]);
-            if ((source.SelectedItem as ComboBoxItem)?.Tag?.ToString() != "manual" || search.IsEnabled)
-                throw new InvalidOperationException("Legacy JAVLibrary preference did not migrate to safe manual mode.");
+            ClickWorkspaceButton(window, "EditReviewButton");
+            var rating = (Button)window.FindName("RatingSourceText");
+            if (!rating.IsVisible || !rating.IsEnabled || active.MetadataReview.GetCandidates(MetadataField.Rating).Count != 1)
+                throw new InvalidOperationException("A prior source with a rating cannot be chosen on an empty field.");
+            rating.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var choice = rating.ContextMenu.Items.OfType<MenuItem>().Single();
+            choice.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            rating.ContextMenu.IsOpen = false;
+            if (active.Metadata.Rating != "8.5" || active.Metadata.Title != "Libre fixture")
+                throw new InvalidOperationException("Choosing an alternate rating changed unrelated fields.");
+            ClickWorkspaceButton(window, "FinishEditButton");
+            foreach (var oldMode in new[] { "manual", "javlibrary" })
+            {
+                typeof(MainWindow).GetMethod("ApplyPreferences", flags)!.Invoke(window,
+                    [new AppPreferences { RememberSavePreferences = true, SearchSourceMode = oldMode }]);
+                if ((source.SelectedItem as ComboBoxItem)?.Tag?.ToString() != "libredmm")
+                    throw new InvalidOperationException("Retired source preference did not resolve to LibreDMM.");
+            }
             typeof(MainWindow).GetMethod("ApplyPreferences", flags)!.Invoke(window,
                 [new AppPreferences { RememberSavePreferences = true, SearchSourceMode = "auto" }]);
             if ((source.SelectedItem as ComboBoxItem)?.Tag?.ToString() != "libredmm")
                 throw new InvalidOperationException("Legacy Auto preference did not migrate to LibreDMM.");
 
-            var hint = (TextBlock)window.FindName("BatchSourceHint");
-            var toolbar = (Grid)window.FindName("SearchToolbarLayout");
-            var selector = (Grid)window.FindName("SourceSelectorHost");
+            var batchSearch = (Button)window.FindName("SearchQueueButton");
             var language = (ComboBox)window.FindName("LanguageComboBox");
             window.Width = 930;
             window.Height = 650;
             foreach (var code in UiLanguageCodes.Supported)
             {
                 language.SelectedItem = language.Items.OfType<ComboBoxItem>().Single(item => item.Tag?.ToString() == code);
-                foreach (var mode in MetadataSearchSourceModes.Supported)
+                foreach (var mode in new[] { "libredmm", "r18dev", "custom" })
                 {
                     Select(mode);
                     window.UpdateLayout();
-                    if (mode == "manual")
-                    {
-                        if (hint.Visibility != Visibility.Collapsed) throw new InvalidOperationException("Manual mode shows an automatic batch warning.");
-                        continue;
-                    }
-                    if (hint.Visibility != Visibility.Visible || string.IsNullOrWhiteSpace(hint.Text) ||
-                        !hint.Text.Contains("LibreDMM") || !hint.Text.Contains("R18") ||
-                        hint.TranslatePoint(new Point(0, 0), toolbar).Y < selector.TranslatePoint(new Point(0, selector.ActualHeight), toolbar).Y ||
-                        hint.TranslatePoint(new Point(hint.ActualWidth, hint.ActualHeight), toolbar).X > toolbar.ActualWidth + 1 ||
-                        hint.TranslatePoint(new Point(hint.ActualWidth, hint.ActualHeight), toolbar).Y > toolbar.ActualHeight + 1)
-                        throw new InvalidOperationException($"Batch hint is missing, overlapping or clipped: {code}/{mode}.");
-                    var expectedBrush = window.FindResource(mode == "libredmm" ? "MutedBrush" : "BatchSourceWarningBrush");
-                    if (!ReferenceEquals(hint.Foreground, expectedBrush)) throw new InvalidOperationException("Batch hint warning emphasis is incorrect.");
+                    var hint = LocalizationService.Get(mode == "libredmm" ? "Main.BatchSource.DmmHint" : "Main.BatchSource.R18Hint");
+                    if (batchSearch.ToolTip?.ToString()?.Contains(hint) != true)
+                        throw new InvalidOperationException($"Batch source tooltip missing: {code}/{mode}.");
                 }
             }
             Select("r18dev");
-            ((RadioButton)window.FindName("SingleModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SetQueueOpen(window, false);
             window.UpdateLayout();
-            if (hint.Visibility != Visibility.Collapsed) throw new InvalidOperationException("Single-movie mode displays batch-only warning.");
+
             if (libreHandler.Calls != 76 || r18Handler.Calls != 7 || javHandler.Calls != 0)
                 throw new InvalidOperationException("Source/language changes triggered unintended searches.");
-            Console.WriteLine("UI PASS queueSourceRouting=True libre71R18Zero=True sourceSnapshot=True r18Only=True customBoth=True singleSourceParity=True manualNoRequests=True retryScope=True javLibraryManualOnly=True legacySourceMigration=True dmmDefault=True autoRetired=True batchHintsFourLanguages=True compactHintLayout=True");
+            // Editing the ID must initiate just this lookup, even with a checked batch and a previous result.
+            ((TextBox)window.FindName("IdTextBox")).Text = "IPX-812";
+            Select("libredmm");
+            r18Handler.Hold = true;
+            websites = OpenManualWebsites(window);
+            if (r18Handler.HeldRequest is not null || libreHandler.Calls != 76)
+                throw new InvalidOperationException("Opening manual search made an automatic request.");
+            var site = websites.Single(item => Equals(item.Tag, "r18dev"));
+            var requested = string.Empty;
+            InteractWithModal<BrowserWindow>(window, () => site.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)), browser =>
+            {
+                if (source.IsDropDownOpen || ((StackPanel)window.FindName("ManualWebsiteChoices")).IsVisible)
+                    throw new InvalidOperationException("Choosing a website did not close the source menu.");
+                WaitForCondition(() => r18Handler.HeldRequest is not null, "Manual search did not request the current ID.");
+                requested = r18Handler.HeldRequest!.AbsoluteUri;
+                browser.Close();
+            });
+            WaitForCondition(() => r18Handler.HeldRequestCanceled, "Closing the browser left its lookup running.");
+            if (!requested.Contains("812", StringComparison.Ordinal) || !Equals(((ComboBoxItem)source.SelectedItem).Tag, "libredmm") ||
+                libreHandler.Calls != 76 || r18Handler.Calls != 8 || javHandler.Calls != 0)
+                throw new InvalidOperationException("Manual search opened a chooser, reused an old ID or searched the batch.");
+            Console.WriteLine("UI PASS queueSourceRouting=True requeryCheckedAcrossSources=True libre71R18Zero=True sourceSnapshot=True r18Only=True customBoth=True singleSourceParity=True manualSourceRemoved=True retryScope=True javLibraryManualOnly=True legacySourceMigration=True dmmDefault=True autoRetired=True batchHintsFourLanguages=True compactHintLayout=True manualSearchUsesCurrentId=True");
         }
         finally
         {
@@ -200,10 +224,19 @@ internal static partial class Program
     private sealed class RoutingHandler : HttpMessageHandler
     {
         private int _calls;
+        public bool Hold { get; set; }
+        public Uri? HeldRequest { get; private set; }
+        public bool HeldRequestCanceled { get; private set; }
         public int Calls => Volatile.Read(ref _calls);
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _calls);
+            if (Hold)
+            {
+                HeldRequest = request.RequestUri;
+                try { await Task.Delay(Timeout.Infinite, cancellationToken); }
+                finally { HeldRequestCanceled = cancellationToken.IsCancellationRequested; }
+            }
             await Task.Delay(2, cancellationToken);
             var uri = request.RequestUri!;
             var body = uri.Host switch

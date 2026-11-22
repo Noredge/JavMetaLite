@@ -1,15 +1,19 @@
+using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using JavMetaLite.Core.Models;
 using JavMetaLite.Core.Services;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 
 namespace JavMetaLite.App;
 
 public partial class BrowserWindow : Window
 {
     private readonly BrowserImportTarget _target;
+    private readonly IMetadataProvider? _lookupProvider;
+    private readonly CancellationTokenSource _windowLifetime = new();
     private bool _returningToR18SearchHome;
 
     public BrowserWindow(string initialUrl)
@@ -21,12 +25,22 @@ public partial class BrowserWindow : Window
     {
     }
 
-    public BrowserWindow(BrowserImportTarget target)
+    public BrowserWindow(BrowserImportTarget target, IMetadataProvider? lookupProvider = null)
+        : this(target, Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), lookupProvider)
+    {
+    }
+
+    internal BrowserWindow(BrowserImportTarget target, string localAppData, IMetadataProvider? lookupProvider = null)
     {
         ArgumentNullException.ThrowIfNull(target);
         InitializeComponent();
-        WindowVisualTheme.ApplyDarkTitleBar(this);
+        Browser.CreationProperties = new CoreWebView2CreationProperties
+        {
+            UserDataFolder = Path.Combine(localAppData, "JavMetaLite", "WebView2")
+        };
+        WindowVisualTheme.Attach(this);
         _target = target;
+        _lookupProvider = lookupProvider;
         Title = LocalizationService.Get("Browser.SourceTitle", target.DisplayName);
         BrowserInstruction.Text = LocalizationService.Get("Browser.SourceInstruction", target.DisplayName);
         if (target.SourceName == MetadataSourcePreferenceProfile.R18Dev)
@@ -34,6 +48,12 @@ public partial class BrowserWindow : Window
             ImportButton.IsEnabled = false;
         }
         Loaded += BrowserWindow_Loaded;
+        Closed += (_, _) =>
+        {
+            _windowLifetime.Cancel();
+            Browser.Dispose();
+            _windowLifetime.Dispose();
+        };
     }
 
     public string? PageHtml { get; private set; }
@@ -44,16 +64,35 @@ public partial class BrowserWindow : Window
 
     private async void BrowserWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        Loaded -= BrowserWindow_Loaded;
+        var token = _windowLifetime.Token;
         try
         {
+            var destination = _target;
+            if (_lookupProvider is not null && BrowserImportRouting.RequiresProviderResolution(_target))
+            {
+                UrlText.Text = LocalizationService.Get("Status.LocatingBrowserPage", _target.DisplayName);
+                try
+                {
+                    destination = await BrowserImportRouting.ResolveWithProviderAsync(_target, _lookupProvider, token);
+                }
+                catch (Exception error) when (!token.IsCancellationRequested)
+                {
+                    AppLog.Warning($"手动搜索使用网站查询页 source={_target.SourceName}", error);
+                }
+            }
+            if (token.IsCancellationRequested) return;
+            UrlText.Text = destination.InitialUrl;
             await Browser.EnsureCoreWebView2Async();
+            if (!IsLoaded) return;
             Browser.CoreWebView2.Settings.AreDevToolsEnabled = false;
             Browser.CoreWebView2.Settings.IsStatusBarEnabled = true;
-            Browser.Source = new Uri(_target.InitialUrl);
-            UrlText.Text = _target.InitialUrl;
+            Browser.Source = new Uri(destination.InitialUrl);
         }
         catch (Exception exception)
         {
+            if (token.IsCancellationRequested || !IsLoaded) return;
+            AppLog.Warning($"内置浏览器启动失败 source={_target.SourceName}", exception);
             MessageBox.Show(this,
                 LocalizationService.Get("Browser.StartFailed", exception.Message).Replace("\\n", Environment.NewLine),
                 "JAV Metadata Lite",

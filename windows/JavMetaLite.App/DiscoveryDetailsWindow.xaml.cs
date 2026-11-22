@@ -9,7 +9,7 @@ public partial class DiscoveryDetailsWindow : Window
         InitializeComponent();
         DetailsText.Text = details;
         if (title is not null) { Title = title; HeadingText.Text = title; }
-        WindowVisualTheme.ApplyDarkTitleBar(this);
+        WindowVisualTheme.Attach(this);
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();

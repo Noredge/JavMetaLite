@@ -77,7 +77,7 @@ internal static partial class Program
         var normal = loaded.Single(item => item.Job!.Metadata.Id == "TNY-002").Job!;
         try
         {
-            ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SetQueueOpen(window, true);
             var queue = (IList)typeof(MainWindow).GetField("_movieQueue", PrivateInstance)!.GetValue(window)!;
             foreach (var item in loaded)
             {
@@ -106,7 +106,7 @@ internal static partial class Program
                 var badge = FindVisualChildren<Border>(row).Single(b => b.Name == "QueueReviewBadge");
                 var text = FindVisualChildren<TextBlock>(badge).Single();
                 CoverAssert(text.Text == LocalizationService.Get("Queue.Search.NeedsReview") &&
-                    text.Foreground is SolidColorBrush brush && brush.Color == Color.FromRgb(255, 183, 77),
+                    text.Foreground is SolidColorBrush brush && brush.Color == ((SolidColorBrush)window.FindResource("BatchSourceWarningBrush")).Color,
                     "Local searchable movie must display yellow review status: " + code);
                 CoverAssert(!FindVisualChildren<TextBlock>(row).Any(t => t.Text.Contains("147")) && FitsInside(badge, row),
                     "Queue leaks dimensions or clips the review label: " + code);

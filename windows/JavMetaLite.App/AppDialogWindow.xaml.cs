@@ -35,7 +35,7 @@ public partial class AppDialogWindow : Window
                 ConfirmButton.Focus();
             }
         };
-        WindowVisualTheme.ApplyDarkTitleBar(this);
+        WindowVisualTheme.Attach(this);
     }
 
     private void Confirm_Click(object sender, RoutedEventArgs e) => DialogResult = true;

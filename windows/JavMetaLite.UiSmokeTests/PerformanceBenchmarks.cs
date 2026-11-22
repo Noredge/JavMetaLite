@@ -54,7 +54,7 @@ internal static partial class Program
                     var paths = searchOnly ? [] : await Task.Run(() => CreatePerformanceFixtures(root, count, artwork));
                     for (var iteration = 1; iteration <= repetitions; iteration++)
                     {
-                        var window = new MainWindow { ShowActivated = false, ShowInTaskbar = false };
+                        var window = new MainWindow(TestPreferences()) { ShowActivated = false, ShowInTaskbar = false };
                         window.Show();
                         window.UpdateLayout();
                         var queue = (IList)typeof(MainWindow).GetField("_movieQueue", PrivateInstance)!.GetValue(window)!;
@@ -65,7 +65,7 @@ internal static partial class Program
                         {
                             if (searchOnly)
                             {
-                                ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                                SetQueueOpen(window, true);
                                 var attach = typeof(MainWindow).GetMethod("AttachMovieJob", PrivateInstance)!;
                                 for (var n = 1; n <= count; n++)
                                 {

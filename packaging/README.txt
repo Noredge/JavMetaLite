@@ -3,7 +3,7 @@ JavMetaLite v{VERSION}
 
 [English]
 1. Extract the archive and run JavMetaLite.exe; no separate .NET Runtime is required.
-2. Choose or drop movies/folders. Use Batch workflow for multiple movies or recursive folder discovery.
+2. Use Add movies to select videos and folders together, or drop them onto the workspace. Subfolders are included. The sidebar icon toggles the queue. Use the checkboxes or the selection menu to choose movies.
 3. Verify IDs and choose a source. LibreDMM is the recommended default; R18 may be slower due to rate limits. Custom queries both. JAVLibrary is manual web lookup only.
 4. Review text, artwork, outputs and destination as needed. Opening every movie preview is optional.
 5. Inspect the save preview and confirm any existing-metadata replacement. Movie saves run in order and stop on the first failure or cancellation.
@@ -14,7 +14,7 @@ Back up important media. If recovery fails, keep the reported recovery folder an
 
 [简体中文]
 1. 解压后运行 JavMetaLite.exe；无需另装 .NET Runtime。
-2. 选择或拖入影片／文件夹；多部影片或递归扫描可使用批量处理。
+2. 点击“添加影片”可同时勾选影片和文件夹，也可一起拖入工作区。子文件夹中的影片会一并加入。点击侧栏图标收起或展开队列，在队列中直接勾选影片，或按识别状态选择。
 3. 检查番号与来源。默认推荐 LibreDMM；R18 可能因限流较慢；自定义会查询两者。JAVLibrary 仅手动网页查询。
 4. 按需检查文字、图片、输出及目标位置，不必打开每部影片的预览。
 5. 检查保存前预览并确认已有资料覆盖；影片逐部保存，首次失败或取消即停止。
@@ -25,7 +25,7 @@ Back up important media. If recovery fails, keep the reported recovery folder an
 
 [繁體中文]
 1. 解壓縮後執行 JavMetaLite.exe；無需另裝 .NET Runtime。
-2. 選取或拖入影片／資料夾；多部影片或遞迴掃描可使用批次處理。
+2. 點選「加入影片」可同時勾選影片與資料夾，也可一起拖入工作區。子資料夾中的影片會一併加入。點選側欄圖示可收合或展開佇列，在佇列中直接勾選影片，或依辨識狀態選取。
 3. 檢查番號與來源。預設建議 LibreDMM；R18 可能因限流較慢；自訂會查詢兩者。JAVLibrary 僅供手動網頁查詢。
 4. 視需要檢查文字、圖片、輸出與目標位置，不必開啟每部影片的預覽。
 5. 檢查儲存前預覽並確認已有資料覆寫；影片逐部儲存，首次失敗或取消即停止。
@@ -36,7 +36,7 @@ Back up important media. If recovery fails, keep the reported recovery folder an
 
 [日本語]
 1. ZIP を展開して JavMetaLite.exe を実行します。.NET Runtime の別途インストールは不要です。
-2. 動画やフォルダーを選択またはドロップします。複数動画や再帰スキャンには一括処理を使用できます。
+2. 追加画面で動画とフォルダーをまとめて選択するか、作業画面にドロップします。サブフォルダー内の動画も含まれます。サイドバーアイコンでキューを開閉し、チェックボックスや選択メニューで対象を選びます。
 3. 品番と取得元を確認します。標準は LibreDMM を推奨。R18 はレート制限で遅くなる場合があります。カスタムは両方に問い合わせます。JAVLibrary は手動 Web 検索のみです。
 4. テキスト、画像、出力と保存先を必要に応じて確認します。全動画のプレビュー表示は不要です。
 5. 保存前プレビューと既存情報の上書きを確認します。動画は順番に保存し、最初の失敗またはキャンセルで停止します。

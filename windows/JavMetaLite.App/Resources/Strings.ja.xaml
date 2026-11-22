@@ -12,15 +12,15 @@
     <sys:String x:Key="Status.RecentRootRemoved">現在のフォルダーを履歴から削除しました。入力中のパスは変更されません</sys:String><sys:String x:Key="Status.RecentRootsCleared">最近の保存先を消去しました。入力中のパスは変更されません</sys:String><sys:String x:Key="Status.CustomRootUnavailable">指定した保存先ルートを利用できません：{0}。再接続するか別のフォルダーを選択してください。ルートは自動作成されません。</sys:String><sys:String x:Key="Status.LocalNfoUnsafe">ローカル NFO を安全に読み込めません。修復または移動してから動画を選び直してください</sys:String><sys:String x:Key="Status.NfoPreserveUnknown">保存時は管理対象の項目だけを更新し、不明な XML を保持します</sys:String><sys:String x:Key="Status.NfoManagedOnly">保存時は管理対象の項目だけを更新します</sys:String><sys:String x:Key="Status.LocalCheckFailed">動画の横にあるローカルファイルを確認できません：{0}</sys:String><sys:String x:Key="Status.IdRecognized">品番 {0} を認識しました。同名のローカル NFO はないため検索できます</sys:String><sys:String x:Key="Status.NoLocalNfoOrId">同名のローカル NFO がなく、ファイル名から品番を認識できません。手動で入力してください</sys:String><sys:String x:Key="Status.LocalNfoLoaded">ローカル NFO を読み込みました（安全に更新可能）：{0}{1}</sys:String><sys:String x:Key="Status.LocalNfoFailed">ローカル NFO を検出しましたが安全に読み込めません。元ファイルは変更していません：{0}、{1}</sys:String>
     <sys:String x:Key="Status.InvalidLocalImages">無効なローカル画像 {0} 件を無視しました（ログ参照）</sys:String><sys:String x:Key="Status.InvalidImagesSuffix">、無効な画像 {0} 件を無視</sys:String><sys:String x:Key="Status.PreviewIncomplete">、プレビューの読み込みが不完全です</sys:String><sys:String x:Key="Status.LocalImagesLoaded">ローカル画像を読み込みました（{0}）{1}{2}</sys:String><sys:String x:Key="Status.OnlyPoster">ポスターのみ、ファンアートなし</sys:String><sys:String x:Key="Status.OnlyFanart">ファンアートのみ、ポスターなし</sys:String><sys:String x:Key="Status.NoArtwork">利用可能な画像なし</sys:String><sys:String x:Key="Status.ReadingBrowser">ブラウザーから情報を読み込み中…</sys:String><sys:String x:Key="Status.LocalCandidateSuffix">。各項目はローカル NFO に戻せます</sys:String><sys:String x:Key="Status.BrowserLoaded">ブラウザーから {0} の新しい情報を読み込みました{1}</sys:String><sys:String x:Key="Status.FieldSourceChanged">「{0}」を {1} に切り替えました</sys:String><sys:String x:Key="Status.LoadingCover">{0} のジャケットを読み込み中…</sys:String><sys:String x:Key="Status.CoverChanged">ジャケットとファンアートを {0} に切り替えました</sys:String><sys:String x:Key="Status.CoverIncomplete">{0} のジャケットプレビューが不完全です。必要に応じて別のソースを選択してください</sys:String><sys:String x:Key="Status.ReadingLocalCover">ローカルの見開きジャケットを読み込み中…</sys:String><sys:String x:Key="Status.LocalCoverSelected">ローカルの見開きジャケットを選択しました：{0}。ポスターとファンアートは同じソースから生成されます</sys:String><sys:String x:Key="Status.OperationCanceled">処理をキャンセルし、未完了のファイル操作を安全に復元しました</sys:String><sys:String x:Key="Status.Canceling">キャンセルしてファイルを復元中です。しばらくお待ちください…</sys:String><sys:String x:Key="Status.LogDirectory">ログフォルダー：{0}</sys:String>
     <sys:String x:Key="Error.EnterId">先に品番を入力してください。</sys:String><sys:String x:Key="Error.SelectVideo">先に動画ファイルを選択してください。</sys:String><sys:String x:Key="Error.LocalNfoBlocked">ローカル NFO を安全に読み込めません。元ファイルを保護するため、その NFO を修復または移動して動画を選び直すまで保存できません。</sys:String><sys:String x:Key="Error.UnsupportedVideo">対応している動画ファイルを選択してください。</sys:String><sys:String x:Key="Error.OpenLogs">ログフォルダーを開けません：{0}</sys:String><sys:String x:Key="Error.StartupNoPath">起動時に読み込み可能な動画パスが指定されていません。</sys:String><sys:String x:Key="Error.StartupUnreadable">起動時に指定された動画パスを読み込めません。</sys:String>
-    <sys:String x:Key="Artwork.Select">ジャケットを選択…</sys:String><sys:String x:Key="Artwork.SelectTooltip">ローカルの見開きジャケット1枚からポスターとファンアートを生成します</sys:String><sys:String x:Key="Artwork.SourceTooltip">既存のジャケット候補 {0} 件から選ぶか、ローカル画像を選択します</sys:String><sys:String x:Key="Artwork.SourceFieldTooltip">「{0}」の情報ソースを選択します（候補 {1} 件）</sys:String><sys:String x:Key="Artwork.Source">ソース：{0}</sys:String><sys:String x:Key="Artwork.Pair">既存のポスター + ファンアート</sys:String><sys:String x:Key="Artwork.PosterOnly">既存のポスター、ファンアートなし</sys:String><sys:String x:Key="Artwork.FanartOnly">既存のファンアート、ポスターなし</sys:String><sys:String x:Key="Artwork.NoLocal">利用可能なローカル画像なし</sys:String><sys:String x:Key="Artwork.LocalComplete">ローカルの見開きジャケット · ポスター / ファンアートを同時生成</sys:String><sys:String x:Key="Artwork.SharedCount">ポスター / ファンアート共用 · ジャケット URL {0} 件</sys:String><sys:String x:Key="Artwork.Shared">ポスター / ファンアートがこの見開きジャケットを共用</sys:String><sys:String x:Key="Artwork.ManualSource">手動ジャケット</sys:String><sys:String x:Key="Artwork.Role.Poster">ポスター</sys:String><sys:String x:Key="Artwork.Role.Fanart">ファンアート</sys:String><sys:String x:Key="Source.Manual">手動編集</sys:String><sys:String x:Key="Source.LocalNfo">ローカル NFO</sys:String><sys:String x:Key="Source.LocalImages">ローカル画像</sys:String><sys:String x:Key="Source.Unknown">不明なソース</sys:String><sys:String x:Key="Artwork.Dimensions">横長ジャケット：{0}×{1}</sys:String><sys:String x:Key="Error.LocalCoverPreview">ローカルの見開きジャケットからポスターとファンアートの両方をプレビューできません。</sys:String><sys:String x:Key="Error.ImageTooSmall">画像データが小さすぎます。</sys:String><sys:String x:Key="Error.PreviewDownload">画像プレビューのダウンロードに失敗しました。</sys:String><sys:String x:Key="App.StartFailed">JAV Metadata Lite を起動できませんでした。&#10;&#10;エラーログ：{0}&#10;&#10;{1}</sys:String>
+    <sys:String x:Key="Artwork.Select">ジャケットを選択…</sys:String><sys:String x:Key="Artwork.SelectTooltip">ローカルの見開きジャケット1枚からポスターとファンアートを生成します</sys:String><sys:String x:Key="Artwork.SourceTooltip">既存のジャケット候補 {0} 件から選ぶか、ローカル画像を選択します</sys:String><sys:String x:Key="Artwork.SourceFieldTooltip">「{0}」の情報ソースを選択します（候補 {1} 件）</sys:String><sys:String x:Key="Artwork.Source">ソース：{0}</sys:String><sys:String x:Key="Artwork.Pair">既存のポスター + ファンアート</sys:String><sys:String x:Key="Artwork.PosterOnly">既存のポスター、ファンアートなし</sys:String><sys:String x:Key="Artwork.FanartOnly">既存のファンアート、ポスターなし</sys:String><sys:String x:Key="Artwork.NoLocal">利用可能なローカル画像なし</sys:String><sys:String x:Key="Artwork.LocalComplete">ローカルの見開きジャケット · ポスター / ファンアートを同時生成</sys:String><sys:String x:Key="Artwork.SharedCount">ポスター / ファンアート共用 · ジャケット URL {0} 件</sys:String><sys:String x:Key="Artwork.Shared">ポスター / ファンアートがこの見開きジャケットを共用</sys:String><sys:String x:Key="Artwork.ManualSource">手動ジャケット</sys:String><sys:String x:Key="Artwork.Role.Poster">ポスター</sys:String><sys:String x:Key="Artwork.Role.Fanart">ファンアート</sys:String><sys:String x:Key="Source.Manual">手動編集</sys:String><sys:String x:Key="Source.LocalNfo">ローカル NFO</sys:String><sys:String x:Key="Source.LocalImages">ローカル画像</sys:String><sys:String x:Key="Source.Unknown">不明なソース</sys:String><sys:String x:Key="Artwork.Dimensions">{0}×{1}</sys:String><sys:String x:Key="Error.LocalCoverPreview">ローカルの見開きジャケットからポスターとファンアートの両方をプレビューできません。</sys:String><sys:String x:Key="Error.ImageTooSmall">画像データが小さすぎます。</sys:String><sys:String x:Key="Error.PreviewDownload">画像プレビューのダウンロードに失敗しました。</sys:String><sys:String x:Key="App.StartFailed">JAV Metadata Lite を起動できませんでした。&#10;&#10;エラーログ：{0}&#10;&#10;{1}</sys:String>
     <sys:String x:Key="Status.SettingsFallback">設定を読み込めないため、安全な初期値を使用しています</sys:String>
     <sys:String x:Key="Status.SettingsFuture">新しいバージョンの設定です。安全な初期値を使用し、元の設定ファイルは上書きしません</sys:String>
     <sys:String x:Key="Dialog.VideoFilter">動画ファイル|*.mp4;*.m4v;*.mkv;*.avi;*.wmv;*.mov;*.webm;*.ts;*.m2ts|すべてのファイル|*.*</sys:String>
     <sys:String x:Key="Preview.Description.CreateFolder">品番フォルダーを作成</sys:String><sys:String x:Key="Preview.Description.MoveVideo">動画を移動</sys:String><sys:String x:Key="Preview.Description.RenameVideo">動画名を変更</sys:String><sys:String x:Key="Preview.Description.MoveAndRename">動画を移動して名前を変更</sys:String><sys:String x:Key="Preview.Description.CopyVerify">動画を安全にコピーして検証後、元ファイルを削除</sys:String><sys:String x:Key="Preview.Description.GenerateNfo">NFO を生成</sys:String><sys:String x:Key="Preview.Description.OverwriteNfo">NFO を上書き</sys:String><sys:String x:Key="Preview.Description.UpdateNfo">NFO を更新</sys:String><sys:String x:Key="Preview.Description.UpdateNfoPreserve">NFO を更新（不明な XML を保持）</sys:String><sys:String x:Key="Preview.Description.KeepNfo">NFO の内容を変更しない</sys:String><sys:String x:Key="Preview.Description.GenerateArtwork">{0} を生成</sys:String><sys:String x:Key="Preview.Description.ReplaceArtwork">{0} を置換</sys:String><sys:String x:Key="Preview.Description.KeepArtwork">{0} を変更しない</sys:String><sys:String x:Key="Preview.Description.MissingArtwork">ローカル {0} は存在しないため、そのまま保持</sys:String><sys:String x:Key="Preview.Description.Migrate">{0} を維持して移行</sys:String><sys:String x:Key="Preview.Description.GenerateStill">スチル画像を生成</sys:String><sys:String x:Key="Preview.Description.ReplaceStill">スチル画像を置換</sys:String><sys:String x:Key="Preview.Description.RemoveStill">選択されていないローカル画像を削除</sys:String><sys:String x:Key="Preview.Conflict.CustomRootFile">保存先ルートのパスがファイルによって使用されています：{0}</sys:String><sys:String x:Key="Preview.Conflict.CustomRootUnavailable">保存先ルートを利用できず、自動作成もされません：{0}</sys:String><sys:String x:Key="Preview.Conflict.TargetFolderFile">保存先フォルダーのパスがファイルによって使用されています：{0}</sys:String><sys:String x:Key="Preview.Conflict.TargetMovieExists">保存先動画が既に存在するため上書きしません：{0}</sys:String><sys:String x:Key="Progress.Preparing">メタデータと安全な処理を準備中…</sys:String><sys:String x:Key="Progress.Copying">動画を保存先の一時領域へコピー中…</sys:String><sys:String x:Key="Progress.CopyingPercent">動画を保存先の一時領域へコピー中… {0}%</sys:String><sys:String x:Key="Progress.Verifying">保存先動画の SHA-256 を検証中…</sys:String><sys:String x:Key="Progress.VerifyingPercent">保存先動画の SHA-256 を検証中… {0}%</sys:String><sys:String x:Key="Progress.Committing">保存先動画とメタデータを反映中…</sys:String><sys:String x:Key="Progress.RetiringSource">保存先の検証と反映が完了しました。元動画を削除中…</sys:String><sys:String x:Key="Progress.Completed">安全な保存が完了しました</sys:String>
     <sys:String x:Key="Error.SourceTimeout">{0} が {1:0} 秒以内に応答しませんでした。後でもう一度試すか、別のソースを選択してください。</sys:String>
-    <sys:String x:Key="Main.SkipCrossVolumeVerification">ドライブ間の SHA-256 検証を省略（高速・自己責任）</sys:String>
+    <sys:String x:Key="Main.SkipCrossVolumeVerification">ドライブ間の SHA-256 検証を省略</sys:String>
     <sys:String x:Key="Main.SkipCrossVolumeVerificationTooltip">コピー完了とファイルサイズのみを確認し、動画内容の完全一致は検証しません</sys:String>
-    <sys:String x:Key="Main.FastCopy">転送方法：高速なドライブ間コピー（サイズ確認のみ・自己責任）</sys:String>
+    <sys:String x:Key="Main.FastCopy">転送方法：高速なドライブ間コピー、サイズのみ確認</sys:String>
     <sys:String x:Key="Preview.Action.CopyFast">高速コピー</sys:String>
     <sys:String x:Key="Preview.Description.CopyFast">動画を高速コピーします。サイズのみ確認し、内容は検証せず、成功後に元ファイルを削除します</sys:String>
     <sys:String x:Key="Progress.RetiringSourceFast">保存先へのコピーと反映が完了しました。元動画を削除中…</sys:String>
@@ -44,7 +44,7 @@
     <sys:String x:Key="Discovery.ViewDetails">詳細を表示</sys:String>
     <sys:String x:Key="Discovery.DetailsTitle">スキャンの詳細</sys:String>
     <sys:String x:Key="Discovery.Failed">フォルダーの検出に失敗しました：{0}</sys:String>
-    <sys:String x:Key="Discovery.AddFound">検出した動画を追加</sys:String>
+    <sys:String x:Key="Discovery.AddFound">選択した作品を追加（{0}）</sys:String>
     <sys:String x:Key="Status.AddedMovies">{0} 本を追加し、重複 {1} 件をスキップしました。</sys:String>
     <sys:String x:Key="Error.NoSupportedDroppedFiles">ドロップした項目に対応動画ファイルがありません。</sys:String>
     <sys:String x:Key="Main.SearchQueue">検索可能な項目を検索</sys:String>
@@ -142,7 +142,7 @@
     <sys:String x:Key="Status.PreferencesSkipPreview">現在の設定を復元しました：安全な場合は保存プレビューを省略します</sys:String>
     <sys:String x:Key="Main.BrowserImportChoose">手動Web検索 ▾</sys:String>
     <sys:String x:Key="Main.BrowserImportChooseCompact">Web検索 ▾</sys:String>
-    <sys:String x:Key="Main.BrowserImportChooseTooltip">自動検索とは別にWebサイトを選び、作品ページを手動で開いて現在のページを候補として読み込みます</sys:String>
+    <sys:String x:Key="Main.BrowserImportChooseTooltip">サイトを選んで、現在の品番の情報を取り込みます。</sys:String>
     <sys:String x:Key="Browser.SourceTitle">{0} ブラウザー</sys:String>
     <sys:String x:Key="Browser.SourceInstruction">{0} で正しい作品詳細ページを開き、現在の作品を読み込んでください</sys:String>
     <sys:String x:Key="Browser.SourceNotDetailPage">現在のページは読み込み可能な {0} 作品詳細ページではありません。正しい作品を開いて再試行してください。</sys:String>
@@ -169,8 +169,8 @@
     <sys:String x:Key="Main.Source.Summary.Manual">Web 検索を行わず、現在のデータのみ編集</sys:String>
     <sys:String x:Key="Main.Source.Summary.Provider">すべての項目で {0} を優先</sys:String>
     <sys:String x:Key="Main.ArtworkPreviewHeader">画像プレビュー</sys:String>
-    <sys:String x:Key="Main.ArtworkPosterLabel">ポスター切り抜き</sys:String>
-    <sys:String x:Key="Main.ArtworkFanartLabel">完全ジャケット / fanart</sys:String>
+    <sys:String x:Key="Main.ArtworkPosterLabel">表紙</sys:String>
+    <sys:String x:Key="Main.ArtworkFanartLabel">ジャケット全体</sys:String>
     <sys:String x:Key="ArtworkPreview.Loading">画像を読み込み中…</sys:String>
     <sys:String x:Key="ArtworkPreview.Unavailable">プレビューできる画像がありません</sys:String>
     <sys:String x:Key="ArtworkPreview.Deferred">プレビュー未読み込み</sys:String>
@@ -187,7 +187,7 @@
     <sys:String x:Key="ArtworkViewer.LoadFailed">画像を読み込めません。戻ると再試行できます</sys:String>
     <sys:String x:Key="ArtworkViewer.Dimensions">画像サイズ：{0} × {1}</sys:String>
     <sys:String x:Key="Main.ReplaceLocalExtrafanart">ローカルのスチル画像を置換</sys:String>
-    <sys:String x:Key="Main.ReplaceLocalExtrafanartTooltip">今回の検索でオンラインスチル画像を取得した場合のみ有効です。未検索またはスチル画像なしの場合はローカル画像を保持します</sys:String>
+    <sys:String x:Key="Main.ReplaceLocalExtrafanartTooltip">今回の検索でオンラインのスチルが見つかった場合、または同じ作品の以前の検索結果からスチルを選んだ場合に、ローカル画像を置き換えます。</sys:String>
     <sys:String x:Key="ArtworkViewer.IncludeSample">このスチル画像を保存</sys:String>
     <sys:String x:Key="ArtworkViewer.DeleteLocal">ローカル画像を削除</sys:String>
     <sys:String x:Key="ArtworkViewer.DeleteLocalTitle">ローカル画像の削除確認</sys:String>
@@ -303,4 +303,60 @@
     <sys:String x:Key="Duplicate.SaveOne">選択した 1 本を保存</sys:String>
     <sys:String x:Key="Duplicate.SaveParts">分割として保存</sys:String>
     <sys:String x:Key="Duplicate.Skip">このグループをスキップ</sys:String>
+    <sys:String x:Key="Desk.FindId">この品番を検索</sys:String>
+    <sys:String x:Key="Desk.ApplySelected">この設定を選択中の {0} 件に適用</sys:String>
+    <sys:String x:Key="Desk.MovieFolder">動画と同じフォルダー</sys:String>
+    <sys:String x:Key="Desk.Cast">出演</sys:String>
+    <sys:String x:Key="Desk.ToggleQueue">動画キュー</sys:String>
+    <sys:String x:Key="Desk.Edit">作品情報を編集</sys:String>
+    <sys:String x:Key="Desk.FinishEdit">編集を完了</sys:String>
+    <sys:String x:Key="Desk.WebLookup">手動検索</sys:String>
+    <sys:String x:Key="Desk.Preferences">設定</sys:String>
+    <sys:String x:Key="Desk.Appearance">外観</sys:String>
+    <sys:String x:Key="Desk.System">システムに従う</sys:String>
+    <sys:String x:Key="Desk.Light">ライト</sys:String>
+    <sys:String x:Key="Desk.Dark">ダーク</sys:String>
+    <sys:String x:Key="Desk.Selection">選択範囲 ▾</sys:String>
+    <sys:String x:Key="Desk.Empty">動画を追加</sys:String>
+    <sys:String x:Key="Desk.Drop">動画やフォルダーをドロップして、作品情報と画像を確認できます。</sys:String>
+    <sys:String x:Key="Desk.SearchCount">検索（{0} 件）</sys:String>
+    <sys:String x:Key="Desk.SearchCheckedCount">選択分を検索（{0} 件）</sys:String>
+    <sys:String x:Key="Desk.SaveCount">保存（{0} 件）</sys:String>
+    <sys:String x:Key="Desk.PreviewCount">変更を確認（{0} 件）</sys:String>
+    <sys:String x:Key="Desk.SelectionCount">{1} 件中 {0} 件を選択</sys:String>
+    <sys:String x:Key="Desk.Output">保存設定</sys:String>
+    <sys:String x:Key="Intake.Help">動画とフォルダーを一緒に選択できます。サブフォルダー内の動画も追加します。</sys:String>
+    <sys:String x:Key="Intake.Up">上へ</sys:String>
+    <sys:String x:Key="Intake.Drive">ドライブ</sys:String>
+    <sys:String x:Key="Intake.Path">フォルダーまたは動画のパス</sys:String>
+    <sys:String x:Key="Intake.Go">パスを開く</sys:String>
+    <sys:String x:Key="Intake.List">ファイルとフォルダー</sys:String>
+    <sys:String x:Key="Intake.OpenFolder">フォルダーを開く</sys:String>
+    <sys:String x:Key="Intake.CurrentFolder">現在のフォルダーを選択</sys:String>
+    <sys:String x:Key="Intake.AddSelected">選択項目を追加</sys:String>
+    <sys:String x:Key="Intake.ReadFailed">場所を読み込めません：{0}</sys:String>
+    <sys:String x:Key="Intake.Empty">動画やフォルダーはありません</sys:String>
+    <sys:String x:Key="Intake.Back">一覧に戻る</sys:String>
+    <sys:String x:Key="Intake.Count">選択中：フォルダー {0} 件、ファイル {1} 件</sys:String>
+    <sys:String x:Key="Intake.SwitchArt">表紙とジャケット全体を切り替え</sys:String>
+    <sys:String x:Key="Intake.SaveTo">保存先：{0}</sys:String>
+    <sys:String x:Key="Intake.UnselectCurrent">現在のフォルダーの選択を解除</sys:String>
+    <sys:String x:Key="Intake.Release">ドロップして動画とフォルダーを追加</sys:String>
+    <sys:String x:Key="Intake.DropHint">動画やフォルダーをドロップ</sys:String>
+    <sys:String x:Key="Desk.Ready">準備完了</sys:String>
+    <sys:String x:Key="Desk.NfoLoaded">ローカル NFO を読み込みました</sys:String>
+    <sys:String x:Key="TransferClose.Title">ドライブ間の転送中です</sys:String>
+    <sys:String x:Key="TransferClose.Message">動画の転送はまだ完了していません。残りの処理を中止し、必要な後処理を終えてから JavMetaLite を閉じますか？</sys:String>
+    <sys:String x:Key="TransferClose.Continue">コピーを続ける</sys:String>
+    <sys:String x:Key="TransferClose.Stop">中止して閉じる</sys:String>
+    <sys:String x:Key="Desk.NoPendingLookup">検索対象なし</sys:String>
+    <sys:String x:Key="Progress.Overall">全体の進捗</sys:String>
+    <sys:String x:Key="Progress.VerifyingSource">元の動画を再確認中…</sys:String>
+    <sys:String x:Key="Footer.Found">検索結果 {0} 件</sys:String>
+    <sys:String x:Key="Footer.Saved">保存済み {0} 件</sys:String>
+    <sys:String x:Key="Footer.ArtworkIncomplete">一部の画像を表示できません</sys:String>
+    <sys:String x:Key="Footer.LookupFailed">検索失敗 {0} 件</sys:String>
+    <sys:String x:Key="Footer.NeedReview">要確認 {0} 件</sys:String>
+    <sys:String x:Key="Footer.CleanupPending">一時ファイルの確認が必要</sys:String>
+    <sys:String x:Key="Footer.Canceled">キャンセルしました</sys:String>
 </ResourceDictionary>

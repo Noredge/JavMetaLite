@@ -16,15 +16,15 @@
     <sys:String x:Key="Status.RecentRootRemoved">已移除目前目錄的歷史記錄；目前路徑保持不變</sys:String><sys:String x:Key="Status.RecentRootsCleared">已清除最近目標根目錄；目前路徑保持不變</sys:String><sys:String x:Key="Status.CustomRootUnavailable">自訂目標根目錄目前無法使用：{0}。請重新連線或選擇其他目錄；程式不會自動建立該根目錄。</sys:String><sys:String x:Key="Status.LocalNfoUnsafe">本機 NFO 無法安全讀取；修復或移走後重新選擇影片</sys:String><sys:String x:Key="Status.NfoPreserveUnknown">儲存時只更新受管理欄位，並保留偵測到的未知 XML</sys:String><sys:String x:Key="Status.NfoManagedOnly">儲存時只更新受管理欄位</sys:String><sys:String x:Key="Status.LocalCheckFailed">無法檢查影片旁的本機檔案：{0}</sys:String><sys:String x:Key="Status.IdRecognized">已識別番號 {0}，未找到同名本機 NFO，可以搜尋資料</sys:String><sys:String x:Key="Status.NoLocalNfoOrId">未找到同名本機 NFO，也未從檔名識別番號，請手動輸入</sys:String><sys:String x:Key="Status.LocalNfoLoaded">已從本機 NFO 載入（可安全更新）：{0}{1}</sys:String><sys:String x:Key="Status.LocalNfoFailed">偵測到本機 NFO，但無法安全讀取，原檔未修改：{0}；{1}</sys:String>
     <sys:String x:Key="Status.InvalidLocalImages">已忽略 {0} 個無效本機圖片（請見日誌）</sys:String><sys:String x:Key="Status.InvalidImagesSuffix">；已忽略 {0} 個無效圖片</sys:String><sys:String x:Key="Status.PreviewIncomplete">；預覽載入不完整</sys:String><sys:String x:Key="Status.LocalImagesLoaded">本機圖片已載入（{0}）{1}{2}</sys:String><sys:String x:Key="Status.OnlyPoster">僅 poster，缺少 fanart</sys:String><sys:String x:Key="Status.OnlyFanart">僅 fanart，缺少 poster</sys:String><sys:String x:Key="Status.NoArtwork">無可用圖片</sys:String><sys:String x:Key="Status.ReadingBrowser">正在讀取瀏覽器中的資料…</sys:String><sys:String x:Key="Status.LocalCandidateSuffix">；可逐欄位切回本機 NFO</sys:String><sys:String x:Key="Status.BrowserLoaded">已讀取瀏覽器中的新資料 {0}{1}</sys:String><sys:String x:Key="Status.FieldSourceChanged">已將「{0}」切換為 {1}</sys:String><sys:String x:Key="Status.LoadingCover">正在載入 {0} 封套…</sys:String><sys:String x:Key="Status.CoverChanged">封套與 fanart 已同時切換為 {0}</sys:String><sys:String x:Key="Status.CoverIncomplete">{0} 封套預覽載入不完整，可改選其他來源</sys:String><sys:String x:Key="Status.ReadingLocalCover">正在讀取本機完整封套…</sys:String><sys:String x:Key="Status.LocalCoverSelected">已選擇本機完整封套：{0}；poster 與 fanart 將由同一來源產生</sys:String><sys:String x:Key="Status.OperationCanceled">操作已取消；未完成的檔案交易已安全復原</sys:String><sys:String x:Key="Status.Canceling">正在取消並復原檔案，請稍候…</sys:String><sys:String x:Key="Status.LogDirectory">日誌目錄：{0}</sys:String>
     <sys:String x:Key="Error.EnterId">請先輸入影片番號。</sys:String><sys:String x:Key="Error.SelectVideo">請先選擇一個影片檔案。</sys:String><sys:String x:Key="Error.LocalNfoBlocked">偵測到無法安全讀取的本機 NFO。為保護原檔，必須修復或移走該 NFO 後重新選擇影片，目前不能儲存。</sys:String><sys:String x:Key="Error.UnsupportedVideo">請選擇支援的影片檔案。</sys:String><sys:String x:Key="Error.OpenLogs">無法開啟日誌目錄：{0}</sys:String><sys:String x:Key="Error.StartupNoPath">啟動參數未提供可讀取的影片路徑。</sys:String><sys:String x:Key="Error.StartupUnreadable">無法讀取啟動參數中的影片路徑。</sys:String>
-    <sys:String x:Key="Artwork.Select">選擇封套…</sys:String><sys:String x:Key="Artwork.SelectTooltip">選擇一張本機完整封套，由同一張圖產生 poster 與 fanart</sys:String><sys:String x:Key="Artwork.SourceTooltip">點選以選擇封套來源（{0} 個現有候選），或選擇本機完整封套</sys:String><sys:String x:Key="Artwork.SourceFieldTooltip">點選以選擇「{0}」的資料來源（{1} 個候選）</sys:String><sys:String x:Key="Artwork.Source">來源：{0}</sys:String><sys:String x:Key="Artwork.Pair">現有 poster + fanart（成對來源）</sys:String><sys:String x:Key="Artwork.PosterOnly">現有 poster；缺少 fanart</sys:String><sys:String x:Key="Artwork.FanartOnly">現有 fanart；缺少 poster</sys:String><sys:String x:Key="Artwork.NoLocal">沒有可用的本機圖片</sys:String><sys:String x:Key="Artwork.LocalComplete">本機完整封套 · 統一產生 poster / fanart</sys:String><sys:String x:Key="Artwork.SharedCount">poster / fanart 共用 · {0} 個封套位址</sys:String><sys:String x:Key="Artwork.Shared">poster / fanart 共用此完整封套</sys:String><sys:String x:Key="Artwork.ManualSource">手動封套</sys:String><sys:String x:Key="Artwork.Role.Poster">海報</sys:String><sys:String x:Key="Artwork.Role.Fanart">fanart</sys:String><sys:String x:Key="Source.Manual">手動編輯</sys:String><sys:String x:Key="Source.LocalNfo">本機 NFO</sys:String><sys:String x:Key="Source.LocalImages">本機圖片</sys:String><sys:String x:Key="Source.Unknown">未知來源</sys:String><sys:String x:Key="Artwork.Dimensions">橫式封套：{0}×{1}</sys:String><sys:String x:Key="Error.LocalCoverPreview">本機完整封套無法同時產生 poster 與 fanart 預覽。</sys:String><sys:String x:Key="Error.ImageTooSmall">圖片內容太小。</sys:String><sys:String x:Key="Error.PreviewDownload">圖片預覽下載失敗。</sys:String><sys:String x:Key="App.StartFailed">JAV Metadata Lite 啟動失敗。&#10;&#10;錯誤記錄：{0}&#10;&#10;{1}</sys:String>
+    <sys:String x:Key="Artwork.Select">選擇封套…</sys:String><sys:String x:Key="Artwork.SelectTooltip">選擇一張本機完整封套，由同一張圖產生 poster 與 fanart</sys:String><sys:String x:Key="Artwork.SourceTooltip">點選以選擇封套來源（{0} 個現有候選），或選擇本機完整封套</sys:String><sys:String x:Key="Artwork.SourceFieldTooltip">點選以選擇「{0}」的資料來源（{1} 個候選）</sys:String><sys:String x:Key="Artwork.Source">來源：{0}</sys:String><sys:String x:Key="Artwork.Pair">現有 poster + fanart（成對來源）</sys:String><sys:String x:Key="Artwork.PosterOnly">現有 poster；缺少 fanart</sys:String><sys:String x:Key="Artwork.FanartOnly">現有 fanart；缺少 poster</sys:String><sys:String x:Key="Artwork.NoLocal">沒有可用的本機圖片</sys:String><sys:String x:Key="Artwork.LocalComplete">本機完整封套 · 統一產生 poster / fanart</sys:String><sys:String x:Key="Artwork.SharedCount">poster / fanart 共用 · {0} 個封套位址</sys:String><sys:String x:Key="Artwork.Shared">poster / fanart 共用此完整封套</sys:String><sys:String x:Key="Artwork.ManualSource">手動封套</sys:String><sys:String x:Key="Artwork.Role.Poster">海報</sys:String><sys:String x:Key="Artwork.Role.Fanart">fanart</sys:String><sys:String x:Key="Source.Manual">手動編輯</sys:String><sys:String x:Key="Source.LocalNfo">本機 NFO</sys:String><sys:String x:Key="Source.LocalImages">本機圖片</sys:String><sys:String x:Key="Source.Unknown">未知來源</sys:String><sys:String x:Key="Artwork.Dimensions">{0}×{1}</sys:String><sys:String x:Key="Error.LocalCoverPreview">本機完整封套無法同時產生 poster 與 fanart 預覽。</sys:String><sys:String x:Key="Error.ImageTooSmall">圖片內容太小。</sys:String><sys:String x:Key="Error.PreviewDownload">圖片預覽下載失敗。</sys:String><sys:String x:Key="App.StartFailed">JAV Metadata Lite 啟動失敗。&#10;&#10;錯誤記錄：{0}&#10;&#10;{1}</sys:String>
     <sys:String x:Key="Status.SettingsFallback">偏好設定無法讀取，已使用安全預設值</sys:String>
     <sys:String x:Key="Status.SettingsFuture">偏好設定來自較新版本，已使用安全預設值且不會覆寫原設定</sys:String>
     <sys:String x:Key="Dialog.VideoFilter">影片檔案|*.mp4;*.m4v;*.mkv;*.avi;*.wmv;*.mov;*.webm;*.ts;*.m2ts|所有檔案|*.*</sys:String>
     <sys:String x:Key="Preview.Description.CreateFolder">建立番號資料夾</sys:String><sys:String x:Key="Preview.Description.MoveVideo">移動影片</sys:String><sys:String x:Key="Preview.Description.RenameVideo">重新命名影片</sys:String><sys:String x:Key="Preview.Description.MoveAndRename">移動並重新命名影片</sys:String><sys:String x:Key="Preview.Description.CopyVerify">安全複製並校驗影片，成功後移除來源</sys:String><sys:String x:Key="Preview.Description.GenerateNfo">產生 NFO</sys:String><sys:String x:Key="Preview.Description.OverwriteNfo">覆寫 NFO</sys:String><sys:String x:Key="Preview.Description.UpdateNfo">更新 NFO</sys:String><sys:String x:Key="Preview.Description.UpdateNfoPreserve">更新 NFO（保留未知 XML）</sys:String><sys:String x:Key="Preview.Description.KeepNfo">NFO 內容保持不變</sys:String><sys:String x:Key="Preview.Description.GenerateArtwork">產生 {0}</sys:String><sys:String x:Key="Preview.Description.ReplaceArtwork">取代 {0}</sys:String><sys:String x:Key="Preview.Description.KeepArtwork">{0} 內容保持不變</sys:String><sys:String x:Key="Preview.Description.MissingArtwork">本機 {0} 缺少，保持缺少</sys:String><sys:String x:Key="Preview.Description.Migrate">遷移並保持 {0}</sys:String><sys:String x:Key="Preview.Description.GenerateStill">產生劇照</sys:String><sys:String x:Key="Preview.Description.ReplaceStill">取代劇照</sys:String><sys:String x:Key="Preview.Description.RemoveStill">移除未選取的本機劇照</sys:String><sys:String x:Key="Preview.Conflict.CustomRootFile">自訂目標根目錄路徑已被檔案占用：{0}</sys:String><sys:String x:Key="Preview.Conflict.CustomRootUnavailable">自訂目標根目錄目前無法使用，程式不會自動建立該根目錄：{0}</sys:String><sys:String x:Key="Preview.Conflict.TargetFolderFile">目標資料夾路徑已被檔案占用：{0}</sys:String><sys:String x:Key="Preview.Conflict.TargetMovieExists">目標影片已存在，軟體不會覆寫影片：{0}</sys:String><sys:String x:Key="Progress.Preparing">正在準備 metadata 與安全交易…</sys:String><sys:String x:Key="Progress.Copying">正在將影片複製到目標暫存區…</sys:String><sys:String x:Key="Progress.CopyingPercent">正在將影片複製到目標暫存區… {0}%</sys:String><sys:String x:Key="Progress.Verifying">正在校驗目標影片 SHA-256…</sys:String><sys:String x:Key="Progress.VerifyingPercent">正在校驗目標影片 SHA-256… {0}%</sys:String><sys:String x:Key="Progress.Committing">正在提交目標影片與 metadata…</sys:String><sys:String x:Key="Progress.RetiringSource">目標校驗與提交完成，正在移除來源影片…</sys:String><sys:String x:Key="Progress.Completed">安全儲存已完成</sys:String>
     <sys:String x:Key="Error.SourceTimeout">資料來源 {0} 在 {1:0} 秒內沒有回應，請稍後重試或更換來源。</sys:String>
-    <sys:String x:Key="Main.SkipCrossVolumeVerification">略過跨磁碟 SHA-256 校驗（較快，風險自負）</sys:String>
+    <sys:String x:Key="Main.SkipCrossVolumeVerification">略過跨磁碟 SHA-256 校驗</sys:String>
     <sys:String x:Key="Main.SkipCrossVolumeVerificationTooltip">只檢查複製完成與檔案大小，不逐位元組校驗影片內容</sys:String>
-    <sys:String x:Key="Main.FastCopy">傳輸方式：快速跨磁碟複製，只檢查檔案大小（風險自負）</sys:String>
+    <sys:String x:Key="Main.FastCopy">傳輸方式：快速跨磁碟複製，只檢查檔案大小</sys:String>
     <sys:String x:Key="Preview.Action.CopyFast">快速複製</sys:String>
     <sys:String x:Key="Preview.Description.CopyFast">快速複製影片；只檢查檔案大小，不校驗內容，成功後移除來源</sys:String>
     <sys:String x:Key="Progress.RetiringSourceFast">目標複製與提交完成，正在移除來源影片…</sys:String>
@@ -48,7 +48,7 @@
     <sys:String x:Key="Discovery.ViewDetails">查看詳情</sys:String>
     <sys:String x:Key="Discovery.DetailsTitle">掃描詳情</sys:String>
     <sys:String x:Key="Discovery.Failed">資料夾探索失敗：{0}</sys:String>
-    <sys:String x:Key="Discovery.AddFound">加入找到的影片</sys:String>
+    <sys:String x:Key="Discovery.AddFound">加入所選（{0}）</sys:String>
     <sys:String x:Key="Status.AddedMovies">已加入 {0} 部影片，略過 {1} 個重複項。</sys:String>
     <sys:String x:Key="Error.NoSupportedDroppedFiles">拖入的項目中找不到支援的影片檔案。</sys:String>
     <sys:String x:Key="Main.SearchQueue">搜尋可搜尋項目</sys:String>
@@ -146,7 +146,7 @@
     <sys:String x:Key="Status.PreferencesSkipPreview">已還原目前設定：可安全略過時將不顯示儲存預覽</sys:String>
     <sys:String x:Key="Main.BrowserImportChoose">手動網頁查詢 ▾</sys:String>
     <sys:String x:Key="Main.BrowserImportChooseCompact">網頁查詢 ▾</sys:String>
-    <sys:String x:Key="Main.BrowserImportChooseTooltip">獨立選擇網站並手動開啟影片頁，將目前頁面資料匯入為候選</sys:String>
+    <sys:String x:Key="Main.BrowserImportChooseTooltip">選擇網站，匯入目前番號的資料。</sys:String>
     <sys:String x:Key="Browser.SourceTitle">{0} 瀏覽器</sys:String>
     <sys:String x:Key="Browser.SourceInstruction">在 {0} 中開啟正確的影片詳情頁，然後讀取目前影片</sys:String>
     <sys:String x:Key="Browser.SourceNotDetailPage">目前頁面不是可讀取的 {0} 影片詳情頁。請開啟正確影片後重試。</sys:String>
@@ -173,8 +173,8 @@
     <sys:String x:Key="Main.Source.Summary.Manual">不查詢網站，只編輯目前資料</sys:String>
     <sys:String x:Key="Main.Source.Summary.Provider">所有欄位優先使用 {0}</sys:String>
     <sys:String x:Key="Main.ArtworkPreviewHeader">圖片預覽</sys:String>
-    <sys:String x:Key="Main.ArtworkPosterLabel">海報裁切</sys:String>
-    <sys:String x:Key="Main.ArtworkFanartLabel">完整封套 / fanart</sys:String>
+    <sys:String x:Key="Main.ArtworkPosterLabel">封面</sys:String>
+    <sys:String x:Key="Main.ArtworkFanartLabel">完整封套</sys:String>
     <sys:String x:Key="ArtworkPreview.Loading">正在載入圖片…</sys:String>
     <sys:String x:Key="ArtworkPreview.Unavailable">目前沒有可預覽的圖片</sys:String>
     <sys:String x:Key="ArtworkPreview.Deferred">預覽未載入</sys:String>
@@ -191,7 +191,7 @@
     <sys:String x:Key="ArtworkViewer.LoadFailed">圖片載入失敗；切換回來可重試</sys:String>
     <sys:String x:Key="ArtworkViewer.Dimensions">圖片尺寸：{0} × {1}</sys:String>
     <sys:String x:Key="Main.ReplaceLocalExtrafanart">取代本機劇照</sys:String>
-    <sys:String x:Key="Main.ReplaceLocalExtrafanartTooltip">僅在本次搜尋取得線上劇照後生效；未搜尋或沒有線上劇照時保留本機圖片</sys:String>
+    <sys:String x:Key="Main.ReplaceLocalExtrafanartTooltip">本次搜尋找到線上劇照，或勾選了這部影片先前查到的劇照時，才會取代本機劇照。</sys:String>
     <sys:String x:Key="ArtworkViewer.IncludeSample">儲存這張劇照</sys:String>
     <sys:String x:Key="ArtworkViewer.DeleteLocal">刪除本機圖片</sys:String>
     <sys:String x:Key="ArtworkViewer.DeleteLocalTitle">確認刪除本機圖片</sys:String>
@@ -307,4 +307,60 @@
     <sys:String x:Key="Duplicate.SaveOne">儲存選中一條</sys:String>
     <sys:String x:Key="Duplicate.SaveParts">作為分段儲存</sys:String>
     <sys:String x:Key="Duplicate.Skip">本次略過此組</sys:String>
+    <sys:String x:Key="Desk.FindId">查詢目前番號</sys:String>
+    <sys:String x:Key="Desk.ApplySelected">將此設定套用至已勾選的 {0} 部</sys:String>
+    <sys:String x:Key="Desk.MovieFolder">影片所在資料夾</sys:String>
+    <sys:String x:Key="Desk.Cast">演員</sys:String>
+    <sys:String x:Key="Desk.ToggleQueue">影片佇列</sys:String>
+    <sys:String x:Key="Desk.Edit">編輯資料</sys:String>
+    <sys:String x:Key="Desk.FinishEdit">完成編輯</sys:String>
+    <sys:String x:Key="Desk.WebLookup">手動搜尋</sys:String>
+    <sys:String x:Key="Desk.Preferences">設定</sys:String>
+    <sys:String x:Key="Desk.Appearance">外觀</sys:String>
+    <sys:String x:Key="Desk.System">跟隨系統</sys:String>
+    <sys:String x:Key="Desk.Light">淺色</sys:String>
+    <sys:String x:Key="Desk.Dark">深色</sys:String>
+    <sys:String x:Key="Desk.Selection">選取範圍 ▾</sys:String>
+    <sys:String x:Key="Desk.Empty">加入影片</sys:String>
+    <sys:String x:Key="Desk.Drop">將影片或資料夾拖到這裡，查看資料與封面。</sys:String>
+    <sys:String x:Key="Desk.SearchCount">查詢 {0} 部</sys:String>
+    <sys:String x:Key="Desk.SearchCheckedCount">查詢所選 {0} 部</sys:String>
+    <sys:String x:Key="Desk.SaveCount">儲存 {0} 部</sys:String>
+    <sys:String x:Key="Desk.PreviewCount">預覽 {0} 部變更</sys:String>
+    <sys:String x:Key="Desk.SelectionCount">已勾選 {0} / {1} 部</sys:String>
+    <sys:String x:Key="Desk.Output">儲存設定</sys:String>
+    <sys:String x:Key="Intake.Help">在同一份清單勾選影片和資料夾，子資料夾中的影片也會加入。</sys:String>
+    <sys:String x:Key="Intake.Up">上一層</sys:String>
+    <sys:String x:Key="Intake.Drive">磁碟機</sys:String>
+    <sys:String x:Key="Intake.Path">資料夾或影片路徑</sys:String>
+    <sys:String x:Key="Intake.Go">開啟路徑</sys:String>
+    <sys:String x:Key="Intake.List">檔案與資料夾</sys:String>
+    <sys:String x:Key="Intake.OpenFolder">開啟資料夾</sys:String>
+    <sys:String x:Key="Intake.CurrentFolder">勾選目前資料夾</sys:String>
+    <sys:String x:Key="Intake.AddSelected">加入所選項目</sys:String>
+    <sys:String x:Key="Intake.ReadFailed">無法讀取此位置：{0}</sys:String>
+    <sys:String x:Key="Intake.Empty">這裡沒有影片或資料夾</sys:String>
+    <sys:String x:Key="Intake.Back">返回檔案清單</sys:String>
+    <sys:String x:Key="Intake.Count">已選 {0} 個資料夾、{1} 個檔案</sys:String>
+    <sys:String x:Key="Intake.SwitchArt">切換封面與完整封套</sys:String>
+    <sys:String x:Key="Intake.SaveTo">儲存至{0}</sys:String>
+    <sys:String x:Key="Intake.UnselectCurrent">取消勾選目前資料夾</sys:String>
+    <sys:String x:Key="Intake.Release">放開以加入影片與資料夾</sys:String>
+    <sys:String x:Key="Intake.DropHint">可拖入影片或資料夾</sys:String>
+    <sys:String x:Key="Desk.Ready">已就緒</sys:String>
+    <sys:String x:Key="Desk.NfoLoaded">已載入本機 NFO</sys:String>
+    <sys:String x:Key="TransferClose.Title">跨磁碟傳輸尚未完成</sys:String>
+    <sys:String x:Key="TransferClose.Message">影片仍在傳輸中。要停止剩餘操作並關閉 JavMetaLite 嗎？程式會先完成必要的檔案清理。</sys:String>
+    <sys:String x:Key="TransferClose.Continue">繼續複製</sys:String>
+    <sys:String x:Key="TransferClose.Stop">停止並關閉</sys:String>
+    <sys:String x:Key="Desk.NoPendingLookup">無待查詢影片</sys:String>
+    <sys:String x:Key="Progress.Overall">整體進度</sys:String>
+    <sys:String x:Key="Progress.VerifyingSource">正在複核來源影片…</sys:String>
+    <sys:String x:Key="Footer.Found">已查到 {0} 部</sys:String>
+    <sys:String x:Key="Footer.Saved">已儲存 {0} 部</sys:String>
+    <sys:String x:Key="Footer.ArtworkIncomplete">圖片預覽不全</sys:String>
+    <sys:String x:Key="Footer.LookupFailed">{0} 部查詢失敗</sys:String>
+    <sys:String x:Key="Footer.NeedReview">{0} 部需檢查</sys:String>
+    <sys:String x:Key="Footer.CleanupPending">待清理</sys:String>
+    <sys:String x:Key="Footer.Canceled">已取消</sys:String>
 </ResourceDictionary>

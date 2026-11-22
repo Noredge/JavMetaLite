@@ -26,11 +26,11 @@ internal static partial class Program
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
         AppLog.ConfigureDirectory(Path.Combine(Path.GetDirectoryName(output)!, "logs"));
         var rows = new List<object>();
-        var window = new MainWindow { ShowActivated = false, ShowInTaskbar = false };
+        var window = new MainWindow(TestPreferences()) { ShowActivated = false, ShowInTaskbar = false };
         window.Show();
         try
         {
-            ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SetQueueOpen(window, true);
             var source = (ComboBox)window.FindName("SourceComboBox");
             source.SelectedItem = source.Items.OfType<ComboBoxItem>().Single(item => item.Tag?.ToString() == "libredmm");
             var queue = (IList)typeof(MainWindow).GetField("_movieQueue", PrivateInstance)!.GetValue(window)!;

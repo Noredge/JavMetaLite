@@ -5,7 +5,7 @@
         Title="{DynamicResource BatchPreview.Title}"
         Width="900" Height="680" MinWidth="720" MinHeight="520"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource WindowBrush}">
+        Background="{DynamicResource WindowBrush}">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -20,22 +20,22 @@
                    FontSize="20" FontWeight="SemiBold" />
         <TextBlock Grid.Row="1"
                    Text="{DynamicResource BatchPreview.Description}"
-                   Foreground="{StaticResource MutedBrush}"
+                   Foreground="{DynamicResource MutedBrush}"
                    TextWrapping="Wrap"
                    Margin="0,6,0,14" />
 
         <Border x:Name="IssuesPanel"
                 Grid.Row="2"
                 Visibility="Collapsed"
-                Background="#3D2D18"
-                BorderBrush="#8A5A24"
+                Background="{DynamicResource WarningFillBrush}"
+                BorderBrush="{DynamicResource BatchSourceWarningBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="12"
                 Margin="0,0,0,12">
             <StackPanel>
                 <TextBlock Text="{DynamicResource BatchPreview.IssuesHeader}"
-                           Foreground="#FFD18A"
+                           Foreground="{DynamicResource BatchSourceWarningBrush}"
                            FontWeight="SemiBold" />
                 <ScrollViewer x:Name="IssuesScrollViewer"
                               MaxHeight="150"
@@ -49,8 +49,8 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel Margin="0,3,0,3">
-                                    <TextBlock Text="{Binding Header}" Foreground="#FFD18A" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding Message}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                    <TextBlock Text="{Binding Header}" Foreground="{DynamicResource BatchSourceWarningBrush}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Message}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
                                 </StackPanel>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -82,15 +82,15 @@
             </ListBox.ItemContainerStyle>
             <ListBox.ItemTemplate>
                 <DataTemplate>
-                    <Border Background="{StaticResource PanelBrush}"
-                            BorderBrush="{StaticResource BorderBrush}"
+                    <Border Background="{DynamicResource PanelBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="1"
                             CornerRadius="9"
                             Padding="14">
                         <StackPanel>
                             <TextBlock Text="{Binding Header}" FontSize="15" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding SourcePath}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding SourcePath}" Margin="0,4,0,0" />
-                            <TextBlock Text="{Binding TargetPath}" Foreground="#8DB8FF" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding TargetPath}" Margin="0,2,0,8" />
+                            <TextBlock Text="{Binding SourcePath}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding SourcePath}" Margin="0,4,0,0" />
+                            <TextBlock Text="{Binding TargetPath}" Foreground="{DynamicResource AccentTextBrush}" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding TargetPath}" Margin="0,2,0,8" />
                             <ItemsControl ItemsSource="{Binding Changes}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -99,8 +99,8 @@
                                                 <ColumnDefinition Width="100" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Text="{Binding Action}" Foreground="#72E3A6" FontWeight="SemiBold" FontSize="11" />
-                                            <TextBlock Grid.Column="1" Text="{Binding Path}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}" />
+                                            <TextBlock Text="{Binding Action}" Foreground="{DynamicResource SuccessTextBrush}" FontWeight="SemiBold" FontSize="11" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Path}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}" />
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -114,14 +114,14 @@
         <Border x:Name="WarningPanel"
                 Grid.Row="4"
                 Visibility="Collapsed"
-                Background="#4A3218"
-                BorderBrush="#8A5A24"
+                Background="{DynamicResource WarningFillBrush}"
+                BorderBrush="{DynamicResource BatchSourceWarningBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="12"
                 Margin="0,4,0,0">
             <StackPanel>
-                <TextBlock x:Name="WarningText" Foreground="#FFD18A" TextWrapping="Wrap" />
+                <TextBlock x:Name="WarningText" Foreground="{DynamicResource BatchSourceWarningBrush}" TextWrapping="Wrap" />
                 <CheckBox x:Name="OverwriteConfirmCheckBox"
                           Content="{DynamicResource BatchPreview.ConfirmOverwrite}"
                           Margin="0,10,0,0"
@@ -136,7 +136,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="SummaryText" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+            <TextBlock x:Name="SummaryText" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" />
             <Button Grid.Column="1" Content="{DynamicResource Common.Cancel}" Click="Cancel_Click" IsCancel="True" />
             <Button x:Name="ConfirmButton"
                     Grid.Column="2"

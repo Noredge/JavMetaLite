@@ -33,7 +33,7 @@ internal static partial class Program
         var oldJobs = new List<WeakReference<MovieJob>>();
         try
         {
-            ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SetQueueOpen(window, true);
             var source = (ComboBox)window.FindName("SourceComboBox");
             source.SelectedItem = source.Items.OfType<ComboBoxItem>().Single(i => i.Tag?.ToString() == "libredmm");
             for (var round = 1; round <= rounds; round++)
@@ -88,9 +88,9 @@ internal static partial class Program
         }
         async Task Click(string name)
         {
-            var button = (Button)window.FindName(name);
+            var button = (Control)window.FindName(name);
             if (!button.IsEnabled) throw new InvalidOperationException($"Stability action disabled: {name}.");
-            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            ClickWorkspaceButton(window, name);
             await UntilStableAsync(() => !IsWindowBusy(window), $"Stability action timed out: {name}.", 120);
         }
         await Invoke("AddMovieFilesAsync", (object)fixtures);

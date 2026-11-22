@@ -16,6 +16,7 @@ internal static class OutputDownloadRegressionTests
         new("downloads", "有界并发、乱序完成、稳定去重与 50 张上限", TestOrderAndLimit),
         new("downloads", "普通保存跳过失败、坏响应及限流图片，不额外重试", TestPartialFailure),
         new("downloads", "混合本地和在线选择保持图片顺序与去重", TestMixedLocations),
+        new("downloads", "更换来源后保存勾选的旧来源剧照，未勾选时保护本地图", TestRetainedSamplesAfterRequery),
         new("downloads", "单片及多 CD 全面替换部分失败保持原文件", TestReplacementFailure),
         new("downloads", "响应体下载中取消会排空请求并保留单片及多 CD 原文件", TestCancelBody),
         new("downloads", "不可恢复失败取消同批请求并阻止后续影片", TestFatalStopsBatch)
@@ -67,6 +68,46 @@ internal static class OutputDownloadRegressionTests
         AssertEx.Equal(8, handler.Calls);
         AssertEx.Equal(0, handler.Pending);
         workspace.AssertNoTemporaryArtifacts();
+    }
+
+    private static async Task TestRetainedSamplesAfterRequery()
+    {
+        var images = Enumerable.Range(0, 3).Select(i => TestImageFactory.CreateJpeg(100 + i, 80)).ToArray();
+        foreach (var hasNfo in new[] { false, true })
+        foreach (var (select, replace) in new[] { (true, false), (true, true), (false, true) })
+        {
+            using var workspace = new TestWorkspace("retained-samples");
+            const string id = "TEST-508";
+            var video = workspace.WriteFile(id + ".mp4", [1, 2, 3]);
+            var local = workspace.WriteFile("extrafanart/fanart1.jpg", images[0]);
+            if (hasNfo)
+                workspace.WriteFile(id + ".nfo", "<movie><title>Local</title></movie>"u8.ToArray());
+            using var job = new MovieJob();
+            await MovieJobLoader.LoadAsync(job, video, WindowsArtworkImageProcessor.Instance);
+            AssertEx.Equal(hasNfo, job.LocalSourceMetadata is not null);
+            var r18 = new MovieMetadata { Id = id, SourceName = "r18dev", ScreenshotUrls = [Url(1), Url(2)] };
+            var libre = new MovieMetadata { Id = id, Title = "New title", SourceName = "libredmm" };
+            job.ApplyOnlineSources(r18, [r18]);
+            job.ApplyOnlineSources(libre, [libre]);
+            AssertEx.True(job.AvailableScreenshotUrls.Contains(Url(2)), "Retained R18 still is missing from the viewer.");
+            if (select) job.Metadata.ScreenshotUrls = [local, Url(2)];
+
+            using var handler = new SampleHandler(images);
+            using var client = new HttpClient(handler);
+            using var output = new OutputService(WindowsArtworkImageProcessor.Instance, client);
+            var options = SamplesOnly with { WriteNfo = true, ReplaceLocalExtrafanart = replace };
+            var plan = FileOrganizationService.BuildPlan(job.VideoPaths, job.Metadata, options,
+                new(false, false), job.CreateLocalSaveContext());
+            var result = await new FileOrganizationService(output).ExecuteAsync(plan, job.Metadata, true);
+            AssertEx.FileExists(result.Outputs.NfoPath!);
+            AssertEx.Equal(select ? 1 : 0, handler.Calls, "Download count does not match the retained selection.");
+            if (select) AssertEx.Equal(2, handler.Completed.Single());
+            var hashes = Directory.GetFiles(Path.GetDirectoryName(local)!).Select(AssertEx.Sha256).ToArray();
+            var expected = select && replace ? new[] { Hash(images[2]) }
+                : select ? new[] { Hash(images[0]), Hash(images[2]) } : new[] { Hash(images[0]) };
+            AssertEx.True(hashes.Order().SequenceEqual(expected.Order()), "Unexpected saved stills after switching sources.");
+            workspace.AssertNoTemporaryArtifacts();
+        }
     }
 
     private static async Task TestMixedLocations()

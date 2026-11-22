@@ -86,7 +86,7 @@ internal static partial class Program
         window.Show();
         try
         {
-            ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SetQueueOpen(window, true);
             var queue = (IList)typeof(MainWindow).GetField("_movieQueue", PrivateInstance)!.GetValue(window)!;
             MovieJob Add(string id, string url)
             {
@@ -103,23 +103,21 @@ internal static partial class Program
             var list = (ListBox)window.FindName("MovieQueueList");
             var image = (Image)window.FindName("FanartImage");
             list.SelectedItem = slow;
-            await UntilStableAsync(() => handler.Pending == 1 && IsWindowBusy(window), "Slow preview did not start.");
-            ((Button)window.FindName("CancelOperationButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await UntilStableAsync(() => handler.Pending == 0 && !IsWindowBusy(window), "Canceled preview did not settle.");
-            if (handler.Canceled != 1) throw new InvalidOperationException("Preview cancellation was not observed.");
+            await UntilStableAsync(() => handler.Pending == 1 && !IsWindowBusy(window), "Slow preview did not start.");
             list.SelectedItem = fast;
-            await UntilStableAsync(() => !IsWindowBusy(window), "Fast preview did not finish.");
+            await UntilStableAsync(() => handler.Pending == 0 && image.Source is not null, "Switching movies did not cancel the old preview and load the new one.");
+            if (handler.Canceled != 1) throw new InvalidOperationException("Preview cancellation was not observed.");
             if (image.Source is null) throw new InvalidOperationException("Fast movie lost its preview.");
             list.SelectedItem = slow;
-            await UntilStableAsync(() => !IsWindowBusy(window), "Canceled movie revisit did not finish.");
+            await UntilStableAsync(() => NavigationSettled(window), "Canceled movie revisit did not finish.");
             if (handler.SlowCalls != 2 || image.Source is null ||
                 ((TextBlock)window.FindName("FanartHintText")).Text != LocalizationService.Get("Artwork.Dimensions", 1200, 600))
                 throw new InvalidOperationException($"Canceled preview was cached as complete; revisit must reload. slowCalls={handler.SlowCalls}, image={image.Source is not null}.");
             var restoredImage = image.Source;
             list.SelectedItem = fast;
-            await UntilStableAsync(() => !IsWindowBusy(window), "Second fast preview did not finish.");
+            await UntilStableAsync(() => NavigationSettled(window), "Second fast preview did not finish.");
             list.SelectedItem = slow;
-            await UntilStableAsync(() => !IsWindowBusy(window), "Completed preview revisit did not finish.");
+            await UntilStableAsync(() => NavigationSettled(window), "Completed preview revisit did not finish.");
             if (!ReferenceEquals(restoredImage, image.Source) || handler.SlowCalls != 2)
                 throw new InvalidOperationException("Completed preview no longer uses the cache.");
 
@@ -132,18 +130,18 @@ internal static partial class Program
             await changeSource;
             await UntilStableAsync(() => handler.Pending == 0 && !IsWindowBusy(window), "Source preview did not cancel.");
             list.SelectedItem = fast;
-            await UntilStableAsync(() => !IsWindowBusy(window), "Source-change switch did not finish.");
+            await UntilStableAsync(() => NavigationSettled(window), "Source-change switch did not finish.");
             list.SelectedItem = slow;
-            await UntilStableAsync(() => !IsWindowBusy(window), "Canceled source revisit did not finish.");
+            await UntilStableAsync(() => NavigationSettled(window), "Canceled source revisit did not finish.");
             if (handler.SwitchCalls != 2 ||
                 ((TextBlock)window.FindName("FanartHintText")).Text != LocalizationService.Get("Artwork.Dimensions", 1000, 500))
                 throw new InvalidOperationException("Canceled source change restored stale/blank cached artwork.");
 
             var empty = Add("EMPTY-003", "");
             list.SelectedItem = empty;
-            await UntilStableAsync(() => !IsWindowBusy(window), "Missing artwork did not settle.");
+            await UntilStableAsync(() => NavigationSettled(window), "Missing artwork did not settle.");
             list.SelectedItem = fast;
-            await UntilStableAsync(() => !IsWindowBusy(window), "Switch after missing artwork did not settle.");
+            await UntilStableAsync(() => NavigationSettled(window), "Switch after missing artwork did not settle.");
             var cache = (MoviePreviewCache)typeof(MainWindow).GetField("_jobPreviews", PrivateInstance)!.GetValue(window)!;
             if (!cache.Contains(empty)) throw new InvalidOperationException("Completed missing-artwork preview must remain cacheable.");
         }

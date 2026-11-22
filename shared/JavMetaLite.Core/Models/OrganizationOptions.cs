@@ -141,6 +141,8 @@ public sealed record SavePlan(
 
     public bool RequiresVerifiedVideoCopy { get; init; }
 
+    public long CrossVolumeVideoBytes { get; init; }
+
     public bool HasBlockingConflicts => BlockingConflicts.Count > 0;
 
     public bool VideoWillMove => VideoTransfers.Any(transfer => transfer.WillMove);
@@ -211,7 +213,8 @@ public enum FileTransactionStage
     Committing,
     RetiringSource,
     RetiringSourceFast,
-    Completed
+    Completed,
+    VerifyingSource
 }
 
 public sealed record FileTransactionProgress(
@@ -221,6 +224,9 @@ public sealed record FileTransactionProgress(
     long TotalBytes = 0,
     string? TemporaryPath = null)
 {
+    // Increment since the last byte report, across file and phase boundaries.
+    public long BytesAdvanced { get; init; }
+
     public int Percentage => TotalBytes <= 0
         ? 0
         : (int)Math.Clamp(BytesProcessed * 100L / TotalBytes, 0, 100);

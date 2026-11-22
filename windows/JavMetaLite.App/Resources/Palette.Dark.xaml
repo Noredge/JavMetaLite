@@ -1,0 +1,25 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="WindowBrush" Color="#171C23" />
+    <SolidColorBrush x:Key="ChromeBrush" Color="#1A2028" />
+    <SolidColorBrush x:Key="PanelBrush" Color="#1A2028" />
+    <SolidColorBrush x:Key="PanelAltBrush" Color="#202833" />
+    <SolidColorBrush x:Key="InputBrush" Color="#222C37" />
+    <SolidColorBrush x:Key="BorderBrush" Color="#394451" />
+    <SolidColorBrush x:Key="BorderHoverBrush" Color="#697B90" />
+    <SolidColorBrush x:Key="TextBrush" Color="#EEF1F6" />
+    <SolidColorBrush x:Key="MutedBrush" Color="#ABB7C5" />
+    <SolidColorBrush x:Key="AccentBrush" Color="#CBDBEC" />
+    <SolidColorBrush x:Key="AccentBorderBrush" Color="#B9CBDE" />
+    <SolidColorBrush x:Key="AccentTextBrush" Color="#BDCEE1" />
+    <SolidColorBrush x:Key="OnAccentBrush" Color="#1C2B3D" />
+    <SolidColorBrush x:Key="ControlBrush" Color="#2A3542" />
+    <SolidColorBrush x:Key="SelectionBrush" Color="#2C3743" />
+    <SolidColorBrush x:Key="TabBrush" Color="#FF9A60" />
+    <SolidColorBrush x:Key="SuccessTextBrush" Color="#89D7AA" />
+    <SolidColorBrush x:Key="SuccessFillBrush" Color="#17382D" />
+    <SolidColorBrush x:Key="ErrorTextBrush" Color="#FFA9B3" />
+    <SolidColorBrush x:Key="ErrorFillBrush" Color="#46242A" />
+    <SolidColorBrush x:Key="BatchSourceWarningBrush" Color="#F2C999" />
+    <SolidColorBrush x:Key="WarningFillBrush" Color="#382C20" />
+</ResourceDictionary>

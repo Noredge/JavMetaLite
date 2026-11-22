@@ -6,10 +6,12 @@ Windows 10/11 x64 · WPF · .NET SDK pinned in [global.json](../global.json).
 
 Windows 10/11 x64. No separate .NET Runtime installation; the embedded browser requires Microsoft Edge WebView2 Runtime.
 
-1. Get a published portable ZIP from [Releases](https://github.com/Noredge/JavMetaLite/releases), or use the supplied local build. Verify its SHA-256 and extract it.
-2. Run `JavMetaLite.exe`, then choose or drop movies/folders.
-3. Check IDs, search and adjust metadata, images and save settings as needed.
-4. Click Save and review the changes. Batch saving does not require opening every movie's preview.
+1. Download the [Windows 1.3.0 portable ZIP](https://github.com/Noredge/JavMetaLite/releases/download/v1.3.0/JavMetaLite-v1.3.0-win-x64-portable.zip), verify it against the [published SHA-256](https://github.com/Noredge/JavMetaLite/releases/download/v1.3.0/SHA256SUMS.txt), and extract it.
+2. Open `JavMetaLite.exe`. Use **Add movies** or drag in files and folders together. When the import review opens, choose the recognized items or adjust the selection.
+3. Check the catalog numbers and choose a source. Use the magnifying glass for the current number or search the checked movies again after changing sources.
+4. Review the poster, full cover and metadata in the main window. Use the pencil to edit. Open save settings to choose the outputs and destination, then preview and save.
+
+![Windows 1.3.0 movie queue and workspace](../docs/images/windows-1.3.0-workspace.en.png)
 
 ## Keep in mind
 

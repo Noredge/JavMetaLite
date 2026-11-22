@@ -114,7 +114,7 @@ internal static partial class Program
         window.Show();
         try
         {
-            ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SetQueueOpen(window, true);
             var a = FinalReviewAddJob(window, "A-001", @"C:\Synthetic\A-001.mp4",
                 FinalReviewMetadata("A-001", "libredmm", "red"), FinalReviewMetadata("A-001", "r18dev", "red"));
             var b = FinalReviewAddJob(window, "B-002", @"C:\Synthetic\B-002.mp4", FinalReviewMetadata("B-002", "libredmm", "blue"));
@@ -131,12 +131,12 @@ internal static partial class Program
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
             CoverAssert(IsWindowBusy(window) && !((ListBox)window.FindName("MovieQueueList")).IsEnabled,
                 "Viewer source application did not own the normal busy lifecycle.");
-            FinalReviewInvoke(window, "NavigateQueue", 1);
+            FinalReviewInvoke(window, "NavigateQueue", System.Windows.Input.Key.Down);
             CoverAssert(ReferenceEquals(FinalReviewField(window, "_activeJob"), a), "Busy viewer reload allowed movie navigation.");
             release.TrySetResult();
             await UntilStableAsync(() => !IsWindowBusy(window), "Viewer application did not finish.");
             ((ListBox)window.FindName("MovieQueueList")).SelectedItem = b;
-            await UntilStableAsync(() => !IsWindowBusy(window) && ReferenceEquals(FinalReviewField(window, "_activeJob"), b), "Queue did not resume.");
+            await UntilStableAsync(() => NavigationSettled(window) && ReferenceEquals(FinalReviewField(window, "_activeJob"), b), "Selected movie preview did not finish.");
             CoverAssert(FinalReviewPreviewIsBlue(window, "PosterImage") && FinalReviewPreviewIsBlue(window, "FanartImage"), "Viewer reload contaminated another movie.");
 
             // Deliberately bypass UI serialization to exercise the late-result guard itself.
@@ -232,7 +232,7 @@ internal static partial class Program
         var language = LocalizationService.CurrentLanguageCode;
         try
         {
-            ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SetQueueOpen(window, true);
             var options = new SaveOptions(false, false, false, true, false, true, true);
             var organization = new OrganizationOptions(OrganizationTargetMode.VideoDirectory, false);
             MovieJob Add(string id, int samples)

@@ -1,5 +1,15 @@
 # Changelog
 
+## Windows 1.3.0
+
+- Add videos and folders together, select recognized movies on import, and manage a collapsible queue with thumbnails.
+- Review metadata, the poster and the full cover in one workspace. Search checked movies again with another source or open a source page from the manual search menu.
+- Save selected stills from an earlier source for the same movie, even when the latest source has no stills.
+- Show overall transfer progress during batch saves and ask before closing during a cross-drive copy. Search and save totals are available on hover.
+- Follow the Windows light or dark theme and keep the embedded browser profile in the user’s local app data folder.
+
+[Windows release](https://github.com/Noredge/JavMetaLite/releases/tag/v1.3.0)
+
 ## macOS 1.1.0
 
 - Review and edit movie details in the main window. Drop a movie to read its local metadata, then choose a source and click Search when ready.

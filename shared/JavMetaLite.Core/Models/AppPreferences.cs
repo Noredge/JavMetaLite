@@ -10,6 +10,10 @@ public sealed record AppPreferences
 
     public string UiLanguage { get; init; } = UiLanguageCodes.System;
 
+    public string Appearance { get; init; } = "system";
+
+    public bool? QueueVisible { get; init; }
+
     public bool RememberSavePreferences { get; init; }
 
     public string SearchSourceMode { get; init; } = MetadataSearchSourceModes.LibreDmm;

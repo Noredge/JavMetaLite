@@ -20,6 +20,7 @@ internal static partial class Program
         var window = new MainWindow(new AppPreferencesStore(Path.Combine(directory, "unused-settings.json")))
             { MaxWidth = hostMaximumWidth };
         window.Show();
+
         var language = (ComboBox)window.FindName("LanguageComboBox");
         try
         {
@@ -28,8 +29,7 @@ internal static partial class Program
                 language.SelectedItem = language.Items.OfType<ComboBoxItem>().Single(item => item.Tag?.ToString() == code);
                 foreach (var batch in new[] { false, true })
                 {
-                    ((RadioButton)window.FindName(batch ? "BatchModeButton" : "SingleModeButton"))
-                        .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    SetQueueOpen(window, batch);
                     foreach (var width in new[] { 930d, 1120d })
                     {
                         SetLayoutTestWidth(window, width);
@@ -43,16 +43,20 @@ internal static partial class Program
                         var heading = (TextBlock)window.FindName("ArtworkPreviewHeading");
                         var actions = (StackPanel)source.Parent;
                         var headingBottom = heading.TranslatePoint(new Point(0, heading.ActualHeight), header).Y;
-                        if (actions.TranslatePoint(new Point(), header).Y < headingBottom + 3 ||
+                        if ((Grid.GetRow(actions) == 0 ? actions.TranslatePoint(new Point(), header).X < heading.TranslatePoint(new Point(heading.ActualWidth, 0), header).X : actions.TranslatePoint(new Point(), header).Y < headingBottom - 0.5) ||
                             !FitsInside(actions, header, 0.5))
                             throw new InvalidOperationException($"Artwork header actions overlap or clip: {context}");
                         AssertReadableText(heading, header, context);
                         if (batch)
                         {
-                            var remove = (Button)window.FindName("RemoveSelectedQueueButton");
+                            ClickWorkspaceButton(window, "QueueOptionsButton");
+                            var remove = (MenuItem)window.FindName("RemoveSelectedQueueButton");
+                            remove.UpdateLayout();
                             var text = FindVisualChildren<TextBlock>(remove).Single();
                             AssertReadableText(text, remove, context);
+                            ((ContextMenu)window.FindName("QueueOptions")).IsOpen = false;
                         }
+                        ClickWorkspaceButton(window, "SaveSettingsToggleButton");
                         var target = (ComboBox)window.FindName("TargetModeComboBox");
                         foreach (var item in target.Items.OfType<ComboBoxItem>())
                         {
@@ -65,6 +69,7 @@ internal static partial class Program
                             if (!FitsInside(target, (FrameworkElement)target.Parent, 0.5))
                                 throw new InvalidOperationException($"Target selector outside layout: {context}");
                         }
+                        ClickWorkspaceButton(window, "CloseOutputButton");
                         if (width == 1120)
                             SaveReadabilitySnapshot((FrameworkElement)window.Content,
                                 Path.Combine(directory, $"{code}-{(batch ? "batch" : "single")}.png"));

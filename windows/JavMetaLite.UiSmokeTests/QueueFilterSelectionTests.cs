@@ -10,11 +10,11 @@ internal static partial class Program
 {
     private static void TestQueueFilterSelection()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(TestPreferences());
         window.Show();
         try
         {
-            ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SetQueueOpen(window, true);
             var queue = (IList)typeof(MainWindow).GetField("_movieQueue", PrivateInstance)!.GetValue(window)!;
             var attach = typeof(MainWindow).GetMethod("AttachMovieJob", PrivateInstance)!;
             var normal = new MovieJob();
@@ -45,7 +45,7 @@ internal static partial class Program
                 filter.IsDropDownOpen = false;
             }
             CheckCounts(2, 1, 1);
-            void Click(string name) => ((Button)window.FindName(name)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            void Click(string name) => ClickWorkspaceButton(window, name);
             Click("SelectPendingQueueButton");
             if (!normal.IsSelectedForBatch || issue.IsSelectedForBatch)
                 throw new InvalidOperationException("Pending button must select only matching movies.");
@@ -70,7 +70,7 @@ internal static partial class Program
                 (filter.SelectedItem as ComboBoxItem)?.Tag?.ToString() != "issues")
                 throw new InvalidOperationException("Selection must cover the whole queue without altering an active filter.");
             Select("all");
-            Click("SelectAllQueueButton");
+            Click("QueueCheckAll");
             if (!normal.IsSelectedForBatch || !issue.IsSelectedForBatch)
                 throw new InvalidOperationException("Select all must retain its original behavior.");
             issue.Metadata.Id = "IPX-456";
@@ -82,13 +82,13 @@ internal static partial class Program
             typeof(MainWindow).GetField("_busy", PrivateInstance)!.SetValue(window, true);
             Refresh();
             Click("SelectPendingQueueButton");
-            if (((Button)window.FindName("SelectPendingQueueButton")).IsEnabled ||
-                ((Button)window.FindName("SelectIssuesQueueButton")).IsEnabled ||
+            if (((MenuItem)window.FindName("SelectPendingQueueButton")).IsEnabled ||
+                ((MenuItem)window.FindName("SelectIssuesQueueButton")).IsEnabled ||
                 normal.IsSelectedForBatch || issue.IsSelectedForBatch)
                 throw new InvalidOperationException("Active task must prevent category selection.");
             typeof(MainWindow).GetField("_busy", PrivateInstance)!.SetValue(window, false);
             Refresh();
-            if (!((Button)window.FindName("SelectPendingQueueButton")).IsEnabled)
+            if (!((MenuItem)window.FindName("SelectPendingQueueButton")).IsEnabled)
                 throw new InvalidOperationException("Idle task must restore category selection.");
         }
         finally { window.Close(); }

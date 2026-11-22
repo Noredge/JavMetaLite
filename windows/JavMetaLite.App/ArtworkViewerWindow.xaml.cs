@@ -186,7 +186,7 @@ public partial class ArtworkViewerWindow : Window
         _deleteLocalImage = deleteLocalImage ?? File.Delete;
         var initialItem = items[Math.Clamp(initialIndex, 0, items.Count - 1)];
         InitializeComponent();
-        WindowVisualTheme.ApplyDarkTitleBar(this);
+        WindowVisualTheme.Attach(this);
         RefreshArtworkSourceOptions();
         _initialArtworkSourceName = _selectedArtworkSourceName;
         InitializeCurrentSourceSampleSelection();

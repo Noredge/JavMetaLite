@@ -7,7 +7,7 @@
         Width="900" Height="650" MinWidth="720" MinHeight="520"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize"
-        Background="{StaticResource WindowBrush}"
+        Background="{DynamicResource WindowBrush}"
         ShowInTaskbar="False">
     <Grid Margin="24,22">
         <Grid.RowDefinitions>
@@ -20,10 +20,10 @@
 
         <StackPanel>
             <TextBlock Text="{DynamicResource Preview.Title}" FontSize="22" FontWeight="SemiBold" />
-            <TextBlock Text="{DynamicResource Preview.Subtitle}" Foreground="{StaticResource MutedBrush}" Margin="0,5,0,0" TextWrapping="Wrap" />
+            <TextBlock Text="{DynamicResource Preview.Subtitle}" Foreground="{DynamicResource MutedBrush}" Margin="0,5,0,0" TextWrapping="Wrap" />
         </StackPanel>
 
-        <Border x:Name="PreviewPathPanel" Grid.Row="1" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,18,0,14">
+        <Border x:Name="PreviewPathPanel" Grid.Row="1" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,18,0,14">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="90" />
@@ -33,18 +33,18 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
-                <TextBlock Text="{DynamicResource Preview.CurrentVideo}" Foreground="{StaticResource MutedBrush}" />
-                <TextBox x:Name="SourcePathTextBox" Grid.Column="1" IsReadOnly="True" BorderThickness="0" Background="Transparent" Foreground="{StaticResource TextBrush}" TextWrapping="Wrap" Padding="0" MinHeight="0" />
-                <TextBlock Grid.Row="1" Text="{DynamicResource Preview.FinalVideo}" Foreground="{StaticResource MutedBrush}" Margin="0,10,0,0" />
-                <TextBox x:Name="TargetPathTextBox" Grid.Row="1" Grid.Column="1" IsReadOnly="True" BorderThickness="0" Background="Transparent" Foreground="#72E3A6" TextWrapping="Wrap" Margin="0,10,0,0" Padding="0" MinHeight="0" />
+                <TextBlock Text="{DynamicResource Preview.CurrentVideo}" Foreground="{DynamicResource MutedBrush}" />
+                <TextBox x:Name="SourcePathTextBox" Grid.Column="1" IsReadOnly="True" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Padding="0" MinHeight="0" />
+                <TextBlock Grid.Row="1" Text="{DynamicResource Preview.FinalVideo}" Foreground="{DynamicResource MutedBrush}" Margin="0,10,0,0" />
+                <TextBox x:Name="TargetPathTextBox" Grid.Row="1" Grid.Column="1" IsReadOnly="True" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource SuccessTextBrush}" TextWrapping="Wrap" Margin="0,10,0,0" Padding="0" MinHeight="0" />
             </Grid>
         </Border>
 
-        <Border x:Name="ChangesPanel" Grid.Row="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="6">
+        <Border x:Name="ChangesPanel" Grid.Row="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="6">
             <ListView x:Name="ChangesList"
                       Background="Transparent"
                       BorderThickness="0"
-                      Foreground="{StaticResource TextBrush}"
+                      Foreground="{DynamicResource TextBrush}"
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling"
                       VirtualizingPanel.ScrollUnit="Pixel"
@@ -65,7 +65,7 @@
                 </ListView.ItemContainerStyle>
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <Border Background="#111821" CornerRadius="8" Margin="3" Padding="12,10">
+                        <Border Background="{DynamicResource ChromeBrush}" CornerRadius="8" Margin="3" Padding="12,10">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="128" />
@@ -76,7 +76,7 @@
                                 </Border>
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="{Binding Description}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                    <TextBlock Text="{Binding Path}" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" FontSize="11" Margin="0,3,0,0" />
+                                    <TextBlock Text="{Binding Path}" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" FontSize="11" Margin="0,3,0,0" />
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -85,9 +85,9 @@
             </ListView>
         </Border>
 
-        <Border x:Name="WarningPanel" Grid.Row="3" Background="#332615" BorderBrush="#79551D" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,14,0,0" Visibility="Collapsed">
+        <Border x:Name="WarningPanel" Grid.Row="3" Background="{DynamicResource WarningFillBrush}" BorderBrush="{DynamicResource BatchSourceWarningBrush}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,14,0,0" Visibility="Collapsed">
             <StackPanel>
-                <TextBlock x:Name="WarningText" Foreground="#FFD18A" TextWrapping="Wrap" />
+                <TextBlock x:Name="WarningText" Foreground="{DynamicResource BatchSourceWarningBrush}" TextWrapping="Wrap" />
                 <CheckBox x:Name="OverwriteConfirmCheckBox" Content="{DynamicResource Preview.ConfirmOverwrite}" Margin="0,10,0,0" Checked="OverwriteConfirm_Changed" Unchecked="OverwriteConfirm_Changed" />
             </StackPanel>
         </Border>
@@ -97,7 +97,7 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="SafetyText" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Text="{DynamicResource Preview.Safety}" TextWrapping="Wrap" Margin="0,0,18,0" />
+            <TextBlock x:Name="SafetyText" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Text="{DynamicResource Preview.Safety}" TextWrapping="Wrap" Margin="0,0,18,0" />
             <StackPanel x:Name="FooterButtonsPanel" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="{DynamicResource Common.Cancel}" IsCancel="True" />
                 <Button x:Name="ConfirmButton" Style="{StaticResource PrimaryButton}" Content="{DynamicResource Common.ConfirmExecute}" Click="Confirm_Click" Margin="10,0,0,0" />
