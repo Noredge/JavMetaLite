@@ -30,7 +30,7 @@ public partial class BatchSavePreviewWindow : Window
         }
 
         InitializeComponent();
-        WindowVisualTheme.ApplyDarkTitleBar(this);
+        WindowVisualTheme.Attach(this);
         Items = items;
         Issues = issues;
         PlansList.ItemsSource = items.Select(CreateGroup).ToArray();

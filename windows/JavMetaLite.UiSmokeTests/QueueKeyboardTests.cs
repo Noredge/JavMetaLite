@@ -34,7 +34,9 @@ internal static partial class Program
     {
         var target = Keyboard.FocusedElement as UIElement
             ?? throw new InvalidOperationException("Keyboard test has no focused UI element.");
-        if (Window.GetWindow(target) != window)
+        if (Window.GetWindow(target) != window &&
+            !((System.Windows.Controls.Primitives.Popup)window.FindName("AppearancePopup")).IsKeyboardFocusWithin &&
+            !((ComboBox)window.FindName("LanguageComboBox")).IsKeyboardFocusWithin)
             throw new InvalidOperationException("Keyboard test focus escaped its synthetic window.");
         var args = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window)!,
             Environment.TickCount, key)
@@ -58,16 +60,19 @@ internal static partial class Program
         Keyboard.Focus(target);
     }
 
+    private static bool NavigationSettled(MainWindow window) =>
+        typeof(MainWindow).GetField("_navigationPreviewCancellation", PrivateInstance)!.GetValue(window) is null;
+
     private static async Task TestQueueKeyboardNavigationAsync(string root)
     {
         var originalLanguage = LocalizationService.CurrentLanguageCode;
         try
         {
-            foreach (var scenario in new[] { "down", "up", "release", "restart", "mouse", "tab", "deactivate", "cancel" })
+            foreach (var scenario in new[] { "down", "up", "release", "restart", "mouse", "tab", "deactivate", "supersede" })
                 await TestQueueKeyboardScenarioAsync(root, scenario);
         }
         finally { LocalizationService.ApplyLanguage(originalLanguage); }
-        Console.WriteLine("UI PASS queueHeldArrows=True busyFocusLeakBlocked=True cachedNavigation=True queueBounds=True keyRelease=True explicitFocusRespected=True previewCancelKeyboard=True intentionalComboArrows=True");
+        Console.WriteLine("UI PASS queueHeldArrows=True nonblockingPreview=True cachedNavigation=True queueBounds=True keyRelease=True explicitFocusRespected=True supersededPreviewCanceled=True queueViewStable=True simultaneousUncroppedArtwork=True intentionalComboArrows=True");
     }
 
     private static async Task TestQueueKeyboardScenarioAsync(string root, string scenario)
@@ -80,7 +85,8 @@ internal static partial class Program
         window.Show();
         try
         {
-            ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SetQueueOpen(window, true);
+
             var queue = (IList)typeof(MainWindow).GetField("_movieQueue", PrivateInstance)!.GetValue(window)!;
             for (var i = 0; i < 3; i++)
             {
@@ -99,96 +105,87 @@ internal static partial class Program
             var direction = scenario == "up" ? Key.Up : Key.Down;
             var initial = direction == Key.Up ? 2 : 0;
             list.SelectedIndex = initial;
-            await UntilStableAsync(() => !IsWindowBusy(window), "Initial keyboard preview did not settle.");
+            await UntilStableAsync(() => NavigationSettled(window), "Initial keyboard preview did not settle.");
             Keyboard.Focus(list);
             if (!list.IsKeyboardFocusWithin) throw new InvalidOperationException("Queue did not obtain keyboard focus.");
+            var resets = 0;
+            ((System.Collections.Specialized.INotifyCollectionChanged)list.Items).CollectionChanged += (_, change) =>
+            {
+                if (change.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset) resets++;
+            };
             handler.HoldNext = true;
             QueueTestKey(window, direction);
-            await UntilStableAsync(() => handler.Pending == 1 && IsWindowBusy(window), "Slow keyboard preview did not start.");
-
-            // Reproduce the focus fallback observed in the recording deterministically. This is
-            // NOT a mouse/Tab gesture; the held queue arrow must survive framework focus movement.
-            Keyboard.Focus(language);
-            if (!language.IsKeyboardFocusWithin) throw new InvalidOperationException("Cannot reproduce language focus fallback.");
-            for (var i = 0; i < 20; i++)
-            {
-                var input = QueueTestKey(window, direction);
-                if (!input.Handled || language.SelectedIndex != 0 || source.SelectedIndex != sourceIndex)
-                    throw new InvalidOperationException($"Held {direction} leaked during preview: language={language.SelectedIndex}, source={source.SelectedIndex}, scenario={scenario}.");
-                await Dispatcher.Yield(DispatcherPriority.Input);
-            }
-            if (handler.Calls != 2 || list.SelectedIndex != 1)
-                throw new InvalidOperationException("Held arrows queued extra preview work while busy.");
+            await UntilStableAsync(() => handler.Pending == 1, "Slow keyboard preview did not start.");
+            if (IsWindowBusy(window) || !list.IsEnabled || list.SelectedIndex != 1 ||
+                window.DataContext != ((MovieJob)queue[1]!).Metadata ||
+                !((FrameworkElement)window.FindName("MetadataPanel")).IsEnabled ||
+                ((Button)window.FindName("CancelOperationButton")).IsVisible)
+                throw new InvalidOperationException("Selecting a movie blocked the workspace or deferred its metadata.");
 
             var explicitFocus = scenario is "mouse" or "tab" or "deactivate";
+            var fallback = (Button)window.FindName("PreferencesButton");
             if (scenario is "release" or "restart") QueueTestKey(window, direction, release: true);
-            if (scenario == "restart")
-            {
-                // The key was released, but framework focus is still temporarily on the combo.
-                if (!QueueTestKey(window, direction).Handled || language.SelectedIndex != 0)
-                    throw new InvalidOperationException("Fresh arrow leaked before pending queue focus returned.");
-            }
-            if (scenario == "mouse") QueueTestClick(language);
-            if (scenario == "tab")
-            {
-                QueueTestKey(window, Key.Tab);
-                Keyboard.Focus(language);
-            }
+            if (scenario == "mouse") QueueTestClick(fallback);
+            if (scenario == "tab") { QueueTestKey(window, Key.Tab); Keyboard.Focus(fallback); }
             if (scenario == "deactivate")
+            {
+                Keyboard.Focus(fallback);
                 typeof(Window).GetMethod("OnDeactivated", PrivateInstance)!.Invoke(window, [EventArgs.Empty]);
-            if (explicitFocus)
-            {
-                QueueTestKey(window, Key.Down);
-                if (language.SelectedIndex != 1)
-                    throw new InvalidOperationException("Intentional language navigation was swallowed.");
-                QueueTestKey(window, Key.Down, release: true);
             }
-            if (scenario == "cancel")
-                ((Button)window.FindName("CancelOperationButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            else handler.Release();
-            await UntilStableAsync(() => !IsWindowBusy(window) && handler.Pending == 0, "Held-key preview did not finish.");
-            if (explicitFocus)
+            if (scenario is "supersede" or "restart")
             {
-                if (!language.IsKeyboardFocusWithin || language.SelectedIndex != 1)
-                    throw new InvalidOperationException("Preview completion stole deliberately changed focus.");
+                QueueTestKey(window, direction);
+                if (list.SelectedIndex != 2) throw new InvalidOperationException("A pending preview swallowed the next arrow.");
+                list.SelectedIndex = 1;
             }
-            else
-            {
-                if (!list.IsKeyboardFocusWithin || list.SelectedIndex != 1 || language.SelectedIndex != 0)
-                    throw new InvalidOperationException("Queue focus/selection was not restored after held-key preview.");
-                if (scenario != "release") QueueTestKey(window, direction, release: true);
+            handler.Release();
+            await UntilStableAsync(() => NavigationSettled(window) && handler.Pending == 0, "Keyboard preview did not settle.");
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            if (explicitFocus && !fallback.IsKeyboardFocusWithin)
+                throw new InvalidOperationException("Preview completion stole deliberately changed focus.");
 
-                // Cached round trips and end stops, without a fresh mouse click between arrows.
-                for (var i = 0; i < 6; i++)
+            Keyboard.Focus(list);
+            var calls = handler.Calls;
+            for (var i = 0; i < 12; i++)
+            {
+                var back = initial == 0 ? Key.Up : Key.Down;
+                QueueTestKey(window, back);
+                QueueTestKey(window, back);
+                if (list.SelectedIndex != initial) throw new InvalidOperationException("Queue boundary navigation escaped.");
+                QueueTestKey(window, direction);
+                if (list.SelectedIndex != 1) throw new InvalidOperationException("Cached navigation lost the selection.");
+            }
+            QueueTestKey(window, direction, release: true);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            if (resets != 0 || handler.Calls != calls || language.SelectedIndex != 0 || source.SelectedIndex != sourceIndex)
+                throw new InvalidOperationException($"Selection refreshed the queue or reloaded cached images: resets={resets}, calls={handler.Calls}/{calls}.");
+
+            if (scenario == "down")
+            {
+                var cover = (Border)window.FindName("PosterPreviewBorder");
+                var sleeve = (Border)window.FindName("FanartPreviewBorder");
+                foreach (var width in new[] { 930, 1120 })
                 {
-                    var back = initial == 0 ? Key.Up : Key.Down;
-                    QueueTestKey(window, back);
-                    await UntilStableAsync(() => !IsWindowBusy(window) && list.IsKeyboardFocusWithin, "Cached back navigation lost focus.");
-                    QueueTestKey(window, back); // already at first/last item
-                    if (list.SelectedIndex != initial) throw new InvalidOperationException("Queue boundary navigation escaped.");
-                    QueueTestKey(window, back, release: true);
-                    QueueTestKey(window, direction);
-                    await UntilStableAsync(() => !IsWindowBusy(window) && list.IsKeyboardFocusWithin, "Cached forward navigation lost focus.");
-                    QueueTestKey(window, direction, release: true);
+                    window.Width = width;
+                    window.Height = 650;
+                    window.UpdateLayout();
+                    var viewport = (Grid)window.FindName("ArtViewport");
+                    if (!FitsInside(cover, viewport) || !FitsInside(sleeve, viewport) ||
+                        !cover.IsVisible || !sleeve.IsVisible ||
+                        cover.TranslatePoint(new Point(0, cover.ActualHeight), viewport).Y >= sleeve.TranslatePoint(new Point(), viewport).Y)
+                        throw new InvalidOperationException("Both images did not fit together in the artwork column.");
+                    foreach (var (border, name) in new[] { (cover, "PosterImage"), (sleeve, "FanartImage") })
+                    {
+                        var artwork = ((Image)window.FindName(name)).Source;
+                        if (artwork is null || border.ActualWidth < 1 || border.ActualHeight < 1 ||
+                            Math.Abs(border.ActualHeight - border.ActualWidth * artwork.Height / artwork.Width) > 1 ||
+                            border.Background is not null)
+                            throw new InvalidOperationException("Loaded artwork exposed its background or changed aspect ratio.");
+                    }
                 }
-                if (language.SelectedIndex != 0 || source.SelectedIndex != sourceIndex ||
-                    handler.Calls != (scenario == "cancel" ? 3 : 2))
-                    throw new InvalidOperationException("Cached arrows changed a combo or reloaded completed images.");
-
-                // No key release or Dispatcher idle between cached round trips: deferred
-                // focus callbacks from the previous selection must not redirect later input.
-                for (var i = 0; i < 20; i++)
-                {
-                    QueueTestKey(window, initial == 0 ? Key.Up : Key.Down);
-                    QueueTestKey(window, direction);
-                }
-                QueueTestKey(window, direction, release: true);
-                await UntilStableAsync(() => !IsWindowBusy(window) && list.IsKeyboardFocusWithin,
-                    "Rapid cached round trips did not restore queue focus.");
-                if (list.SelectedIndex != 1 || language.SelectedIndex != 0)
-                    throw new InvalidOperationException("Rapid cached arrows escaped the queue.");
             }
 
+            ClickWorkspaceButton(window, "PreferencesButton");
             QueueTestClick(language);
             language.SelectedIndex = 0;
             for (var i = 1; i < 4; i++)
@@ -200,6 +197,7 @@ internal static partial class Program
             QueueTestKey(window, Key.Up);
             if (language.SelectedIndex != 2) throw new InvalidOperationException("Deliberate language Up stopped working.");
             QueueTestKey(window, Key.Up, release: true);
+            ((System.Windows.Controls.Primitives.Popup)window.FindName("AppearancePopup")).IsOpen = false;
             QueueTestClick(source);
             source.SelectedIndex = 0;
             QueueTestKey(window, Key.Down);

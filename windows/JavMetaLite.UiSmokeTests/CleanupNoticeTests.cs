@@ -14,7 +14,7 @@ internal static partial class Program
     {
         foreach (var recoveryFailed in new[] { false, true })
         {
-            var window = new MainWindow();
+            var window = new MainWindow(TestPreferences());
             window.Show();
             var path = @"C:\Synthetic\.JavMetaLite-test.tmp";
             Exception error = recoveryFailed

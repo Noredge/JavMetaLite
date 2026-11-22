@@ -11,7 +11,7 @@ internal static partial class Program
 {
     private static void TestSearchPredicateParity()
     {
-        var window = new MainWindow();
+        var window = new MainWindow(TestPreferences());
         window.Show();
         try
         {
@@ -84,19 +84,19 @@ internal static partial class Program
             var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
             if (count != 10000 || allocated > 16384)
                 throw new InvalidOperationException($"Queue eligibility regained per-query parsing/allocation: results={count}, bytes={allocated}.");
-            Console.WriteLine("UI PASS searchPredicateOldBehaviorParity=True unicodeBlankIds=True customIdFallbackPreserved=True searchCancelRetryStates=True sourceScopedRetryParity=True lowAllocationQueueChecks=True");
+            Console.WriteLine("UI PASS checkedReviewedMoviesSearchable=True unicodeBlankIds=True customIdFallbackPreserved=True searchCancelRetryStates=True sourceScopedRetryParity=True lowAllocationQueueChecks=True");
 
             void Check(MovieJob job)
             {
-                // Preserve the preview.48 expressions as an independent behavior oracle.
+                // Check normalized IDs and eligibility independently of the optimized queue predicate.
                 var idMissing = string.IsNullOrWhiteSpace(MovieIdParser.Normalize(job.Metadata.Id));
                 var expectedSearch = job.IsSelectedForBatch && !idMissing && job.SearchState is
-                    (MovieSearchState.Searchable or MovieSearchState.SearchFailed or MovieSearchState.SearchCanceled);
+                    (MovieSearchState.Searchable or MovieSearchState.NeedsReview or MovieSearchState.SearchFailed or MovieSearchState.SearchCanceled);
                 var expectedIssue = job.LocalNfoSaveBlocked || job.HasFailedSources || idMissing ||
                     job.SearchState == MovieSearchState.SearchFailed || job.SaveState is (MovieSaveState.SaveFailed or MovieSaveState.Conflict);
                 if (job.CanBatchSearch != expectedSearch || issue(job) != expectedIssue)
                     throw new InvalidOperationException($"Queue predicate behavior changed for {inputDescription(job)}.");
-                foreach (var mode in new[] { "libredmm", "r18dev", "custom", "manual" })
+                foreach (var mode in new[] { "libredmm", "r18dev", "custom" })
                 {
                     source.SelectedItem = source.Items.OfType<ComboBoxItem>().Single(item => item.Tag?.ToString() == mode);
                     string[] allowed = mode switch { "libredmm" => ["libredmm"], "r18dev" => ["r18dev"], "custom" => ["libredmm", "r18dev"], _ => [] };

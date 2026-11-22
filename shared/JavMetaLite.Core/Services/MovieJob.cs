@@ -150,7 +150,16 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
 
     public MovieMetadata? LocalSourceMetadata { get; private set; }
 
-    public ArtworkCoverCandidate? LocalArtworkCandidate { get; private set; }
+    public ArtworkCoverCandidate? LocalArtworkCandidate
+    {
+        get;
+        private set
+        {
+            if (Equals(field, value)) return;
+            field = value;
+            OnPropertyChanged();
+        }
+    }
 
     public ArtworkCoverCandidate? ManualArtworkCandidate { get; private set; }
 
@@ -233,7 +242,7 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
     // Eligibility only needs presence. Normalize also accepts unrecognized, nonempty
     // input via its trimmed fallback; parsing here adds work, not validation.
     public bool CanBatchSearch => IsSelectedForBatch &&
-                                  SearchState is (MovieSearchState.Searchable or
+                                  SearchState is (MovieSearchState.Searchable or MovieSearchState.NeedsReview or
                                       MovieSearchState.SearchFailed or
                                       MovieSearchState.SearchCanceled) &&
                                   !string.IsNullOrWhiteSpace(Metadata.Id);
@@ -504,15 +513,24 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
 
         // Editable values must never mutate the provider result reused by retries.
         preferredOnlineMetadata = CloneMetadata(preferredOnlineMetadata);
-        ReplaceAvailableScreenshotUrls(onlineSources.Append(preferredOnlineMetadata));
+        var movieId = MovieIdParser.Normalize(preferredOnlineMetadata.Id);
+        // New results win per provider. Only other providers for this title remain available for review.
+        var queriedSources = attempts?.Select(attempt => attempt.SourceName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var reviewSources = onlineSources.Concat(SourceResults.Where(previous =>
+                movieId.Length > 0 && queriedSources?.Contains(previous.SourceName) != true &&
+                string.Equals(MovieIdParser.Normalize(previous.Id), movieId, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(previous.SourceName, "local-nfo", StringComparison.OrdinalIgnoreCase)))
+            .DistinctBy(result => MetadataCandidateSource.FromMetadata(result).Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
+        ReplaceAvailableScreenshotUrls(reviewSources.Append(preferredOnlineMetadata));
         var retainedManualCandidates = CaptureManualCandidates();
         PreferredArtworkSourceName = MetadataCandidateSource
             .FromMetadata(preferredOnlineMetadata)
             .Name;
         if (LocalSourceMetadata is null)
         {
-            ReplaceMetadata(preferredOnlineMetadata, onlineSources, retainedManualCandidates);
+            ReplaceMetadata(preferredOnlineMetadata, reviewSources, retainedManualCandidates);
             MarkOnlineExtrafanartCandidates(onlineSources.Append(preferredOnlineMetadata));
             ApplySourceProfile(sourceProfile, resolvedArtworkBundleSource);
             CompleteSearch(attempts);
@@ -524,7 +542,7 @@ public sealed class MovieJob : IDisposable, INotifyPropertyChanged
         var composition = LocalMetadataReviewComposer.ComposeWithOnline(
             localForMerge,
             preferredOnlineMetadata,
-            onlineSources);
+            reviewSources);
         ReplaceMetadata(composition.Metadata, composition.Sources, retainedManualCandidates);
         MarkOnlineExtrafanartCandidates(onlineSources.Append(preferredOnlineMetadata));
         ApplySourceProfile(sourceProfile, resolvedArtworkBundleSource);

@@ -14,6 +14,7 @@ $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $projects = @(
     @{ Name = "Core smoke tests"; Path = "windows\JavMetaLite.SmokeTests\JavMetaLite.SmokeTests.csproj" },
     @{ Name = "File transaction regression tests"; Path = "windows\JavMetaLite.RegressionTests\JavMetaLite.RegressionTests.csproj" },
+    @{ Name = "Unified workspace"; Path = "windows\JavMetaLite.UiSmokeTests\JavMetaLite.UiSmokeTests.csproj"; Suite = "--workspace" },
     @{ Name = "WPF UI smoke tests"; Path = "windows\JavMetaLite.UiSmokeTests\JavMetaLite.UiSmokeTests.csproj" }
 )
 
@@ -35,6 +36,7 @@ try {
             $arguments += "-p:OutputPath=$BuildOutputDirectory"
         }
 
+        if ($project.ContainsKey("Suite")) { $arguments += @("--", $project.Suite) }
         & $DotNet @arguments
         if ($LASTEXITCODE -ne 0) {
             throw "$($project.Name) failed with exit code $LASTEXITCODE."

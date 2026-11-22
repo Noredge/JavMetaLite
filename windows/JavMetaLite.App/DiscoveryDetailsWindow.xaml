@@ -5,7 +5,7 @@
         Title="{DynamicResource Discovery.DetailsTitle}"
         Width="720" Height="440" MinWidth="480" MinHeight="280"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
-        Background="{StaticResource WindowBrush}">
+        Background="{DynamicResource WindowBrush}">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

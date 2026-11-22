@@ -23,7 +23,7 @@ internal static partial class Program
         window.Show();
         try
         {
-            ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SetQueueOpen(window, true);
             var queue = (IList)typeof(MainWindow).GetField("_movieQueue", PrivateInstance)!.GetValue(window)!;
             var first = CoverJob("DEF-001");
             var next = CoverJob("DEF-002");
@@ -58,8 +58,9 @@ internal static partial class Program
                 window.UpdateLayout();
                 AssertPlaceholder("ArtworkPreview.Deferred");
                 CoverAssert(posterText.ToolTip?.ToString() == LocalizationService.Get("ArtworkPreview.DeferredHint"), "Tooltip did not localize.");
-                CoverAssert(FitsInside(posterText, (FrameworkElement)window.FindName("PosterPreviewBorder")) &&
-                    FitsInside(fanartText, (FrameworkElement)window.FindName("FanartPreviewBorder")), "Deferred text overflows in " + language);
+                CoverAssert(FitsInside(posterText, (FrameworkElement)window.FindName("PosterPreviewBorder")), "Poster text overflows in " + language);
+                CoverAssert(fanartText.IsVisible && FitsInside(fanartText, (FrameworkElement)window.FindName("FanartPreviewBorder")),
+                    "Cover text overflows in " + language);
                 var visual = new RenderTargetBitmap((int)window.ActualWidth, (int)window.ActualHeight, 96, 96, PixelFormats.Pbgra32);
                 visual.Render(window);
                 var encoder = new PngBitmapEncoder();

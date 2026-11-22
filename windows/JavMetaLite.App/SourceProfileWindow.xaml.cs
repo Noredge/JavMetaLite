@@ -21,7 +21,7 @@ public partial class SourceProfileWindow : Window
             normalized.ArtworkSource,
             BuildSourceOptions(true)));
         InitializeComponent();
-        WindowVisualTheme.ApplyDarkTitleBar(this);
+        WindowVisualTheme.Attach(this);
     }
 
     public ObservableCollection<SourceProfileRow> Rows { get; }

@@ -14,20 +14,23 @@ internal static partial class Program
     private static void TestSearchToolbarLayout(double hostMaximumWidth = double.PositiveInfinity)
     {
         var originalLanguage = LocalizationService.CurrentLanguageCode;
-        var window = new MainWindow { MaxWidth = hostMaximumWidth };
+        var window = new MainWindow(TestPreferences()) { MaxWidth = hostMaximumWidth };
         var minimumWidth = window.MinWidth;
         window.Show();
         var language = (ComboBox)window.FindName("LanguageComboBox");
+
         var toolbar = (Border)window.FindName("SearchToolbar");
         var layout = (Grid)window.FindName("SearchToolbarLayout");
         var source = (ComboBox)window.FindName("SourceComboBox");
         var host = (Grid)window.FindName("SourceSelectorHost");
         var gear = (Button)window.FindName("SourceProfileButton");
-        var browser = (Button)window.FindName("BrowserImportButton");
+        var output = (Button)window.FindName("SaveSettingsToggleButton");
+        var batchSearch = (Button)window.FindName("SearchQueueButton");
+        var manual = (ComboBoxItem)window.FindName("ManualSearchItem");
         var search = (Button)window.FindName("SearchButton");
         var id = (TextBox)window.FindName("IdTextBox");
         var label = (TextBlock)window.FindName("MovieIdTextBlock");
-        var hint = (TextBlock)window.FindName("BatchSourceHint");
+        var sourceLabel = (TextBlock)window.FindName("AutomaticSourceText");
         try
         {
             foreach (var code in UiLanguageCodes.Supported)
@@ -35,12 +38,13 @@ internal static partial class Program
                 language.SelectedItem = language.Items.OfType<ComboBoxItem>().Single(item => item.Tag?.ToString() == code);
                 foreach (var batch in new[] { false, true })
                 {
-                    ((RadioButton)window.FindName(batch ? "BatchModeButton" : "SingleModeButton"))
-                        .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    SetQueueOpen(window, batch);
+                    window.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                     SetLayoutTestWidth(window, 1120);
-                    var offset = window.ActualWidth - toolbar.ActualWidth;
+                    var offset = window.ActualWidth - layout.ActualWidth;
+                    var rowWidth = host.TranslatePoint(new Point(host.ActualWidth, 0), layout).X;
                     var widths = new[] { 930d, 1000, 1120, 1320 }
-                        .Concat(new[] { 539d, 540, 541, 649, 650, 651, 719, 720, 721 }.Select(width => width + offset))
+                        .Concat(new[] { rowWidth - 1, rowWidth, rowWidth + 1 }.Select(width => width + offset))
                         .Where(width => width >= minimumWidth).Distinct().Order().ToArray();
                     foreach (var width in widths)
                     {
@@ -48,21 +52,27 @@ internal static partial class Program
                         var position = host.TranslatePoint(new Point(), layout);
                         var hostWidth = host.ActualWidth;
                         var row = Grid.GetRow(host);
-                        foreach (var mode in MetadataSearchSourceModes.Supported)
+                        foreach (var mode in new[] { "libredmm", "r18dev", "custom" })
                         {
                             source.SelectedItem = source.Items.OfType<ComboBoxItem>().Single(item => item.Tag?.ToString() == mode);
                             SetLayoutTestWidth(window, width);
                             var context = $"{code}/{(batch ? "batch" : "single")}/{width:0}/{mode} actualWindow={window.ActualWidth:0} toolbar={toolbar.ActualWidth:0}";
                             if (Grid.GetRow(host) != row || Math.Abs(host.ActualWidth - hostWidth) > 0.5 ||
                                 (position - host.TranslatePoint(new Point(), layout)).Length > 0.5)
-                                throw new InvalidOperationException($"Source change rearranged toolbar: {context}");
+                                throw new InvalidOperationException($"Source change rearranged toolbar: {context}, row={row}/{Grid.GetRow(host)}, width={hostWidth}/{host.ActualWidth}, position={position}/{host.TranslatePoint(new Point(), layout)}.");
                             if (Math.Abs(width - 1120) < 0.5 && row != 0)
                                 throw new InvalidOperationException($"Default window must use one search row: {context}");
-                            foreach (var control in new FrameworkElement[] { label, id, search, browser, host })
+                            foreach (var control in new FrameworkElement[] { label, id, search, batchSearch, host })
                                 if (!FitsInside(control, layout, 0.5))
                                     throw new InvalidOperationException($"Toolbar control clipped: {control.Name}, {context}");
+                            var batchEdge = batchSearch.TranslatePoint(new Point(batchSearch.ActualWidth, 0), toolbar).X;
+                            var outputOrigin = output.TranslatePoint(new Point(), toolbar);
+                            if (Math.Abs(toolbar.ActualWidth - toolbar.Padding.Right - outputOrigin.X - output.ActualWidth) > 1 ||
+                                outputOrigin.X < batchEdge || !FitsInside(output, toolbar) ||
+                                new Control[] { id, search, source, batchSearch }.Any(control => Math.Abs(control.ActualHeight - 36) > 0.5))
+                                throw new InvalidOperationException($"Toolbar height or right pinning regressed: {context}.");
                             var controls = row == 0
-                                ? new FrameworkElement[] { label, id, search, browser, host }
+                                ? new FrameworkElement[] { label, id, search, sourceLabel, host }
                                 : [label, id, search];
                             for (var index = 1; index < controls.Length; index++)
                             {
@@ -73,16 +83,16 @@ internal static partial class Program
                                 if (left.X - right.X < 3 || Math.Abs(left.Y - right.Y) > 1)
                                     throw new InvalidOperationException($"Toolbar spacing/alignment failed: {context}");
                             }
-                            if (row != 0 && browser.TranslatePoint(new Point(browser.ActualWidth, 0), layout).X + 3 > position.X)
-                                throw new InvalidOperationException($"Wrapped source overlaps web lookup: {context}");
+                            var gap = batchSearch.TranslatePoint(new Point(), layout).X -
+                                source.TranslatePoint(new Point(source.ActualWidth, 0), layout).X;
+                            if (gap < 3 || gap > 12 || !batchSearch.IsVisible || !batchSearch.Focusable)
+                                throw new InvalidOperationException($"Batch search is not beside the source: {context}");
                             var displayed = source.Resources["SearchSourceSelectionLabel"]?.ToString() ?? string.Empty;
-                            var expectedLabel = toolbar.ActualWidth < 650 && mode == "libredmm"
-                                ? "LibreDMM" : ((ComboBoxItem)source.SelectedItem).Content?.ToString();
-                            var expectedBrowserLabel = LocalizationService.Get(toolbar.ActualWidth < 650
-                                ? "Main.BrowserImportChooseCompact" : "Main.BrowserImportChoose");
-                            if (displayed != expectedLabel || browser.Content?.ToString() != expectedBrowserLabel ||
-                                string.IsNullOrWhiteSpace(browser.ToolTip?.ToString()))
-                                throw new InvalidOperationException($"Compact labels did not refresh on resize/language/source change: {context}");
+                            var expectedLabel = mode == "libredmm" ? "LibreDMM" : ((ComboBoxItem)source.SelectedItem).Content?.ToString();
+                            if (displayed != expectedLabel || ((TextBlock)window.FindName("ManualSearchLabel")).Text != LocalizationService.Get("Desk.WebLookup") ||
+                                System.Windows.Automation.AutomationProperties.GetName(manual) != LocalizationService.Get("Desk.WebLookup") ||
+                                string.IsNullOrWhiteSpace(System.Windows.Automation.AutomationProperties.GetHelpText(manual)))
+                                throw new InvalidOperationException($"Search controls lost their label: {context}");
                             var presenter = FindVisualChildren<ContentPresenter>(source)
                                 .FirstOrDefault(item => item.Content?.ToString() == displayed);
                             if (string.IsNullOrEmpty(displayed) || presenter is null || !FitsInside(presenter, source, 0.5))
@@ -101,18 +111,12 @@ internal static partial class Program
                                     arrow.TranslatePoint(new Point(), host).X - gear.TranslatePoint(new Point(gear.ActualWidth, 0), host).X < 3)
                                     throw new InvalidOperationException($"Source gear/arrow spacing regressed: {context}");
                             }
-                            if (batch && mode != "manual" &&
-                                (hint.Visibility != Visibility.Visible || !FitsInside(hint, layout) ||
-                                 hint.TranslatePoint(new Point(), layout).Y < host.TranslatePoint(new Point(0, host.ActualHeight), layout).Y + 7))
-                                throw new InvalidOperationException($"Batch hint must remain below actions: {context}");
-                            if (!batch && hint.Visibility != Visibility.Collapsed)
-                                throw new InvalidOperationException($"Single mode shows batch hint: {context}");
                             if (Math.Abs(width - 1120) < 0.5)
                             {
                                 source.IsDropDownOpen = true;
                                 SetLayoutTestWidth(window, width);
                                 var dmm = source.Items.OfType<ComboBoxItem>().Single(item => item.Tag?.ToString() == "libredmm");
-                                if (dmm.Content?.ToString() != LocalizationService.Get("Main.Source.LibreDmmRecommended") ||
+                                if (!manual.IsVisible || dmm.Content?.ToString() != LocalizationService.Get("Main.Source.LibreDmmRecommended") ||
                                     Grid.GetRow(host) != row || Math.Abs(host.ActualWidth - hostWidth) > 0.5)
                                     throw new InvalidOperationException($"Opening source menu lost recommendation or changed layout: {context}");
                                 source.IsDropDownOpen = false;
@@ -123,7 +127,7 @@ internal static partial class Program
                     }
                 }
             }
-            Console.WriteLine("UI PASS toolbarDefaultSingleRowBothModes=True toolbarFourLanguages=True toolbarBreakpointEdges=True sourceMenuFullLabels=True sourceSwitchStable=True gearArrowSpacing=True batchHintSeparate=True");
+            Console.WriteLine("UI PASS toolbarDefaultSingleRowBothModes=True toolbarFourLanguages=True toolbarBreakpointEdges=True sourceMenuFullLabels=True sourceSwitchStable=True gearArrowSpacing=True manualLookupInSourceMenu=True batchSearchBesideSource=True");
         }
         finally
         {

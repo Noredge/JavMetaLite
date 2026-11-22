@@ -5,7 +5,7 @@
         Title="{DynamicResource Discovery.Title}"
         Width="760" Height="560" MinWidth="620" MinHeight="460"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource WindowBrush}"
+        Background="{DynamicResource WindowBrush}"
         Loaded="Window_Loaded"
         Closing="Window_Closing">
     <Grid Margin="20">
@@ -22,13 +22,13 @@
                    FontSize="20" FontWeight="SemiBold" />
         <TextBlock Grid.Row="1"
                    Text="{DynamicResource Discovery.Description}"
-                   Foreground="{StaticResource MutedBrush}"
+                   Foreground="{DynamicResource MutedBrush}"
                    TextWrapping="Wrap"
                    Margin="0,6,0,14" />
 
         <Border Grid.Row="2"
-                Background="{StaticResource PanelAltBrush}"
-                BorderBrush="{StaticResource BorderBrush}"
+                Background="{DynamicResource PanelAltBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="12"
@@ -61,8 +61,8 @@
         </Border>
 
         <Border Grid.Row="3"
-                Background="{StaticResource InputBrush}"
-                BorderBrush="{StaticResource BorderBrush}"
+                Background="{DynamicResource InputBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1"
                 CornerRadius="8">
             <DockPanel>
@@ -87,7 +87,7 @@
                 <ListBox x:Name="MovieGroupsList"
                          Background="Transparent"
                          BorderThickness="0"
-                         Foreground="{StaticResource TextBrush}"
+                         Foreground="{DynamicResource TextBrush}"
                          Padding="6"
                          ScrollViewer.CanContentScroll="False"
                          ScrollViewer.IsDeferredScrollingEnabled="False"
@@ -97,7 +97,7 @@
                          local:PreciseScrollBehavior.Axis="Vertical">
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem">
-                            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
                             <Setter Property="Padding" Value="8,6" />
                             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                         </Style>
@@ -120,19 +120,19 @@
                                                FontWeight="SemiBold"
                                                TextTrimming="CharacterEllipsis" />
                                     <TextBlock Text="{Binding Detail}"
-                                               Foreground="{StaticResource MutedBrush}"
+                                               Foreground="{DynamicResource MutedBrush}"
                                                FontSize="11"
                                                Margin="0,3,0,0"
                                                TextTrimming="CharacterEllipsis" />
                                     <TextBlock Text="{Binding PrimaryPath}"
-                                               Foreground="#7F93AA"
+                                               Foreground="{DynamicResource MutedBrush}"
                                                FontSize="10"
                                                Margin="0,2,0,0"
                                                TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                                 <TextBlock Grid.Column="3"
                                            Text="{Binding StatusText}"
-                                           Foreground="#6FA8FF"
+                                           Foreground="{DynamicResource AccentTextBrush}"
                                            FontSize="11"
                                            VerticalAlignment="Center"
                                            Margin="12,0,2,0" />
@@ -144,9 +144,9 @@
         </Border>
 
         <StackPanel Grid.Row="4" Margin="0,12,0,0">
-            <TextBlock x:Name="SummaryText" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+            <TextBlock x:Name="SummaryText" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" />
             <TextBlock x:Name="DiagnosticsText"
-                       Foreground="#FFB74D"
+                       Foreground="{DynamicResource BatchSourceWarningBrush}"
                        FontSize="11"
                        TextWrapping="Wrap"
                        MaxHeight="48"
@@ -162,7 +162,6 @@
             <Button Content="{DynamicResource Common.Cancel}" Click="Cancel_Click" IsCancel="True" />
             <Button x:Name="AddButton"
                     Style="{StaticResource PrimaryButton}"
-                    Content="{DynamicResource Discovery.AddFound}"
                     Click="Add_Click"
                     Margin="10,0,0,0"
                     IsEnabled="False" />

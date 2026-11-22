@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.IO;
 using System.Globalization;
 using System.Collections;
@@ -26,6 +27,14 @@ internal static partial class Program
     {
         try
         {
+            if (args.FirstOrDefault() == "--footer-status")
+                return RunFooterStatusChecks();
+            if (args.FirstOrDefault() == "--transfer-close")
+                return RunTransferCloseChecks(args[1]);
+            if (args.FirstOrDefault() == "--browser-profile")
+                return RunBrowserProfileTest();
+            if (args.FirstOrDefault() == "--workspace")
+                return RunWorkspaceChecks(args);
             if (args.FirstOrDefault() == "--performance")
                 return RunPerformance(args);
             if (args.FirstOrDefault() == "--search-hotspots")
@@ -42,7 +51,7 @@ internal static partial class Program
                 return RunVersionDisplayTests(args);
             if (args.FirstOrDefault() == "--layout")
                 return RunLayoutTests();
-            RunTests();
+            RunTests(args.FirstOrDefault() != "--workspace-details");
             return 0;
         }
         catch (Exception exception)
@@ -50,24 +59,18 @@ internal static partial class Program
             Console.Error.WriteLine(exception);
             return 1;
         }
+        finally
+        {
+            if (TestSettingsRoot.IsValueCreated) TestSettingsRoot.Value.Delete(true);
+        }
     }
 
-    private static void RunTests()
+    private static void RunIndependentUiSuites()
     {
-        TestSystemLanguageResolution();
-        var application = new Application();
-        application.Resources.MergedDictionaries.Add(new ResourceDictionary
-        {
-            Source = new Uri("/JavMetaLite;component/Resources/Theme.xaml", UriKind.Relative)
-        });
-        SynchronizationContext.SetSynchronizationContext(
-            new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
-        var window = new MainWindow();
-        window.Show();
-
         TestCloseWaitsForOperation(observeCancellation: true);
         TestCloseWaitsForOperation(observeCancellation: false);
         Console.WriteLine("UI PASS closeWaitsForRecovery=True repeatedCloseSafe=True uncancellableCompletionSafe=True");
+        TestFooterStatus();
         TestPartialSourceQueueUi();
         TestBatchSourceRoutingUi();
         TestPerformanceCloseout();
@@ -90,6 +93,22 @@ internal static partial class Program
         TestVersionDisplay(Path.Combine(Path.GetTempPath(), "JavMetaLite-version-display-" + Guid.NewGuid().ToString("N")));
         RunStabilityTask(TestFinalReviewFixesAsync(Path.Combine(
             Path.GetTempPath(), "JavMetaLite-final-review-fixes-" + Guid.NewGuid().ToString("N"))));
+    }
+
+    private static void RunTests(bool includeIndependentSuites)
+    {
+        TestSystemLanguageResolution();
+        var application = new Application();
+        application.Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("/JavMetaLite;component/Resources/Theme.xaml", UriKind.Relative)
+        });
+        SynchronizationContext.SetSynchronizationContext(
+            new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
+        var window = new MainWindow(TestPreferences());
+        window.Show();
+
+        if (includeIndependentSuites) RunIndependentUiSuites();
 
         var handle = new WindowInteropHelper(window).EnsureHandle();
         if (handle == IntPtr.Zero || !window.IsVisible || window.Title != "JAV Metadata Lite")
@@ -97,7 +116,8 @@ internal static partial class Program
             throw new InvalidOperationException("主窗口未成功创建。 ");
         }
         var nativeCaptionColor = TryReadDwmIntAttribute(handle, 35);
-        if (nativeCaptionColor is not null && nativeCaptionColor != 0x00211811)
+        var chromeColor = ((SolidColorBrush)window.FindResource("ChromeBrush")).Color;
+        if (nativeCaptionColor is not null && nativeCaptionColor != (chromeColor.R | chromeColor.G << 8 | chromeColor.B << 16))
         {
             throw new InvalidOperationException(
                 $"v0.9 dev3-r2 标题栏颜色不匹配：0x{nativeCaptionColor:X8}。 ");
@@ -129,7 +149,7 @@ internal static partial class Program
             ?? throw new InvalidOperationException("没有找到语言选择框。 ");
         var searchButton = window.FindName("SearchButton") as Button
             ?? throw new InvalidOperationException("没有找到搜索按钮。 ");
-        var browserImportButton = window.FindName("BrowserImportButton") as Button
+        var manualItem = window.FindName("ManualSearchItem") as ComboBoxItem
             ?? throw new InvalidOperationException("没有找到网页导入按钮。 ");
         var idTextBox = window.FindName("IdTextBox") as TextBox
             ?? throw new InvalidOperationException("没有找到番号输入框。 ");
@@ -149,14 +169,8 @@ internal static partial class Program
             ?? throw new InvalidOperationException("Preview 23 保存设置摘要入口未创建。 ");
         var saveSettingsOptionsPanel = window.FindName("SaveSettingsOptionsPanel") as StackPanel
             ?? throw new InvalidOperationException("Preview 23 可折叠保存设置未创建。 ");
-        var saveSettingsSummaryText = window.FindName("SaveSettingsSummaryText") as TextBlock
-            ?? throw new InvalidOperationException("Preview 23 保存设置摘要未创建。 ");
-        var saveSettingsTitleText = window.FindName("SaveSettingsTitleText") as TextBlock
-            ?? throw new InvalidOperationException("Preview 35 保存设置标题未创建。 ");
-        var saveSettingsChevronPath = window.FindName("SaveSettingsChevronPath") as ShapePath
-            ?? throw new InvalidOperationException("Preview 36 保存设置矢量折叠箭头未创建。 ");
         var posterRoleText = window.FindName("PosterRoleText") as TextBlock
-            ?? throw new InvalidOperationException("Preview 23 海报裁切标签未创建。 ");
+            ?? throw new InvalidOperationException("Preview 23 封面标签未创建。 ");
         var fanartRoleText = window.FindName("FanartRoleText") as TextBlock
             ?? throw new InvalidOperationException("Preview 23 完整封套标签未创建。 ");
         var preview26PosterBorder = window.FindName("PosterPreviewBorder") as Border
@@ -212,36 +226,27 @@ internal static partial class Program
             .Single(item => item.Tag?.ToString() == "libredmm");
         var libreSourceItem = sourceComboBox.Items.OfType<ComboBoxItem>()
             .Single(item => item.Tag?.ToString() == "libredmm");
-        var manualSourceItem = sourceComboBox.Items.OfType<ComboBoxItem>()
-            .Single(item => item.Tag?.ToString() == "manual");
+        if (sourceComboBox.Items.OfType<ComboBoxItem>().Any(item => Equals(item.Tag, "manual")))
+            throw new InvalidOperationException("Retired manual-only source is still offered.");
         idTextBox.Text = "IPZZ-850";
         sourceComboBox.SelectedItem = libreSourceItem;
         window.UpdateLayout();
-        if (browserImportButton.Content?.ToString() != "Manual web lookup ▾" ||
-            browserImportButton.ToolTip?.ToString()?.Contains("independently", StringComparison.Ordinal) != true)
+        if (System.Windows.Automation.AutomationProperties.GetName(manualItem) != "Manual search" ||
+            System.Windows.Automation.AutomationProperties.GetHelpText(manualItem)?.Contains("current movie ID", StringComparison.Ordinal) != true)
         {
             throw new InvalidOperationException("Preview 20 手动网页查询仍受自动搜索来源影响。 ");
         }
-        browserImportButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        var browserSourceMenu = browserImportButton.ContextMenu
-            ?? throw new InvalidOperationException("Preview 20 单来源模式没有打开独立网页查询菜单。 ");
-        browserSourceMenu.ApplyTemplate();
-        window.UpdateLayout();
-        var browserMenuScrollViewer = FindVisualChildren<ScrollViewer>(browserSourceMenu).FirstOrDefault()
-            ?? throw new InvalidOperationException("Preview 37 网页查询菜单滚动视口未创建。 ");
-        var browserTargets = browserSourceMenu.Items.OfType<MenuItem>().ToArray();
-        browserSourceMenu.IsOpen = false;
-        sourceComboBox.SelectedItem = manualSourceItem;
-        window.UpdateLayout();
-        if (browserImportButton.Content?.ToString() != "Manual web lookup ▾")
-        {
-            throw new InvalidOperationException("Preview 20 手动填写模式错误地改变了网页查询入口。 ");
-        }
-        foreach (var sourceItem in sourceComboBox.Items.OfType<ComboBoxItem>())
+        var targetForId = (BrowserImportTarget)typeof(MainWindow).GetMethod("CurrentBrowserTarget", PrivateInstance)!
+            .Invoke(window, ["libredmm"])!;
+        if (targetForId.RequestedMovieId != "IPZZ-850" || targetForId.InitialUrl != LibreDmmClient.BuildDetailPageUrl("IPZZ-850"))
+            throw new InvalidOperationException("Manual search URL did not use the current number.");
+        var browserTargets = OpenManualWebsites(window);
+        sourceComboBox.IsDropDownOpen = false;
+        foreach (var sourceItem in sourceComboBox.Items.OfType<ComboBoxItem>().Where(item => item != manualItem))
         {
             sourceComboBox.SelectedItem = sourceItem;
             window.UpdateLayout();
-            if (browserImportButton.Content?.ToString() != "Manual web lookup ▾")
+            if (System.Windows.Automation.AutomationProperties.GetName(manualItem) != "Manual search")
             {
                 throw new InvalidOperationException(
                     $"Preview 20 来源模式 {sourceItem.Tag} 错误地改变了网页查询入口。 ");
@@ -249,26 +254,11 @@ internal static partial class Program
         }
         sourceComboBox.SelectedItem = defaultSourceItem;
         window.UpdateLayout();
-        var r18BrowserTarget = browserTargets
-            .Select(item => item.Tag)
-            .OfType<BrowserImportTarget>()
-            .Single(target => target.SourceName == "r18dev");
-        var r18MenuHeading = (browserTargets[1].Header as StackPanel)?.Children
-            .OfType<TextBlock>()
-            .FirstOrDefault()?.Text;
-        if (browserImportButton.Content?.ToString() != "Manual web lookup ▾" ||
-            browserTargets.Length != 3 ||
-            browserTargets.Any(item => item.Style != window.FindResource("CandidateMenuItem")) ||
-            browserMenuScrollViewer.CanContentScroll ||
-            PreciseScrollBehavior.GetAxis(browserMenuScrollViewer) != PreciseScrollAxis.Vertical ||
-            browserTargets.Select(item => item.Tag).OfType<BrowserImportTarget>().Select(target => target.SourceName)
-                .SequenceEqual(["libredmm", "r18dev", "javlibrary"]) == false ||
-            r18MenuHeading != "Search with R18.dev" ||
-            r18BrowserTarget.InitialUrl != R18DevClient.HomePageUrl ||
-            r18BrowserTarget.InitialUrl.EndsWith("/json", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("Preview 20 独立网页查询菜单、R18.dev 安全首页路由或深色样式不正确。 ");
-        }
+        var r18BrowserTarget = (BrowserImportTarget)typeof(MainWindow).GetMethod("CurrentBrowserTarget", PrivateInstance)!
+            .Invoke(window, ["r18dev"])!;
+        if (!browserTargets.Select(item => item.Content).SequenceEqual(new[] { "LibreDMM", "R18.dev", "JAVLibrary" }) ||
+            r18BrowserTarget.InitialUrl != R18DevClient.HomePageUrl)
+            throw new InvalidOperationException("Manual website menu or R18 web fallback is incorrect.");
         idTextBox.Text = string.Empty;
         var normalWidth = window.Width;
         var normalHeight = window.Height;
@@ -313,15 +303,15 @@ internal static partial class Program
             {
                 throw new InvalidOperationException("Displayed version does not match the running assembly and language.");
             }
-            if (searchButton.Content?.ToString() != expectation.Search ||
+            if (AutomationProperties.GetName(searchButton) != LocalizationService.Get("Desk.FindId") ||
                 window.FindName("SaveButton") is not Button languageSaveButton ||
-                languageSaveButton.Content?.ToString() != expectation.Save ||
+                languageSaveButton.Content?.ToString() != LocalizationService.Get("Desk.PreviewCount", 0) ||
                 automaticSourceText.Text != expectation.AutomaticLabel ||
                 sourceComboBox.Items[0] is not ComboBoxItem languageAutoSource ||
                 languageAutoSource.Content?.ToString() != expectation.AutoSource ||
                 string.IsNullOrWhiteSpace(languageAutoSource.ToolTip?.ToString()) ||
                 languageSaveButton.ToolTip?.ToString()?.Contains("Ctrl+S", StringComparison.Ordinal) != true ||
-                searchButton.FontFamily.Source != expectation.Font)
+                sourceComboBox.FontFamily.Source != expectation.Font)
             {
                 throw new InvalidOperationException($"v0.9 {expectation.Code} 没有即时更新主要界面文字。 ");
             }
@@ -371,7 +361,8 @@ internal static partial class Program
                 sourceProfileDivider.Visibility != Visibility.Collapsed ||
                 !FitsInside(idTextBox, searchToolbar) ||
                 !FitsInside(searchButton, searchToolbar) ||
-                !FitsInside(browserImportButton, searchToolbar) ||
+                sourceComboBox.IsDropDownOpen ||
+                !FitsInside((Button)window.FindName("SearchQueueButton"), searchToolbar) ||
                 !FitsInside(sourceSelectorHost, searchToolbar) ||
                 !FitsInside(sourceComboBox, searchToolbar) ||
                 !FitsInside(chooseVideoButton, window))
@@ -422,8 +413,8 @@ internal static partial class Program
         {
             throw new InvalidOperationException("Preview 46 默认推荐来源不是 LibreDMM。 ");
         }
-        if (firstItem.Foreground is not SolidColorBrush foreground || foreground.Color.R < 200 ||
-            firstItem.Background is not SolidColorBrush background || background.Color.R > 40 ||
+        if (firstItem.Foreground is not SolidColorBrush foreground || firstItem.Background is not SolidColorBrush background ||
+            Math.Abs(foreground.Color.R - background.Color.R) < 90 ||
             sourcePopupScrollViewer.CanContentScroll ||
             PreciseScrollBehavior.GetAxis(sourcePopupScrollViewer) != PreciseScrollAxis.Vertical)
         {
@@ -446,9 +437,8 @@ internal static partial class Program
             metadataScrollViewer.CanContentScroll ||
             PreciseScrollBehavior.GetAxis(metadataScrollViewer) != PreciseScrollAxis.Vertical ||
             saveSettingsOptionsPanel.Visibility != Visibility.Collapsed ||
-            string.IsNullOrWhiteSpace(saveSettingsSummaryText.Text) ||
-            posterRoleText.Text != "海报裁切" ||
-            fanartRoleText.Text != "完整封套 / fanart" ||
+            posterRoleText.Text != "封面" ||
+            fanartRoleText.Text != "完整封套" ||
             preview26PosterBorder.Cursor != Cursors.Arrow ||
             preview26FanartBorder.Cursor != Cursors.Arrow ||
             posterPreviewStatePanel.Visibility != Visibility.Collapsed ||
@@ -924,7 +914,7 @@ internal static partial class Program
         deleteDialog.Show();
         deleteDialog.UpdateLayout();
         if (deleteDialog.Background is not SolidColorBrush dialogBackground ||
-            dialogBackground.Color.R > 40 ||
+            dialogBackground.Color != ((SolidColorBrush)deleteDialog.FindResource("WindowBrush")).Color ||
             deleteDialog.FindName("DialogMessageText") is not TextBlock
             {
                 Text: "这些文件将直接从磁盘删除，此操作无法撤销。"
@@ -934,7 +924,7 @@ internal static partial class Program
                 Content: "确认删除"
             } dialogConfirmButton ||
             dialogConfirmButton.Background is not SolidColorBrush dialogConfirmBackground ||
-            dialogConfirmBackground.Color.R < 80 ||
+            dialogConfirmBackground.Color != ((SolidColorBrush)deleteDialog.FindResource("ErrorFillBrush")).Color ||
             dialogConfirmButton.IsDefault ||
             deleteDialog.FindName("CancelButton") is not Button
             {
@@ -964,37 +954,16 @@ internal static partial class Program
         {
             throw new InvalidOperationException("Preview 28 应用 extrafanart 选择没有返回确认结果。 ");
         }
-        var saveChevronRight = saveSettingsChevronPath
-            .TranslatePoint(new Point(saveSettingsChevronPath.ActualWidth, 0), window).X;
-        var saveTitleLeft = saveSettingsTitleText.TranslatePoint(new Point(0, 0), window).X;
-        var collapsedSaveChevronSize = new Size(
-            saveSettingsChevronPath.ActualWidth,
-            saveSettingsChevronPath.ActualHeight);
         if (saveSettingsOptionsPanel.Visibility != Visibility.Collapsed ||
-            saveSettingsChevronPath.RenderTransform is not RotateTransform { Angle: 0 } ||
-            saveChevronRight > saveTitleLeft + 0.5 ||
-            !ReferenceEquals(
-                saveSettingsChevronPath.Style,
-                window.FindResource("DisclosureChevronPath") as Style))
-        {
-            throw new InvalidOperationException("Preview 35 保存设置箭头没有与标题组成左侧折叠入口。 ");
-        }
-        saveSettingsToggleButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        window.UpdateLayout();
-        if (saveSettingsOptionsPanel.Visibility != Visibility.Visible ||
-            saveSettingsChevronPath.RenderTransform is not RotateTransform { Angle: 90 } ||
-            Math.Abs(saveSettingsChevronPath.ActualWidth - collapsedSaveChevronSize.Width) > 0.1 ||
-            Math.Abs(saveSettingsChevronPath.ActualHeight - collapsedSaveChevronSize.Height) > 0.1)
-        {
-            throw new InvalidOperationException("Preview 36 保存设置无法展开，或两个方向的箭头尺寸不一致。 ");
-        }
-        saveSettingsToggleButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        window.UpdateLayout();
-        if (saveSettingsOptionsPanel.Visibility != Visibility.Collapsed ||
-            saveSettingsChevronPath.RenderTransform is not RotateTransform { Angle: 0 })
-        {
-            throw new InvalidOperationException("Preview 35 保存设置无法收起或箭头方向不正确。 ");
-        }
+            saveSettingsToggleButton.Parent != searchToolbar.Child ||
+            !sourceComboBox.Items.Contains(manualItem))
+            throw new InvalidOperationException("The search and output options are in the wrong toolbar groups.");
+        ClickWorkspaceButton(window, "SaveSettingsToggleButton");
+        if (!saveSettingsOptionsPanel.IsVisible)
+            throw new InvalidOperationException("Toolbar save settings did not open the output drawer.");
+        ClickWorkspaceButton(window, "CloseOutputButton");
+        if (saveSettingsOptionsPanel.IsVisible)
+            throw new InvalidOperationException("Output drawer did not close.");
         var sourceProfileWindow = new SourceProfileWindow(new MetadataSourcePreferenceProfile())
         {
             Owner = window
@@ -1074,11 +1043,11 @@ internal static partial class Program
             throw new InvalidOperationException("Preview 32 关闭 Extra Fanart 输出后仍保留替换选项。 ");
         }
         if (window.FindName("FanartHintText") is not TextBlock fanartHintText ||
-            fanartHintText.Visibility != Visibility.Visible ||
+            fanartHintText.Visibility != Visibility.Collapsed ||
             fanartHintText.Text != string.Empty || fanartHintText.MinHeight < 14 ||
             window.FindName("FanartDropHint") is not null)
         {
-            throw new InvalidOperationException("完整封套尚未加载时应保留无文字的固定间距。 ");
+            throw new InvalidOperationException("海报页应收起空的横板封套尺寸。 ");
         }
         if (window.FindName("DropHint") is not StackPanel dropHint ||
             dropHint.Children.OfType<TextBlock>().All(text =>
@@ -1086,22 +1055,12 @@ internal static partial class Program
         {
             throw new InvalidOperationException("拖放提示没有说明可直接拖入番号文件夹。 ");
         }
-        var initialPosterPreviewBorder = window.FindName("PosterPreviewBorder") as Border
-            ?? throw new InvalidOperationException("封套预览区域未创建。 ");
-        var fanartPreviewBorder = window.FindName("FanartPreviewBorder") as Border
-            ?? throw new InvalidOperationException("Fanart 预览区域未创建。 ");
-        window.UpdateLayout();
-        var posterBottom = initialPosterPreviewBorder.TranslatePoint(new Point(0, initialPosterPreviewBorder.ActualHeight), window).Y;
-        var gapBeforeDimensions = fanartPreviewBorder.TranslatePoint(new Point(0, 0), window).Y - posterBottom;
-        fanartHintText.Text = "横板封套：2184×1468";
-        window.UpdateLayout();
-        posterBottom = initialPosterPreviewBorder.TranslatePoint(new Point(0, initialPosterPreviewBorder.ActualHeight), window).Y;
-        var gapAfterDimensions = fanartPreviewBorder.TranslatePoint(new Point(0, 0), window).Y - posterBottom;
-        fanartHintText.Text = string.Empty;
-        if (Math.Abs(gapBeforeDimensions - gapAfterDimensions) > 0.5)
-        {
-            throw new InvalidOperationException("搜索前后两个封套预览框的间距不一致。 ");
-        }
+        var posterFrame = (Border)window.FindName("PosterPreviewBorder");
+        var jacketFrame = (Border)window.FindName("FanartPreviewBorder");
+        if (posterFrame.Visibility != Visibility.Visible || jacketFrame.Visibility != Visibility.Visible ||
+            window.FindName("SwitchArtworkButton") is not null)
+            throw new InvalidOperationException("Both artwork frames must be available together.");
+
         if (window.FindName("TargetModeComboBox") is not ComboBox targetModeComboBox ||
             targetModeComboBox.SelectedItem is not ComboBoxItem { Tag: "VideoDirectory" } ||
             window.FindName("CustomTargetPanel") is not Grid { Visibility: Visibility.Collapsed } ||
@@ -1269,7 +1228,7 @@ internal static partial class Program
         {
             throw new InvalidOperationException("Preview 10 安全默认值没有恢复标题番号。 ");
         }
-        if (window.FindName("SaveButton") is not Button saveButton || saveButton.Content?.ToString() != "保存")
+        if (window.FindName("SaveButton") is not Button saveButton || saveButton.Content?.ToString() != LocalizationService.Get("Desk.PreviewCount", 0))
         {
             throw new InvalidOperationException("v0.4 保存入口未创建。 ");
         }
@@ -1278,13 +1237,13 @@ internal static partial class Program
             throw new InvalidOperationException("dev3 取消操作按钮没有保持默认隐藏。 ");
         }
         window.UpdateLayout();
-        var saveSettingsToggleY = saveSettingsToggleButton.TranslatePoint(new Point(0, 0), window).Y;
-        var targetModeY = targetModeComboBox.TranslatePoint(new Point(0, 0), window).Y;
+        var inspector = (Border)window.FindName("OutputDrawer");
         if (!ReferenceEquals(skipSavePreviewCheckBox.Parent, renameCheckBox.Parent) ||
-            targetModeY <= saveSettingsToggleY)
+            !inspector.IsAncestorOf(targetModeComboBox))
         {
-            throw new InvalidOperationException("Preview 23 命名与保存行为没有归入同一折叠组，或目标位置层级不正确。 ");
+            throw new InvalidOperationException("Expected the output destination and naming options in the inspector.");
         }
+        ClickWorkspaceButton(window, "EditReviewButton");
 
         var titleSourceText = window.FindName("TitleSourceText") as Button
             ?? throw new InvalidOperationException("v0.5 标题来源标记未创建。 ");
@@ -1372,7 +1331,7 @@ internal static partial class Program
             ?? throw new InvalidOperationException("统一封套来源标题栏未创建。 ");
         if (artworkSourceButton.Parent is not StackPanel artworkHeaderActions ||
             !ReferenceEquals(artworkHeaderActions.Parent, artworkSourceHeader) ||
-            Grid.GetRow(artworkSourceHeader) >= Grid.GetRow(posterPreviewBorder) ||
+            Grid.GetRow(artworkSourceHeader) >= Grid.GetRow((Grid)window.FindName("ArtViewport")) ||
             artworkHeaderActions.HorizontalAlignment != HorizontalAlignment.Right ||
             !ReferenceEquals(artworkHeaderActions.Children[^1], artworkSourceButton))
         {
@@ -1391,6 +1350,7 @@ internal static partial class Program
         }
         artworkMenu.IsOpen = false;
 
+        if (((TextBox)window.FindName("TitleEditor")).IsReadOnly) ClickWorkspaceButton(window, "EditReviewButton");
         titleSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         var titleMenu = titleSourceText.ContextMenu
             ?? throw new InvalidOperationException("标题候选菜单未创建。 ");
@@ -1399,7 +1359,7 @@ internal static partial class Program
         var candidateMenuRoot = titleMenu.Template.FindName("CandidateMenuRoot", titleMenu) as Border;
         if (!titleMenu.OverridesDefaultStyle || titleMenu.HasDropShadow ||
             candidateMenuRoot?.Background is not SolidColorBrush menuBackground ||
-            menuBackground.Color != Color.FromRgb(16, 22, 30))
+            menuBackground.Color != ((SolidColorBrush)window.FindResource("InputBrush")).Color)
         {
             throw new InvalidOperationException("候选菜单没有完全替换系统白色菜单模板。 ");
         }
@@ -1503,6 +1463,9 @@ internal static partial class Program
             [StartupVideoRequest.OpenVideo(localVideoPath)])
             ?? throw new InvalidOperationException("启动影片载入没有返回任务。 ")));
         window.UpdateLayout();
+        if (!((TextBox)window.FindName("TitleEditor")).IsReadOnly || titleSourceText.IsVisible)
+            throw new InvalidOperationException("The imported movie should start in review with field-source controls hidden.");
+        ClickWorkspaceButton(window, "EditReviewButton");
         var localMetadata = window.DataContext as MovieMetadata
             ?? throw new InvalidOperationException("本地 NFO 没有进入编辑模型。 ");
         var statusText = window.FindName("StatusText") as TextBlock
@@ -1518,19 +1481,19 @@ internal static partial class Program
             ratingTextBox.Text != "3.7" ||
             titleSourceText.Visibility != Visibility.Visible ||
             ratingSourceText.Visibility != Visibility.Visible ||
-            !statusText.Text.Contains("本地 NFO", StringComparison.Ordinal) ||
-            !statusText.Text.Contains("poster + fanart", StringComparison.Ordinal) ||
-            !statusText.Text.Contains(localNfoPath, StringComparison.OrdinalIgnoreCase) ||
+            !(statusText.ToolTip?.ToString() ?? "").Contains("本地 NFO", StringComparison.Ordinal) ||
+            !(statusText.ToolTip?.ToString() ?? "").Contains("poster + fanart", StringComparison.Ordinal) ||
+            !(statusText.ToolTip?.ToString() ?? "").Contains(localNfoPath, StringComparison.OrdinalIgnoreCase) ||
             artworkSourceButton.Content?.ToString() != "本地图片 ▾" ||
             posterImage.Source is null || fanartImage.Source is null ||
             fanartHintText.Text != LocalizationService.Get("CoverCheck.Low") + " · 1 × 1" ||
             removeCurrentVideoButton.Visibility != Visibility.Visible ||
             !removeCurrentVideoButton.IsEnabled ||
-            removeCurrentVideoButton.Content?.ToString() != "移除影片" ||
+            AutomationProperties.GetName(removeCurrentVideoButton) != "移除影片" ||
             removeCurrentVideoButton.ToolTip?.ToString()?.Contains("不删除磁盘文件", StringComparison.Ordinal) != true ||
             !saveButton.IsEnabled ||
             saveButton.ToolTip?.ToString()?.Contains("保留检测到的未知 XML", StringComparison.Ordinal) != true ||
-            !statusText.Text.Contains("可安全更新", StringComparison.Ordinal) ||
+            !(statusText.ToolTip?.ToString() ?? "").Contains("可安全更新", StringComparison.Ordinal) ||
             window.FindName("FilePathText") is not TextBlock { Text: var startupVideoText } ||
             !string.Equals(startupVideoText, localVideoPath, StringComparison.OrdinalIgnoreCase) ||
             !File.ReadAllText(AppLog.CurrentLogPath).Contains("从启动参数载入影片", StringComparison.Ordinal))
@@ -1593,6 +1556,7 @@ internal static partial class Program
         }
         artworkSourceButton.ContextMenu!.IsOpen = false;
 
+        if (((TextBox)window.FindName("TitleEditor")).IsReadOnly) ClickWorkspaceButton(window, "EditReviewButton");
         titleSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         var localTitleCandidates = titleSourceText.ContextMenu?.Items.OfType<MenuItem>().ToArray()
             ?? throw new InvalidOperationException("本地标题候选菜单未创建。 ");
@@ -1611,11 +1575,13 @@ internal static partial class Program
         {
             throw new InvalidOperationException("本地会话中的手动修改没有成为候选。 ");
         }
+        if (((TextBox)window.FindName("TitleEditor")).IsReadOnly) ClickWorkspaceButton(window, "EditReviewButton");
         titleSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         var localTitle = titleSourceText.ContextMenu?.Items.OfType<MenuItem>().FirstOrDefault(item =>
             item.Tag is MetadataFieldCandidate { Source.Name: "local-nfo" })
             ?? throw new InvalidOperationException("手动修改后无法返回本地 NFO 候选。 ");
         localTitle.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        if (((TextBox)window.FindName("TitleEditor")).IsReadOnly) ClickWorkspaceButton(window, "EditReviewButton");
         titleSourceText.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         var localManualTitle = titleSourceText.ContextMenu?.Items.OfType<MenuItem>().FirstOrDefault(item =>
             item.Tag is MetadataFieldCandidate { Source.IsManual: true })
@@ -1650,9 +1616,9 @@ internal static partial class Program
             ?? throw new InvalidOperationException("Preview 42 图片查看器入口未找到。 ");
         foreach (var (entryKind, expectedPosition, expectedRole) in new[]
                  {
-                     ((ArtworkViewerItemKind?)null, "1 / 4", "海报裁切"),
-                     ((ArtworkViewerItemKind?)ArtworkViewerItemKind.Poster, "1 / 4", "海报裁切"),
-                     ((ArtworkViewerItemKind?)ArtworkViewerItemKind.Fanart, "2 / 4", "完整封套 / fanart")
+                     ((ArtworkViewerItemKind?)null, "1 / 4", "封面"),
+                     ((ArtworkViewerItemKind?)ArtworkViewerItemKind.Poster, "1 / 4", "封面"),
+                     ((ArtworkViewerItemKind?)ArtworkViewerItemKind.Fanart, "2 / 4", "完整封套")
                  })
         {
             var entryVerified = false;
@@ -1784,23 +1750,19 @@ internal static partial class Program
             "IdTextBox_KeyDown",
             BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("Preview 40 番号框 Enter 搜索入口未找到。 ");
-        sourceComboBox.SelectedItem = sourceComboBox.Items.OfType<ComboBoxItem>()
-            .Single(item => item.Tag?.ToString() == "manual");
-        statusText.Text = "enter-test";
-        var enterArgs = new KeyEventArgs(
-            Keyboard.PrimaryDevice,
-            HwndSource.FromHwnd(handle),
-            Environment.TickCount,
-            Key.Enter)
-        {
-            RoutedEvent = Keyboard.KeyDownEvent,
-            Source = idTextBox
-        };
+        var enterReachedSearch = false;
+        void ObserveSearch(object sender, RoutedEventArgs e) => enterReachedSearch = true;
+        var searchButtonForEnter = (Button)window.FindName("SearchButton");
+        // Use an offline provider so the keyboard route exercises the real search command.
+        using var enterHttp = new HttpClient(new RoutingHandler());
+        ReplaceStabilityClient(window, "_libreDmmClient", new LibreDmmClient(enterHttp));
+        searchButtonForEnter.Click += ObserveSearch;
+        var enterArgs = new KeyEventArgs(Keyboard.PrimaryDevice, HwndSource.FromHwnd(handle), Environment.TickCount, Key.Enter)
+        { RoutedEvent = Keyboard.KeyDownEvent, Source = idTextBox };
         idTextBoxKeyDown.Invoke(window, [idTextBox, enterArgs]);
-        if (!enterArgs.Handled || statusText.Text != "当前为手动模式，可以直接填写资料并保存")
-        {
-            throw new InvalidOperationException("Preview 40 番号框内 Enter 没有触发现有搜索流程。 ");
-        }
+        WaitForCondition(() => !IsWindowBusy(window), "Enter search did not finish.");
+        searchButtonForEnter.Click -= ObserveSearch;
+        if (!enterArgs.Handled || !enterReachedSearch) throw new InvalidOperationException("Enter failed to search.");
         statusText.Text = "ime-test";
         var imeEnterArgs = new KeyEventArgs(
             Keyboard.PrimaryDevice,
@@ -1880,13 +1842,8 @@ internal static partial class Program
             throw new InvalidOperationException("dev2 同卷自定义根目录没有生成可保存的实时目标路径。 ");
         }
         var chooseTargetFolderButton = (Button)window.FindName("ChooseTargetFolderButton");
-        var folderButtonRight = chooseTargetFolderButton
-            .TranslatePoint(new Point(chooseTargetFolderButton.ActualWidth, 0), window).X;
-        var saveButtonLeft = saveButton.TranslatePoint(new Point(0, 0), window).X;
-        if (saveButtonLeft - folderButtonRight < 20)
-        {
-            throw new InvalidOperationException("dev3 选择文件夹与保存按钮之间的留白不足。 ");
-        }
+        if (!inspector.IsAncestorOf(chooseTargetFolderButton) || inspector.IsAncestorOf(saveButton))
+            throw new InvalidOperationException("Destination control and primary save action must be in their respective panels.");
 
         customRootTextBox.Text = Path.Combine(customRoot, "ipx-124") + Path.DirectorySeparatorChar;
         window.UpdateLayout();
@@ -1913,9 +1870,11 @@ internal static partial class Program
             skipVerificationCheckBox.IsChecked = true;
             window.UpdateLayout();
             if (!targetPathHintText.Text.Contains("快速跨盘复制", StringComparison.Ordinal) ||
-                !targetPathHintText.Text.Contains("风险自负", StringComparison.Ordinal))
+                !targetPathHintText.Text.Contains("仅检查文件大小", StringComparison.Ordinal) ||
+                targetPathHintText.Text.Contains("风险自负", StringComparison.Ordinal) ||
+                !Equals(skipVerificationCheckBox.Content, "跳过跨盘 SHA-256 校验"))
             {
-                throw new InvalidOperationException("v1.1 快速跨盘模式没有显示明确风险提示。 ");
+                throw new InvalidOperationException("快速跨盘传输的简洁说明不正确。 ");
             }
             skipVerificationCheckBox.IsChecked = false;
         }
@@ -2043,7 +2002,7 @@ internal static partial class Program
         var directNestedCd2 = Path.Combine(directFolderNested, "IPX-125-CD2.mp4");
         File.WriteAllBytes(directNestedCd1, [0x15]);
         File.WriteAllBytes(directNestedCd2, [0x16]);
-        var directFolderWindow = new MainWindow();
+        var directFolderWindow = new MainWindow(TestPreferences());
         directFolderWindow.Show();
         var importDiscoveredPathsAsync = typeof(MainWindow).GetMethod(
             "ImportDiscoveredPathsAsync",
@@ -2061,7 +2020,7 @@ internal static partial class Program
             !string.Equals(importedNestedVideo, directNestedCd1, StringComparison.OrdinalIgnoreCase) ||
             importedMovie.VideoPaths.Count != 2 ||
             !importedMovie.VideoPaths.Contains(directNestedCd2, StringComparer.OrdinalIgnoreCase) ||
-            directFolderWindow.FindName("SingleModeButton") is not RadioButton { IsChecked: true })
+            directFolderWindow.FindName("QueuePanel") is not Border { Visibility: Visibility.Collapsed })
         {
             throw new InvalidOperationException("Preview 13 单一嵌套多 CD 影片没有直接加入单片工作区。 ");
         }
@@ -2084,24 +2043,19 @@ internal static partial class Program
         var queueVideoB = Path.Combine(localTestRoot, "IPX-127.mp4");
         File.WriteAllBytes(queueVideoA, [0x06]);
         File.WriteAllBytes(queueVideoB, [0x07]);
-        var queueWindow = new MainWindow();
+        var queueWindow = new MainWindow(TestPreferences());
         queueWindow.Show();
         queueWindow.Width = 1000;
-        var singleModeButton = queueWindow.FindName("SingleModeButton") as RadioButton
-            ?? throw new InvalidOperationException("Preview 2 单片模式入口未创建。 ");
-        var batchModeButton = queueWindow.FindName("BatchModeButton") as RadioButton
-            ?? throw new InvalidOperationException("Preview 2 批量模式入口未创建。 ");
         var singleSavePanel = queueWindow.FindName("SingleSavePanel") as StackPanel
             ?? throw new InvalidOperationException("Preview 2 单片保存入口未创建。 ");
-        var scanFolderButton = queueWindow.FindName("ScanFolderButton") as Button
-            ?? throw new InvalidOperationException("Preview 2 批量扫描入口未创建。 ");
+        var addMoviesButton = (Button)queueWindow.FindName("ChooseVideoButton");
+        if (queueWindow.FindName("ScanFolderButton") != null)
+            throw new InvalidOperationException("File and folder import must share one toolbar action.");
         var queuePanel = queueWindow.FindName("QueuePanel") as Border
             ?? throw new InvalidOperationException("Preview 2 队列面板未创建。 ");
-        if (singleModeButton.IsChecked != true ||
-            batchModeButton.IsChecked == true ||
-            queuePanel.Visibility != Visibility.Collapsed ||
-            singleSavePanel.Visibility != Visibility.Visible ||
-            scanFolderButton.Visibility != Visibility.Collapsed)
+        if (queuePanel.Visibility != Visibility.Collapsed ||
+            singleSavePanel.Visibility != Visibility.Collapsed ||
+            addMoviesButton.Visibility != Visibility.Visible)
         {
             throw new InvalidOperationException("Preview 2 默认没有进入独立单片模式。 ");
         }
@@ -2112,7 +2066,7 @@ internal static partial class Program
             ?? throw new InvalidOperationException("Phase 2 多影片加入入口未找到。 ");
         var unidentifiedVideo = Path.Combine(localTestRoot, "vacation-focus.mp4");
         File.WriteAllBytes(unidentifiedVideo, [0x0A]);
-        var focusWindow = new MainWindow();
+        var focusWindow = new MainWindow(TestPreferences());
         focusWindow.Show();
         focusWindow.Activate();
         WaitForTask((Task)(addMovieFilesAsync.Invoke(
@@ -2133,7 +2087,7 @@ internal static partial class Program
         var multipartCd2 = Path.Combine(localTestRoot, "IPX-128-CD2.mp4");
         File.WriteAllBytes(multipartCd1, [0x08]);
         File.WriteAllBytes(multipartCd2, [0x09]);
-        var multipartQueueWindow = new MainWindow();
+        var multipartQueueWindow = new MainWindow(TestPreferences());
         multipartQueueWindow.Show();
         WaitForTask((Task)(addMovieFilesAsync.Invoke(
             multipartQueueWindow,
@@ -2162,11 +2116,13 @@ internal static partial class Program
             new object[] { new[] { queueVideoA, queueVideoB } })
             ?? throw new InvalidOperationException("Phase 2 多影片加入没有返回任务。 ")));
         queueWindow.UpdateLayout();
+
+        ClickWorkspaceButton(queueWindow, "QueueOptionsButton");
         var movieQueueList = queueWindow.FindName("MovieQueueList") as ListBox
             ?? throw new InvalidOperationException("Phase 2 队列列表未创建。 ");
         var queueCountText = queueWindow.FindName("QueueCountText") as TextBlock
             ?? throw new InvalidOperationException("Phase 2 队列计数未创建。 ");
-        var removeSelectedQueueButton = queueWindow.FindName("RemoveSelectedQueueButton") as Button
+        var removeSelectedQueueButton = queueWindow.FindName("RemoveSelectedQueueButton") as MenuItem
             ?? throw new InvalidOperationException("Phase 2 队列删除按钮未创建。 ");
         var searchQueueButton = queueWindow.FindName("SearchQueueButton") as Button
             ?? throw new InvalidOperationException("Phase 3 批量搜索按钮未创建。 ");
@@ -2174,11 +2130,11 @@ internal static partial class Program
             ?? throw new InvalidOperationException("Preview 2 保存所选按钮未创建。 ");
         var queueSkipSavePreviewCheckBox = queueWindow.FindName("SkipSavePreviewCheckBox") as CheckBox
             ?? throw new InvalidOperationException("Preview 14 统一保存预览选项未找到。 ");
-        var selectAllQueueButton = queueWindow.FindName("SelectAllQueueButton") as Button
+        var selectAllQueueButton = queueWindow.FindName("QueueCheckAll") as CheckBox
             ?? throw new InvalidOperationException("Preview 2 队列全选按钮未创建。 ");
-        var selectNoneQueueButton = queueWindow.FindName("SelectNoneQueueButton") as Button
+        var selectNoneQueueButton = queueWindow.FindName("SelectNoneQueueButton") as MenuItem
             ?? throw new InvalidOperationException("Preview 2 队列取消全选按钮未创建。 ");
-        var clearQueueButton = queueWindow.FindName("ClearQueueButton") as Button
+        var clearQueueButton = queueWindow.FindName("ClearQueueButton") as MenuItem
             ?? throw new InvalidOperationException("Preview 2 清空队列按钮未创建。 ");
         var queueWriteNfoCheckBox = queueWindow.FindName("WriteNfoCheckBox") as CheckBox
             ?? throw new InvalidOperationException("Phase 4 当前影片保存设置未找到。 ");
@@ -2190,18 +2146,12 @@ internal static partial class Program
             ?? throw new InvalidOperationException("Preview 23 批量资料滚动视口未创建。 ");
         var queueSplitter = queueWindow.FindName("QueueSplitter") as GridSplitter
             ?? throw new InvalidOperationException("Preview 23 队列宽度调节器未创建。 ");
-        var previousQueueButton = queueWindow.FindName("PreviousQueueButton") as Button
-            ?? throw new InvalidOperationException("Phase 5 上一个影片按钮未创建。 ");
-        var nextQueueButton = queueWindow.FindName("NextQueueButton") as Button
-            ?? throw new InvalidOperationException("Phase 5 下一个影片按钮未创建。 ");
         var queueSearchToolbarLayout = queueWindow.FindName("SearchToolbarLayout") as Grid
             ?? throw new InvalidOperationException("Preview 25 批量响应式搜索布局未创建。 ");
         var queueIdTextBox = queueWindow.FindName("IdTextBox") as TextBox
             ?? throw new InvalidOperationException("Preview 25 批量番号输入框未创建。 ");
         var queueSearchButton = queueWindow.FindName("SearchButton") as Button
             ?? throw new InvalidOperationException("Preview 25 批量搜索按钮未创建。 ");
-        var queueBrowserImportButton = queueWindow.FindName("BrowserImportButton") as Button
-            ?? throw new InvalidOperationException("Preview 25 批量网页查询按钮未创建。 ");
         var queueSourceComboBox = queueWindow.FindName("SourceComboBox") as ComboBox
             ?? throw new InvalidOperationException("Preview 25 批量自动来源选择框未创建。 ");
         var queueSourceSelectorHost = queueWindow.FindName("SourceSelectorHost") as Grid
@@ -2216,6 +2166,9 @@ internal static partial class Program
             ?? throw new InvalidOperationException("Preview 25 图片列未创建。 ");
         movieQueueList.ApplyTemplate();
         queueWindow.UpdateLayout();
+        if (resolveMainShortcut.Invoke(queueWindow, [Key.S, ModifierKeys.Control]) is not null)
+            throw new InvalidOperationException("The queue menu should own keyboard focus.");
+        ((ContextMenu)queueWindow.FindName("QueueOptions")).IsOpen = false;
         if (!ReferenceEquals(
                 resolveMainShortcut.Invoke(queueWindow, [Key.S, ModifierKeys.Control]),
                 saveSelectedButton) ||
@@ -2223,37 +2176,23 @@ internal static partial class Program
         {
             throw new InvalidOperationException("Preview 40 批量模式 Ctrl+S 没有指向保存所选入口。 ");
         }
-        var selectAllPosition = selectAllQueueButton.TranslatePoint(new Point(0, 0), queuePanel);
-        var selectNonePosition = selectNoneQueueButton.TranslatePoint(new Point(0, 0), queuePanel);
-        var removeSelectedPosition = removeSelectedQueueButton.TranslatePoint(new Point(0, 0), queuePanel);
-        var clearQueuePosition = clearQueueButton.TranslatePoint(new Point(0, 0), queuePanel);
-        if (Math.Abs(selectAllQueueButton.ActualWidth - selectNoneQueueButton.ActualWidth) > 1.5 ||
-            Math.Abs(selectAllQueueButton.ActualWidth - removeSelectedQueueButton.ActualWidth) > 1.5 ||
-            Math.Abs(selectAllQueueButton.ActualWidth - clearQueueButton.ActualWidth) > 1.5 ||
-            Math.Abs(selectAllPosition.X - removeSelectedPosition.X) > 1.5 ||
-            Math.Abs(selectNonePosition.X - clearQueuePosition.X) > 1.5 ||
-            Math.Abs(selectAllPosition.Y - selectNonePosition.Y) > 1.5 ||
-            Math.Abs(removeSelectedPosition.Y - clearQueuePosition.Y) > 1.5)
-        {
-            throw new InvalidOperationException("Preview 24 队列操作按钮没有形成等宽对齐的两列。 ");
-        }
         var compactSearchCenterY = queueSearchButton.TranslatePoint(
             new Point(0, queueSearchButton.ActualHeight / 2),
             queueSearchToolbarLayout).Y;
         var compactIdCenterY = queueIdTextBox.TranslatePoint(
             new Point(0, queueIdTextBox.ActualHeight / 2),
             queueSearchToolbarLayout).Y;
-        var compactBrowserCenterY = queueBrowserImportButton.TranslatePoint(
-            new Point(0, queueBrowserImportButton.ActualHeight / 2),
+        var compactBatchCenterY = searchQueueButton.TranslatePoint(
+            new Point(0, searchQueueButton.ActualHeight / 2),
             queueSearchToolbarLayout).Y;
         var compactSourceCenterY = queueSourceComboBox.TranslatePoint(
             new Point(0, queueSourceComboBox.ActualHeight / 2),
             queueSearchToolbarLayout).Y;
         if (Math.Abs(compactSearchCenterY - compactIdCenterY) > 1.5 ||
-            compactBrowserCenterY <= compactSearchCenterY ||
-            Math.Abs(compactBrowserCenterY - compactSourceCenterY) > 1.5 ||
-            queueSearchToolbarLayout.RowDefinitions[1].Height.Value != 8 ||
-            Math.Abs(queueColumn.Width.Value - 220) > 0.5 ||
+            (Grid.GetRow(queueSourceSelectorHost) == 0 ? Math.Abs(compactBatchCenterY - compactSearchCenterY) > 1.5 : compactBatchCenterY <= compactSearchCenterY) ||
+            Math.Abs(compactBatchCenterY - compactSourceCenterY) > 1.5 ||
+            queueSearchToolbarLayout.RowDefinitions[1].Height.Value != (Grid.GetRow(queueSourceSelectorHost) == 0 ? 0 : 8) ||
+            Math.Abs(queueColumn.Width.Value - 240) > 0.5 ||
             Math.Abs(queueArtworkColumn.Width.Value - 250) > 0.5)
         {
             throw new InvalidOperationException("Preview 25 最小批量窗口没有使用稳定的两行搜索栏或紧凑列宽。 ");
@@ -2276,8 +2215,8 @@ internal static partial class Program
             queueSearchToolbarLayout).Y;
         if (queueSourceProfileButton.Visibility != Visibility.Visible ||
             queueSourceProfileDivider.Visibility != Visibility.Visible ||
-            Math.Abs(compactBrowserCenterY - compactCustomSourceCenterY) > 1.5 ||
-            Math.Abs(compactBrowserCenterY - compactRulesCenterY) > 1.5 ||
+            Math.Abs(compactBatchCenterY - compactCustomSourceCenterY) > 1.5 ||
+            Math.Abs(compactBatchCenterY - compactRulesCenterY) > 1.5 ||
             Grid.GetRow(queueSourceSelectorHost) != compactSourceHostRow ||
             Grid.GetColumn(queueSourceSelectorHost) != compactSourceHostColumn ||
             Grid.GetColumnSpan(queueSourceSelectorHost) != compactSourceHostColumnSpan ||
@@ -2299,7 +2238,7 @@ internal static partial class Program
             ?? throw new InvalidOperationException("Preview 3 队列没有使用独立深色滚动视口。 ");
         var accentBrush = application.TryFindResource("AccentBrush") as SolidColorBrush
             ?? throw new InvalidOperationException("Preview 3 主按钮强调色未找到。 ");
-        var inputBrush = application.TryFindResource("InputBrush") as SolidColorBrush
+        var inputBrush = application.TryFindResource("PanelAltBrush") as SolidColorBrush
             ?? throw new InvalidOperationException("Preview 3 队列背景色未找到。 ");
         movieQueueList.IsEnabled = false;
         queueWindow.UpdateLayout();
@@ -2309,9 +2248,8 @@ internal static partial class Program
         movieQueueList.IsEnabled = true;
         queueWindow.UpdateLayout();
         if (queuePanel.Visibility != Visibility.Visible ||
-            batchModeButton.IsChecked != true ||
-            singleSavePanel.Visibility != Visibility.Collapsed ||
-            scanFolderButton.Visibility != Visibility.Visible ||
+            singleSavePanel.Visibility != Visibility.Visible ||
+            addMoviesButton.Visibility != Visibility.Visible ||
             queueSkipSavePreviewCheckBox.Visibility != Visibility.Visible ||
             movieQueueList.Items.Count != 2 ||
             !queueCountText.Text.Contains("2", StringComparison.Ordinal) ||
@@ -2319,8 +2257,6 @@ internal static partial class Program
             !searchQueueButton.IsEnabled ||
             !saveSelectedButton.IsEnabled ||
             !saveSelectedButton.Content.ToString()!.Contains("2", StringComparison.Ordinal) ||
-            !previousQueueButton.IsEnabled ||
-            !nextQueueButton.IsEnabled ||
             saveSelectedButton.Background is not SolidColorBrush saveSelectedBrush ||
             saveSelectedBrush.Color != accentBrush.Color ||
             movieQueueList.Background is not SolidColorBrush queueBackgroundBrush ||
@@ -2343,14 +2279,15 @@ internal static partial class Program
             ?? throw new InvalidOperationException("Phase 3 队列项没有绑定 MovieJob。 ");
         var secondQueueJob = movieQueueList.Items[1] as MovieJob
             ?? throw new InvalidOperationException("Phase 3 第二个队列项没有绑定 MovieJob。 ");
-        if (!firstQueueJob.IsSelectedForBatch || !secondQueueJob.IsSelectedForBatch ||
-            !FindVisualChildren<TextBlock>(movieQueueList).Any(text =>
-                text.Text == "正在查看" && text.IsVisible) ||
-            FindVisualChildren<TextBlock>(movieQueueList).Any(text => text.Text == "▶"))
+        var currentRow = (ListBoxItem)movieQueueList.ItemContainerGenerator.ContainerFromItem(firstQueueJob);
+        if (!firstQueueJob.IsSelectedForBatch || !secondQueueJob.IsSelectedForBatch || !currentRow.IsSelected ||
+            currentRow.Template.FindName("ItemBorder", currentRow) is not Border currentBorder ||
+            !Equals(currentBorder.BorderBrush, queueWindow.FindResource("TabBrush")))
         {
             throw new InvalidOperationException("Preview 23 队列查看状态、影片图标或批量勾选没有明确分离。 ");
         }
 
+        ClickWorkspaceButton(queueWindow, "EditReviewButton");
         var queueNormalHeight = queueWindow.Height;
         queueWindow.Height = queueWindow.MinHeight;
         queueWindow.UpdateLayout();
@@ -2363,8 +2300,11 @@ internal static partial class Program
         movieQueueList.SelectedIndex = 1;
         WaitForCondition(
             () => queueWindow.DataContext is MovieMetadata { Id: "IPX-127" } &&
+                  ((TextBox)queueWindow.FindName("TitleEditor")).IsReadOnly &&
                   queueMetadataScrollViewer.VerticalOffset <= 0.5,
-            "Preview 23 切换影片后没有回到资料顶部。 ");
+            "Switching movies must reopen the review at the top.");
+        ClickWorkspaceButton(queueWindow, "EditReviewButton");
+        WaitForCondition(() => queueMetadataScrollViewer.VerticalOffset <= 0.5, "New movie opened halfway down its editor.");
         movieQueueList.SelectedIndex = 0;
         queueWindow.Height = queueNormalHeight;
         queueWindow.UpdateLayout();
@@ -2386,7 +2326,7 @@ internal static partial class Program
             "Preview 10 开启标题番号没有同步到全部队列项目。 ");
         movieQueueList.SelectedIndex = 0;
 
-        selectNoneQueueButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        selectNoneQueueButton.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         WaitForCondition(
             () => !firstQueueJob.IsSelectedForBatch &&
                   !secondQueueJob.IsSelectedForBatch &&
@@ -2404,15 +2344,6 @@ internal static partial class Program
         WaitForCondition(
             () => saveSelectedButton.Content.ToString()!.Contains("1", StringComparison.Ordinal),
             "Preview 2 保存按钮没有显示所选数量。 ");
-
-        nextQueueButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        WaitForCondition(
-            () => queueWindow.DataContext is MovieMetadata { Id: "IPX-127" },
-            "Phase 5 下一个影片导航没有切换选中项。 ");
-        previousQueueButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        WaitForCondition(
-            () => queueWindow.DataContext is MovieMetadata { Id: "IPX-126" },
-            "Phase 5 上一个影片导航没有切换选中项。 ");
 
         movieQueueList.Focus();
         Keyboard.Focus(movieQueueList);
@@ -2523,6 +2454,8 @@ internal static partial class Program
             throw new InvalidOperationException("Preview 5 批量搜索没有只清除成功影片的旧封套缓存。 ");
         }
 
+        SetQueueOpen(queueWindow, false);
+        SetQueueOpen(queueWindow, true);
         firstQueueJob.IsSelectedForBatch = false;
         secondQueueJob.IsSelectedForBatch = true;
         var removeQueueJobsAsync = typeof(MainWindow).GetMethod(
@@ -2543,17 +2476,17 @@ internal static partial class Program
                   queueWindow.DataContext is MovieMetadata { Id: "IPX-126", Title: "队列未保存标题" },
             "Preview 2 移除所选后没有保留批量模式或相邻工作上下文。 ");
 
-        singleModeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        SetQueueOpen(queueWindow, false);
         WaitForCondition(
             () => queuePanel.Visibility == Visibility.Collapsed &&
-                  singleSavePanel.Visibility == Visibility.Visible &&
-                  scanFolderButton.Visibility == Visibility.Collapsed,
+                  singleSavePanel.Visibility == Visibility.Collapsed &&
+                  addMoviesButton.Visibility == Visibility.Visible,
             "Preview 2 无法一键切换到单片模式。 ");
-        batchModeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        SetQueueOpen(queueWindow, true);
         WaitForCondition(
             () => queuePanel.Visibility == Visibility.Visible &&
                   singleSavePanel.Visibility == Visibility.Collapsed &&
-                  scanFolderButton.Visibility == Visibility.Visible,
+                  addMoviesButton.Visibility == Visibility.Visible,
             "Preview 2 无法一键恢复批量模式。 ");
 
         var scaleVideos = Enumerable.Range(200, 49)
@@ -2913,7 +2846,7 @@ internal static partial class Program
             "SetStatus",
             BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("Preview 32 底部状态入口不可用。 ");
-        setStatus.Invoke(window, ["底部唯一状态测试", true]);
+        setStatus.Invoke(window, ["底部唯一状态测试", true, null]);
         window.UpdateLayout();
         if (window.FindName("SearchFeedbackPanel") is not null ||
             statusText.Text != "底部唯一状态测试" ||
@@ -2921,6 +2854,7 @@ internal static partial class Program
         {
             throw new InvalidOperationException("Preview 32 搜索状态与失败重试没有收敛到底部状态栏。 ");
         }
+        if (metadataScrollViewer.Visibility != Visibility.Visible) ClickWorkspaceButton(window, "EditReviewButton");
         window.Width = window.MinWidth;
         window.Height = window.MinHeight;
         window.UpdateLayout();
@@ -2944,7 +2878,7 @@ internal static partial class Program
             throw new InvalidOperationException("Preview 37 主资料区没有按统一像素距离滚动。 ");
         }
 
-        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True dmmRecommendedLabel=True customSourceProfile=True integratedSourceSettings=True stableSourceLayout=True sourceActionGap=True minimalKeyboard=True popupShortcutGuard=True idEnterSearch=True imeEnterSafe=True directCancel=True destructiveCancelDefault=True unidentifiedIdFocus=True localizedShortcutHint=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True independentManualWebLookup=True browserSourceRouting=True r18HumanPage=True r18SafeHomeRouting=True r18MissingFallback=True r18UnavailableDistinct=True r18ReadGuard=True webLookupCopy=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True preciseWheelScroll=True unifiedScrollSurfaces=True unifiedSavePreview=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True workspaceModes=True smartImport=True movieQueue=True queueEditIsolation=True queueRemove=True queueClear=True batchSearchCommand=True batchSelection=True revisionGuard=True perJobSaveSettings=True batchSavePreview=True batchIssuePreview=True queueFilter=True queueNavigation=True metadataScrollReset=True deterministicSearchLayout=True compactBatchColumns=True alignedQueueActions=True collapsibleSaveSettings=True artworkRoleLabels=True artworkViewer=True viewerGlobalPosition=True artworkSourceComparison=True artworkSourceSelector=True sourceScopedOnlineCandidates=True stagedImageSettings=True backgroundExtrafanartPreload=True artworkTypeFilter=True darkArtworkTypeMenu=True artworkFilmstrip=True aspectAwareThumbnails=True artworkDimensions=True unobstructedDimensions=True confirmedDirectLocalDeletion=True localPosterDeletion=True localFanartDeletion=True filmstripSelection=True onlineExtrafanartSelection=True replaceLocalExtrafanart=True bottomOnlyStatus=True queueStatusPills=True queueFocusSeparation=True resizableColumns=True lightweightPlaceholder=True sharedTheme=True minimumLayout=True browserLayout=True dropdownGeometry=True systemFallbackEnglish=True captionColor={(nativeCaptionColor is null ? "unsupported" : "#111821")}");
+        Console.WriteLine($"UI PASS  handle={handle} visible={window.IsVisible} title={window.Title} posterFrozen={poster.IsFrozen} comboDark=True dmmRecommendedLabel=True customSourceProfile=True integratedSourceSettings=True stableSourceLayout=True sourceActionGap=True minimalKeyboard=True popupShortcutGuard=True idEnterSearch=True imeEnterSafe=True directCancel=True destructiveCancelDefault=True unidentifiedIdFocus=True localizedShortcutHint=True libreDmm=True fanart=True previewWindow=True previewChangeKinds=True sourceBadges=True candidateMenus=True independentManualWebLookup=True browserSourceRouting=True r18HumanPage=True r18SafeHomeRouting=True r18MissingFallback=True r18UnavailableDistinct=True r18ReadGuard=True webLookupCopy=True fullDarkMenuTemplate=True fieldSwitch=True manualReturn=True unifiedArtworkSource=True artworkMenu=True localNfoLoad=True localNfoSaveEnabled=True localArtworkPreview=True localArtworkDefault=True localOnlineCandidates=True manualCoverPreview=True localManualReturn=True localFailureSafe=True staleCandidatesCleared=True preciseWheelScroll=True unifiedScrollSurfaces=True unifiedSavePreview=True targetModes=True customTargetPreview=True verifiedCopyHint=True cancelOperation=True improvedSpacing=True startupVideo=True recentRoots=True unavailableRootSafe=True collapsibleQueue=True smartImport=True movieQueue=True queueEditIsolation=True queueRemove=True queueClear=True batchSearchCommand=True batchSelection=True revisionGuard=True perJobSaveSettings=True batchSavePreview=True batchIssuePreview=True queueFilter=True queueNavigation=True metadataScrollReset=True deterministicSearchLayout=True compactBatchColumns=True alignedQueueActions=True collapsibleSaveSettings=True artworkRoleLabels=True artworkViewer=True viewerGlobalPosition=True artworkSourceComparison=True artworkSourceSelector=True sourceScopedOnlineCandidates=True stagedImageSettings=True backgroundExtrafanartPreload=True artworkTypeFilter=True darkArtworkTypeMenu=True artworkFilmstrip=True aspectAwareThumbnails=True artworkDimensions=True unobstructedDimensions=True confirmedDirectLocalDeletion=True localPosterDeletion=True localFanartDeletion=True filmstripSelection=True onlineExtrafanartSelection=True replaceLocalExtrafanart=True bottomOnlyStatus=True queueStatusPills=True queueFocusSeparation=True resizableColumns=True lightweightPlaceholder=True sharedTheme=True minimumLayout=True browserLayout=True dropdownGeometry=True systemFallbackEnglish=True captionColor={nativeCaptionColor?.ToString("X6") ?? "unsupported"}");
         window.Close();
         application.Shutdown();
     }
@@ -2989,7 +2923,7 @@ internal static partial class Program
     {
         static string Text(string key, params object[] arguments) => string.Format(CultureInfo.CurrentCulture,
             (string)Application.Current.FindResource(key), arguments);
-        var window = new MainWindow();
+        var window = new MainWindow(TestPreferences());
         window.Show();
         var languageBox = (ComboBox)window.FindName("LanguageComboBox");
         var originalLanguage = languageBox.SelectedItem;
@@ -3010,7 +2944,7 @@ internal static partial class Program
             var batchSources = (ComboBox)window.FindName("SourceComboBox");
             batchSources.SelectedItem = batchSources.Items.OfType<ComboBoxItem>()
                 .Single(item => item.Tag?.ToString() == "custom");
-            ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SetQueueOpen(window, true);
             var list = (ListBox)window.FindName("MovieQueueList");
             var filter = (ComboBox)window.FindName("QueueFilterComboBox");
             var retry = (Button)window.FindName("RetryFailedSourcesButton");
@@ -3029,7 +2963,9 @@ internal static partial class Program
             var summary = typeof(MainWindow).GetMethod("ShowBatchSearchSummary", flags)!;
             summary.Invoke(window, [new BatchMetadataSearchResult([
                 new BatchMetadataSearchItemResult(job, BatchMetadataSearchItemStatus.PartiallySucceeded, [success, failed], null)]), "test"]);
-            if (((TextBlock)window.FindName("StatusText")).Text != Text("Status.BatchSourcesComplete", 0, 1, 0, 0, 0))
+            var footer = (TextBlock)window.FindName("StatusText");
+            if (footer.Text != Text("Footer.Found", 1) + " · " + Text("Queue.Search.Partial") ||
+                footer.ToolTip?.ToString() != Text("Status.BatchSourcesComplete", 0, 1, 0, 0, 0))
             {
                 throw new InvalidOperationException("Batch summary counted partial failure as complete success.");
             }
@@ -3058,7 +2994,7 @@ internal static partial class Program
 
     private static void TestCloseWaitsForOperation(bool observeCancellation)
     {
-        var closingWindow = new MainWindow();
+        var closingWindow = new MainWindow(TestPreferences());
         closingWindow.Show();
         var runBusy = typeof(MainWindow).GetMethod("RunBusyAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
         var cancellationField = typeof(MainWindow).GetField("_activeOperationCancellation", BindingFlags.Instance | BindingFlags.NonPublic)!;

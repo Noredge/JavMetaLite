@@ -12,51 +12,72 @@ internal static class WindowVisualTheme
     private const int DwmwaCaptionColor = 35;
     private const int DwmwaTextColor = 36;
 
-    private static readonly int BorderColor = ToColorRef(0x2A, 0x35, 0x44);
-    private static readonly int CaptionColor = ToColorRef(0x11, 0x18, 0x21);
-    private static readonly int TextColor = ToColorRef(0xF1, 0xF5, 0xF9);
+    private static ResourceDictionary? _palette;
+    private static bool? _dark;
+    public static string Appearance { get; private set; } = "system";
 
-    public static void ApplyDarkTitleBar(Window window)
+    public static void SetAppearance(string? value)
     {
-        window.SourceInitialized += (_, _) => ApplyDarkTitleBar(new WindowInteropHelper(window).Handle);
+        Appearance = value is "light" or "dark" ? value : "system";
+        Refresh();
     }
 
-    private static void ApplyDarkTitleBar(IntPtr handle)
+    public static void Attach(Window window)
     {
-        if (handle == IntPtr.Zero)
+        window.SourceInitialized += (_, _) =>
         {
-            return;
-        }
+            var handle = new WindowInteropHelper(window).Handle;
+            HwndSource.FromHwnd(handle)?.AddHook(WindowsSettingsChanged);
+            Refresh();
+            SetCaption(handle, _dark == true);
+        };
+    }
 
+    private static IntPtr WindowsSettingsChanged(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (message is 0x001A or 0x031A && Appearance == "system")
+            Application.Current?.Dispatcher.BeginInvoke(Refresh);
+        return IntPtr.Zero;
+    }
+
+    private static void Refresh()
+    {
+        var app = Application.Current;
+        if (app is null) return;
+        bool dark = Appearance switch
+        {
+            "light" => false,
+            "dark" => true,
+            _ => Microsoft.Win32.Registry.GetValue(
+                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "AppsUseLightTheme", 1) is 0
+        };
+        if (_dark == dark && _palette != null && app.Resources.MergedDictionaries.Contains(_palette)) return;
+        _dark = dark;
+        var next = new ResourceDictionary { Source = new Uri(
+            "/JavMetaLite;component/Resources/Palette." + (dark ? "Dark" : "Light") + ".xaml", UriKind.Relative) };
+        var dictionaries = app.Resources.MergedDictionaries;
+        if (_palette is not null) dictionaries.Remove(_palette);
+        dictionaries.Add(next);
+        _palette = next;
+        foreach (Window window in app.Windows)
+            SetCaption(new WindowInteropHelper(window).Handle, dark);
+    }
+
+    private static void SetCaption(IntPtr handle, bool dark)
+    {
+        if (handle == IntPtr.Zero) return;
         try
         {
-            var enabled = 1;
-            var result = DwmSetWindowAttribute(
-                handle,
-                DwmwaUseImmersiveDarkMode,
-                ref enabled,
-                Marshal.SizeOf<int>());
-            if (result != 0)
-            {
-                _ = DwmSetWindowAttribute(
-                    handle,
-                    DwmwaUseImmersiveDarkModeBefore20H1,
-                    ref enabled,
-                    Marshal.SizeOf<int>());
-            }
-
-            SetColorAttribute(handle, DwmwaBorderColor, BorderColor);
-            SetColorAttribute(handle, DwmwaCaptionColor, CaptionColor);
-            SetColorAttribute(handle, DwmwaTextColor, TextColor);
+            var enabled = dark ? 1 : 0;
+            if (DwmSetWindowAttribute(handle, DwmwaUseImmersiveDarkMode, ref enabled, sizeof(int)) != 0)
+                DwmSetWindowAttribute(handle, DwmwaUseImmersiveDarkModeBefore20H1, ref enabled, sizeof(int));
+            SetColorAttribute(handle, DwmwaBorderColor, dark ? ToColorRef(57,68,81) : ToColorRef(222,218,211));
+            SetColorAttribute(handle, DwmwaCaptionColor, dark ? ToColorRef(26,32,40) : ToColorRef(252,250,246));
+            SetColorAttribute(handle, DwmwaTextColor, dark ? ToColorRef(238,241,246) : ToColorRef(35,54,78));
         }
-        catch (DllNotFoundException)
-        {
-            // Older or non-standard Windows environments keep their native title bar.
-        }
-        catch (EntryPointNotFoundException)
-        {
-            // DWM is unavailable; leaving the native title bar is the safe fallback.
-        }
+        catch (DllNotFoundException) { }
+        catch (EntryPointNotFoundException) { }
     }
 
     private static void SetColorAttribute(IntPtr handle, int attribute, int color)

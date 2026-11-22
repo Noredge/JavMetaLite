@@ -8,11 +8,11 @@
         MinWidth="640"
         MinHeight="640"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource WindowBrush}"
+        Background="{DynamicResource WindowBrush}"
         PreviewKeyDown="Window_PreviewKeyDown">
     <Window.Resources>
         <Style x:Key="SourceBadgeButton" TargetType="Button">
-            <Setter Property="Foreground" Value="#6FA8FF" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="6,2" />
@@ -38,8 +38,8 @@
                                     <Condition Property="IsEnabled" Value="True" />
                                     <Condition Property="IsMouseOver" Value="True" />
                                 </MultiTrigger.Conditions>
-                                <Setter TargetName="BadgeBorder" Property="Background" Value="#233650" />
-                                <Setter Property="Foreground" Value="#9BC1FF" />
+                                <Setter TargetName="BadgeBorder" Property="Background" Value="{DynamicResource SelectionBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
                             </MultiTrigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Cursor" Value="Arrow" />
@@ -51,8 +51,8 @@
             </Setter>
         </Style>
         <Style x:Key="CandidateContextMenu" TargetType="ContextMenu">
-            <Setter Property="Background" Value="#10161E" />
-            <Setter Property="BorderBrush" Value="#3A4A61" />
+            <Setter Property="Background" Value="{DynamicResource InputBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderHoverBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="4" />
             <Setter Property="HasDropShadow" Value="False" />
@@ -82,7 +82,7 @@
             </Setter>
         </Style>
         <Style x:Key="CandidateMenuItem" TargetType="MenuItem">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Padding" Value="10,8" />
             <Setter Property="MinWidth" Value="300" />
@@ -98,7 +98,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="CandidateBorder" Property="Background" Value="#244B8F" />
+                                <Setter TargetName="CandidateBorder" Property="Background" Value="{DynamicResource SelectionBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -106,8 +106,8 @@
             </Setter>
         </Style>
         <Style x:Key="ArtworkComboBoxItem" TargetType="{x:Type ComboBoxItem}">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-            <Setter Property="Background" Value="#10161E" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="Background" Value="{DynamicResource InputBrush}" />
             <Setter Property="Padding" Value="10,8" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="FontFamily" Value="{DynamicResource Ui.FontFamily}" />
@@ -122,10 +122,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#2D6FD2" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource AccentBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#244B8F" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource SelectionBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -133,9 +133,9 @@
             </Setter>
         </Style>
         <Style x:Key="ArtworkComboBox" TargetType="{x:Type ComboBox}">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-            <Setter Property="Background" Value="#10161E" />
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="Background" Value="{DynamicResource InputBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="10,7" />
             <Setter Property="MinHeight" Value="36" />
@@ -160,7 +160,7 @@
                                                       ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}" />
                                     <Path Width="8" Height="5" Margin="0,0,11,0"
                                           HorizontalAlignment="Right" VerticalAlignment="Center"
-                                          Fill="#B8C5D6" Stretch="Fill"
+                                          Fill="{DynamicResource MutedBrush}" Stretch="Fill"
                                           Data="M 0 0 L 4 4 L 8 0 Z" />
                                 </Grid>
                             </Border>
@@ -184,8 +184,8 @@
                                         MaxHeight="{TemplateBinding MaxDropDownHeight}"
                                         Margin="0,4,0,0"
                                         Padding="3"
-                                        Background="#10161E"
-                                        BorderBrush="#3A4A61"
+                                        Background="{DynamicResource InputBrush}"
+                                        BorderBrush="{DynamicResource BorderHoverBrush}"
                                         BorderThickness="1"
                                         CornerRadius="7">
                                     <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -201,10 +201,10 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="{StaticResource BorderHoverBrush}" />
+                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="{DynamicResource BorderHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -237,11 +237,11 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="CheckBorder" Property="Background" Value="#CC1B2330" />
-                                <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+                                <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="CheckBorder" Property="Background" Value="#E64F8CFF" />
-                                <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{StaticResource AccentBorderBrush}" />
+                                <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{DynamicResource AccentBorderBrush}" />
                                 <Setter TargetName="CheckMark" Property="Visibility" Value="Visible" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
@@ -283,7 +283,7 @@
                            VerticalAlignment="Center" />
                 <TextBlock x:Name="ArtworkPositionText"
                            Grid.Column="1"
-                           Foreground="{StaticResource MutedBrush}"
+                           Foreground="{DynamicResource MutedBrush}"
                            VerticalAlignment="Center" />
             </Grid>
             <Grid Grid.Row="1" Margin="0,9,0,0">
@@ -297,7 +297,7 @@
                 <TextBlock Text="{DynamicResource ArtworkViewer.TypeLabel}"
                            VerticalAlignment="Center"
                            Margin="0,0,8,0"
-                           Foreground="{StaticResource MutedBrush}" />
+                           Foreground="{DynamicResource MutedBrush}" />
                 <ComboBox x:Name="ArtworkTypeComboBox"
                           Grid.Column="1"
                           Width="210"
@@ -306,7 +306,7 @@
                 <TextBlock x:Name="PreloadProgressText"
                            Grid.Column="2"
                            Margin="12,0"
-                           Foreground="{StaticResource MutedBrush}"
+                           Foreground="{DynamicResource MutedBrush}"
                            FontSize="11"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"
@@ -319,7 +319,7 @@
                             Visibility="Collapsed">
                     <TextBlock x:Name="ArtworkSourceLabelText"
                                Text="{DynamicResource ArtworkViewer.ArtworkSourceLabel}"
-                               Foreground="{StaticResource MutedBrush}"
+                               Foreground="{DynamicResource MutedBrush}"
                                FontSize="11"
                                VerticalAlignment="Center" />
                     <Button x:Name="ArtworkSourceSelectorButton"
@@ -339,8 +339,8 @@
 
         <Border x:Name="ArtworkPreviewBorder"
                 Grid.Row="1"
-                Background="#080C12"
-                BorderBrush="{StaticResource BorderBrush}"
+                Background="{DynamicResource InputBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1"
                 CornerRadius="10"
                 Padding="10">
@@ -348,7 +348,7 @@
                 <Image x:Name="ArtworkImage" Stretch="Uniform" />
                 <TextBlock x:Name="EmptyTypeText"
                            Text="{DynamicResource ArtworkViewer.EmptyType}"
-                           Foreground="{StaticResource MutedBrush}"
+                           Foreground="{DynamicResource MutedBrush}"
                            FontSize="14"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
@@ -363,13 +363,13 @@
                         Visibility="Collapsed">
                     <StackPanel>
                         <TextBlock x:Name="ArtworkLoadStateText"
-                                   Foreground="{StaticResource TextBrush}"
+                                   Foreground="{DynamicResource TextBrush}"
                                    FontSize="14"
                                    FontWeight="SemiBold"
                                    TextAlignment="Center"
                                    TextWrapping="Wrap" />
                         <TextBlock x:Name="ArtworkLoadDetailText"
-                                   Foreground="{StaticResource MutedBrush}"
+                                   Foreground="{DynamicResource MutedBrush}"
                                    FontSize="11"
                                    Margin="0,7,0,0"
                                    TextAlignment="Center"
@@ -383,7 +383,7 @@
                    Grid.Row="2"
                    Margin="0,5,4,0"
                    HorizontalAlignment="Right"
-                   Foreground="{StaticResource MutedBrush}"
+                   Foreground="{DynamicResource MutedBrush}"
                    FontSize="11"
                    Visibility="Collapsed" />
 
@@ -396,8 +396,8 @@
                     MinWidth="0"
                     MinHeight="36"
                     Padding="9,5"
-                    Background="#111821"
-                    BorderBrush="{StaticResource BorderBrush}"
+                    Background="{DynamicResource ChromeBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
                     Click="ToggleFilmstrip_Click">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -420,7 +420,7 @@
                                VerticalAlignment="Center" />
                     <TextBlock x:Name="ArtworkFilmstripSummaryText"
                                Grid.Column="4"
-                               Foreground="{StaticResource MutedBrush}"
+                               Foreground="{DynamicResource MutedBrush}"
                                FontSize="11"
                                VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" />
@@ -462,8 +462,8 @@
                 <Border x:Name="LocalThumbnailStripBorder"
                         Height="100"
                         Padding="5"
-                        Background="#111821"
-                        BorderBrush="{StaticResource BorderBrush}"
+                        Background="{DynamicResource ChromeBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1"
                         CornerRadius="8">
                     <ScrollViewer x:Name="LocalThumbnailScrollViewer"
@@ -489,7 +489,7 @@
                     <WrapPanel Grid.Column="1" HorizontalAlignment="Right">
                         <TextBlock x:Name="SampleSelectionSummaryText"
                                    Margin="0,0,10,0"
-                                   Foreground="{StaticResource MutedBrush}"
+                                   Foreground="{DynamicResource MutedBrush}"
                                    FontSize="11"
                                    VerticalAlignment="Center"
                                    Visibility="Collapsed" />
@@ -511,8 +511,8 @@
                 <Border x:Name="OnlineThumbnailStripBorder"
                         Height="100"
                         Padding="5"
-                        Background="#111821"
-                        BorderBrush="{StaticResource BorderBrush}"
+                        Background="{DynamicResource ChromeBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
                         BorderThickness="1"
                         CornerRadius="8">
                     <Grid>
@@ -525,7 +525,7 @@
                             <StackPanel x:Name="ThumbnailPanel" Orientation="Horizontal" />
                         </ScrollViewer>
                         <TextBlock x:Name="OnlineEmptySourceText"
-                                   Foreground="{StaticResource MutedBrush}"
+                                   Foreground="{DynamicResource MutedBrush}"
                                    FontSize="11"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
@@ -542,7 +542,7 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Text="{DynamicResource ArtworkViewer.KeyboardHint}"
-                       Foreground="{StaticResource MutedBrush}"
+                       Foreground="{DynamicResource MutedBrush}"
                        FontSize="11"
                        Margin="0,0,10,0"
                        TextTrimming="CharacterEllipsis"

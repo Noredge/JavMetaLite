@@ -215,7 +215,7 @@ internal static partial class Program
         window.Show();
         try
         {
-            ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SetQueueOpen(window, true);
             var queue = (IList)typeof(MainWindow).GetField("_movieQueue", PrivateInstance)!.GetValue(window)!;
             using var job = CoverJob("LOW-053", "https://cover.invalid/missing.png");
             job.Metadata.FallbackCoverUrl = "https://cover.invalid/low.png";
@@ -248,7 +248,7 @@ internal static partial class Program
                 var badge = FindVisualChildren<Border>(row).Single(b => b.Name == "QueueReviewBadge");
                 var label = FindVisualChildren<TextBlock>(badge).Single();
                 CoverAssert(badge.IsVisible && label.Text == LocalizationService.Get("Queue.Search.NeedsReview") &&
-                    label.Foreground is SolidColorBrush brush && brush.Color == Color.FromRgb(255, 183, 77),
+                    label.Foreground is SolidColorBrush brush && brush.Color == ((SolidColorBrush)window.FindResource("BatchSourceWarningBrush")).Color,
                     "Badge did not localize: " + language);
                 CoverAssert(!FindVisualChildren<TextBlock>(row).Any(t => t.Text.Contains("400") || t.Text == LocalizationService.Get("CoverCheck.Low")),
                     "Queue must show only yellow review status, not resolution reasons.");

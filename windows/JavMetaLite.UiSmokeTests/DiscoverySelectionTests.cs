@@ -10,9 +10,6 @@ internal static partial class Program
 {
     private static void TestDiscoveryRecognizedSelection()
     {
-        var scanDialog = MainWindow.CreateScanFolderDialog();
-        if (!scanDialog.Multiselect || scanDialog.Title != LocalizationService.Get("Dialog.ChooseScanRoot"))
-            throw new InvalidOperationException("Scan folder picker must enable multiple selection and use localized instructions.");
         var roots = new[] { @"C:\Synthetic\One", @"C:\Synthetic\Two" };
         var multiRootWindow = new MovieDiscoveryWindow(roots, [], includeSubdirectories: true);
         if (((TextBlock)multiRootWindow.FindName("RootPathText")).Text != string.Join(Environment.NewLine, roots) ||

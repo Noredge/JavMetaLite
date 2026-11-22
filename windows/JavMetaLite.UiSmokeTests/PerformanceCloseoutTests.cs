@@ -41,11 +41,11 @@ internal static partial class Program
         scheduler.Request(false);
         scheduler.Cancel();
 
-        var window = new MainWindow();
+        var window = new MainWindow(TestPreferences());
         window.Show();
         try
         {
-            ((RadioButton)window.FindName("BatchModeButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SetQueueOpen(window, true);
             var queue = (IList)typeof(MainWindow).GetField("_movieQueue", PrivateInstance)!.GetValue(window)!;
             var attach = typeof(MainWindow).GetMethod("AttachMovieJob", PrivateInstance)!;
             var view = (ICollectionView)typeof(MainWindow).GetField("_movieQueueView", PrivateInstance)!.GetValue(window)!;
@@ -164,7 +164,7 @@ internal static partial class Program
             var preview = await ArtworkPreviewLoader.LoadLocalAsync(coverPath, CancellationToken.None);
             if (preview.Width != 1600 || preview.Height != 1000 || preview.Bitmap.PixelWidth != 640 || !preview.Bitmap.IsFrozen)
                 throw new InvalidOperationException("Display decode changed original dimensions or thread safety.");
-            var window = new MainWindow(); window.Show();
+            var window = new MainWindow(TestPreferences()); window.Show();
             try
             {
                 await (Task)typeof(MainWindow).GetMethod("AddMovieFilesAsync", PrivateInstance)!.Invoke(window, [paths])!;

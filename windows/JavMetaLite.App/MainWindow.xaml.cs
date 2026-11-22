@@ -25,12 +25,6 @@ public partial class MainWindow : Window
     internal static string FormatVersionText(string version) => LocalizationService.Get(
         version.Split('+')[0].Contains('-') ? "Main.PreviewVersionFormat" : "Main.CurrentVersionFormat", version);
 
-    private enum WorkspaceMode
-    {
-        Single,
-        Batch
-    }
-
     private sealed record MetadataSearchOutcome(
         MovieMetadata Metadata,
         IReadOnlyList<MovieMetadata> Sources,
@@ -74,6 +68,8 @@ public partial class MainWindow : Window
     private string? _targetConfigurationError;
     private bool _busy;
     private bool _closeRequested;
+    private bool _savingAcrossVolumes;
+    private AppDialogWindow? _transferCloseDialog;
     private bool _uiInitialized;
     private bool _preferencesLoaded;
     private bool _preferencesCanOverwrite = true;
@@ -83,11 +79,10 @@ public partial class MainWindow : Window
     private int? _pendingQueueFocusVersion;
     private bool _applyingSaveConfiguration;
     private bool _saveSettingsExpanded;
-    private string? _searchToolbarLayoutKey;
-    private bool _compactSearchToolbar;
-    private WorkspaceMode? _lastSizedWorkspaceMode;
-    private WorkspaceMode _workspaceMode = WorkspaceMode.Single;
-
+    private bool? _searchToolbarWrapped;
+    private bool _restoringSourceSelection;
+    private CancellationTokenSource? _navigationPreviewCancellation;
+    private long _statusRevision;
     private CancellationToken CurrentOperationToken =>
         _activeOperationCancellation?.Token ?? _lifetimeCancellation.Token;
 
@@ -102,11 +97,13 @@ public partial class MainWindow : Window
         _fileOrganizationService = new FileOrganizationService(_outputService);
         LocalizationService.ApplyLanguage(LocalizationService.CurrentLanguageCode);
         InitializeComponent();
+        foreach (var row in SourceComboBox.Items.OfType<ComboBoxItem>())
+            row.AddHandler(Mouse.MouseEnterEvent, new MouseEventHandler(SourceItem_MouseEnter), handledEventsToo: true);
         _coverResolutionMonitor = new CoverResolutionMonitor(Dispatcher,
             (locations, token) => CoverResolutionCheck.MeasureAsync(locations, ProbeCoverResolutionAsync, token),
             RefreshCoverCheckButton);
         _r18DevClient.CoolingDown += R18CoolingDown;
-        WindowVisualTheme.ApplyDarkTitleBar(this);
+        WindowVisualTheme.Attach(this);
         SelectLanguageItem(LocalizationService.CurrentLanguageCode);
         _activeJob.MetadataPropertyChanged += Metadata_PropertyChanged;
         _activeJob.MetadataSelectionChanged += MetadataReview_SelectionChanged;
@@ -115,15 +112,17 @@ public partial class MainWindow : Window
         _queueRefresh = new QueueRefreshCoordinator(Dispatcher, RefreshQueueUiCore);
         _movieQueueView.Filter = FilterQueueItem;
         MovieQueueList.ItemsSource = _movieQueueView;
+        DeskLayout.SizeChanged += (_, _) => PositionOutputDrawer();
+        QueuePanel.SizeChanged += (_, _) => PositionOutputDrawer();
+        ArtworkPanel.SizeChanged += (_, _) => PositionOutputDrawer();
         _uiInitialized = true;
         DataContext = _activeJob.Metadata;
         RefreshSourceBadges();
         RefreshArtworkSourceBadge();
-        RefreshManualWebLookupUi();
         RefreshSourceSelectionUi();
         RefreshRetryFailedSourcesUi();
         RefreshArtworkPreviewStates();
-        RefreshWorkspaceModeUi();
+        RefreshWorkspacePresentation();
         RefreshQueueUi();
         RefreshTargetLocationUi();
         VersionText.Text = FormatVersionText(ApplicationVersion);
@@ -176,6 +175,10 @@ public partial class MainWindow : Window
 
     private void ApplyPreferences(AppPreferences preferences)
     {
+        _queuePreference = preferences.QueueVisible;
+        AppearanceChoice.SelectedValuePath = "Tag";
+        AppearanceChoice.SelectedValue = preferences.Appearance;
+        WindowVisualTheme.SetAppearance(preferences.Appearance);
         ApplyLanguagePreference(preferences.UiLanguage);
         SkipSavePreviewCheckBox.IsChecked = preferences.SkipSavePreview;
         SkipCrossVolumeVerificationCheckBox.IsChecked =
@@ -225,6 +228,8 @@ public partial class MainWindow : Window
         return new AppPreferences
         {
             UiLanguage = LocalizationService.CurrentLanguageCode,
+            QueueVisible = _queuePreference,
+            Appearance = WindowVisualTheme.Appearance,
             RememberSavePreferences = RememberPreferencesCheckBox.IsChecked == true,
             SearchSourceMode = GetSelectedSourceMode(),
             SkipSavePreview = SkipSavePreviewCheckBox.IsChecked == true,
@@ -329,154 +334,61 @@ public partial class MainWindow : Window
         RefreshTargetLocationUi();
         RefreshSourceBadges();
         RefreshArtworkSourceBadge();
-        RefreshManualWebLookupUi();
         RefreshSourceSelectionUi();
         RefreshArtworkPreviewStates();
-        RefreshWorkspaceModeUi();
+        RefreshWorkspacePresentation();
     }
 
-    private void SingleMode_Click(object sender, RoutedEventArgs e) =>
-        SetWorkspaceMode(WorkspaceMode.Single);
-
-    private void BatchMode_Click(object sender, RoutedEventArgs e) =>
-        SetWorkspaceMode(WorkspaceMode.Batch);
-
-    private void SetWorkspaceMode(WorkspaceMode mode)
-    {
-        if (_workspaceMode == mode && _uiInitialized)
-        {
-            RefreshWorkspaceModeUi();
-            RefreshQueueUi();
-            return;
-        }
-
-        _workspaceMode = mode;
-        if (!_uiInitialized)
-        {
-            return;
-        }
-
-        RefreshWorkspaceModeUi();
-        RefreshQueueUi();
-        AppLog.Info($"切换工作模式 mode={mode}");
-    }
-
-    private void RefreshWorkspaceModeUi()
-    {
-        if (!_uiInitialized)
-        {
-            return;
-        }
-
-        var isBatch = _workspaceMode is WorkspaceMode.Batch;
-        if (_lastSizedWorkspaceMode != _workspaceMode)
-        {
-            QueueColumn.Width = isBatch ? new GridLength(220) : new GridLength(0);
-            QueueSpacerColumn.Width = isBatch ? new GridLength(10) : new GridLength(0);
-            ArtworkColumn.Width = new GridLength(isBatch ? 250 : 300);
-            _lastSizedWorkspaceMode = _workspaceMode;
-        }
-
-        SingleModeButton.IsChecked = !isBatch;
-        BatchModeButton.IsChecked = isBatch;
-        ScanFolderButton.Visibility = isBatch ? Visibility.Visible : Visibility.Collapsed;
-        SingleSavePanel.Visibility = isBatch ? Visibility.Collapsed : Visibility.Visible;
-        RemoveCurrentVideoButton.Visibility = !isBatch && _activeJob.VideoPath is not null
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        RemoveCurrentVideoButton.IsEnabled = !_busy && _activeJob.VideoPath is not null;
-        ChooseVideoButton.Content = LocalizationService.Get(isBatch ? "Main.AddMovies" : "Main.ChooseSingleMovie");
-        SubtitleText.Text = LocalizationService.Get(isBatch ? "Main.Subtitle.Batch" : "Main.Subtitle.Single");
-        RefreshSearchToolbarLayout();
-        RefreshSaveSettingsPresentation();
-    }
+    private string? _lastInputFolder;
 
     private async void ChooseFile_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog
-        {
-            Title = LocalizationService.Get("Dialog.ChooseVideo"),
-            Filter = LocalizationService.Get("Dialog.VideoFilter"),
-            Multiselect = _workspaceMode is WorkspaceMode.Batch,
-            CheckFileExists = true
-        };
-
-        if (dialog.ShowDialog(this) == true)
-        {
-            await AddMovieFilesAsync(dialog.FileNames);
-        }
-    }
-
-    internal static OpenFolderDialog CreateScanFolderDialog() => new()
-    {
-        Title = LocalizationService.Get("Dialog.ChooseScanRoot"),
-        Multiselect = true
-    };
-
-    private async void ScanFolder_Click(object sender, RoutedEventArgs e)
-    {
-        SetWorkspaceMode(WorkspaceMode.Batch);
-        var folderDialog = CreateScanFolderDialog();
-        if (folderDialog.ShowDialog(this) != true)
-        {
-            return;
-        }
-
-        var discovery = new MovieDiscoveryWindow(
-            folderDialog.FolderNames,
-            _movieQueue.SelectMany(job => job.VideoPaths),
-            includeSubdirectories: true)
-        {
-            Owner = this
-        };
-        if (discovery.ShowDialog() == true)
-        {
-            await AddMovieFilesAsync(discovery.SelectedVideoPaths);
-        }
+        if (_busy) return;
+        var initial = _lastInputFolder ?? Path.GetDirectoryName(_activeJob.VideoPath) ??
+            Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+        if (string.IsNullOrEmpty(initial) || !Directory.Exists(initial))
+            initial = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var picker = new MovieInputPicker(initial) { Owner = this };
+        if (picker.ShowDialog() != true) return;
+        _lastInputFolder = picker.CurrentDirectory;
+        await ImportInputsAsync(picker.SelectedPaths);
     }
 
     private void Window_DragOver(object sender, DragEventArgs e)
     {
-        e.Effects = TryGetDroppedPaths(e.Data, out var paths) &&
-                    paths.Length > 0 &&
-                    paths.All(path =>
-                        VideoFileSupport.IsSupportedExistingFile(path) || Directory.Exists(path))
-            ? DragDropEffects.Copy
-            : DragDropEffects.None;
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+        e.Effects = _busy ? DragDropEffects.None : e.AllowedEffects & DragDropEffects.Copy;
+        DropOverlay.Visibility = e.Effects == DragDropEffects.Copy ? Visibility.Visible : Visibility.Collapsed;
         e.Handled = true;
+    }
+
+    private void Window_DragLeave(object sender, DragEventArgs e)
+    {
+        DropOverlay.Visibility = Visibility.Collapsed;
     }
 
     private async void Window_Drop(object sender, DragEventArgs e)
     {
-        if (!TryGetDroppedPaths(e.Data, out var paths))
-        {
-            return;
-        }
+        DropOverlay.Visibility = Visibility.Collapsed;
+        if (!TryGetDroppedPaths(e.Data, out var paths)) return;
+        e.Effects = _busy ? DragDropEffects.None : e.AllowedEffects & DragDropEffects.Copy;
+        e.Handled = true;
+        if (e.Effects != DragDropEffects.Copy) return;
 
-        try
-        {
-            if (paths.All(VideoFileSupport.IsSupportedExistingFile))
-            {
-                await AddMovieFilesAsync(paths);
-            }
-            else
-            {
-                await ImportDiscoveredPathsAsync(paths);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            AppLog.Warning($"无法读取拖入的影片项目 paths={string.Join(" | ", paths)}", exception);
-            ShowError(LocalizationService.Get("Error.ReadVideoFolder", exception.Message));
-        }
-        finally
-        {
-            e.Handled = true;
-        }
+        // Activate during the drop so closing the import review returns to its owner.
+        Activate();
+        await ImportInputsAsync(paths);
+    }
+
+    internal async Task ImportInputsAsync(IReadOnlyList<string> paths)
+    {
+        if (_busy || paths.Count == 0) return;
+        await ImportDiscoveredPathsAsync(paths);
     }
 
     private async void Search_Click(object sender, RoutedEventArgs e)
     {
+        if (_busy) return;
         var job = _activeJob;
         if (string.IsNullOrWhiteSpace(job.Metadata.Id))
         {
@@ -542,11 +454,13 @@ public partial class MainWindow : Window
                 var localPrefix = job.LocalSourceMetadata is null
                     ? LocalizationService.Get("Status.LoadedOnline", sourceName, result.Id)
                     : LocalizationService.Get("Status.LoadedOnlineWithLocal", sourceName);
-                SetStatus(
-                    artworkLoaded.Poster
-                        ? $"{localPrefix}{imageSummary}{(artworkLoaded.Fanart ? string.Empty : LocalizationService.Get("Status.FanartPreviewMissing"))}{degradedNote}"
-                        : $"{localPrefix}{LocalizationService.Get("Status.CoverPreviewMissing")}{degradedNote}",
-                    string.IsNullOrWhiteSpace(failedSources));
+                var details = artworkLoaded.Poster
+                    ? $"{localPrefix}{imageSummary}{(artworkLoaded.Fanart ? string.Empty : LocalizationService.Get("Status.FanartPreviewMissing"))}{degradedNote}"
+                    : $"{localPrefix}{LocalizationService.Get("Status.CoverPreviewMissing")}{degradedNote}";
+                var notice = !string.IsNullOrWhiteSpace(failedSources) ? LocalizationService.Get("Queue.Search.Partial")
+                    : !artworkLoaded.Poster || !artworkLoaded.Fanart ? LocalizationService.Get("Footer.ArtworkIncomplete")
+                    : null;
+                SetResultStatus("Footer.Found", 1, details, notice);
             }
             catch (JavLibraryChallengeException exception)
             {
@@ -609,15 +523,23 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Browser_Click(object sender, RoutedEventArgs e)
+    private async void ManualWebsite_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(MovieIdParser.Normalize(_activeJob.Metadata.Id)))
-        {
-            ShowError(LocalizationService.Get("Error.EnterId"));
-            return;
-        }
+        if (_busy || sender is not Button { Tag: string source } || !ManualSearchItem.IsEnabled) return;
+        e.Handled = true;
+        var target = CurrentBrowserTarget(source);
+        ManualWebsiteChoices.Visibility = Visibility.Collapsed;
+        SourceComboBox.IsDropDownOpen = false;
+        await OpenBrowserAsync(target);
+    }
 
-        ShowBrowserSourceMenu();
+    private BrowserImportTarget CurrentBrowserTarget(string source)
+    {
+        var id = MovieIdParser.Normalize(_activeJob.Metadata.Id);
+        // An edited number must never reuse the previous movie's detail URL.
+        var matches = _activeJob.SourceResults.Where(result =>
+            string.Equals(MovieIdParser.Normalize(result.Id), id, StringComparison.OrdinalIgnoreCase));
+        return BrowserImportRouting.BuildTarget(source, id, matches);
     }
 
     private async void RetryFailedSources_Click(object sender, RoutedEventArgs e)
@@ -626,7 +548,7 @@ public partial class MainWindow : Window
         {
             return;
         }
-        if (_workspaceMode == WorkspaceMode.Batch)
+        if (UseBatchActions)
         {
             await RetryQueueFailedSourcesAsync();
             return;
@@ -718,7 +640,8 @@ public partial class MainWindow : Window
                 sourceProfile: sourceProfile,
                 bestArtworkSourceResolver: ResolveBestArtworkSourceAsync,
                 retryFailedSourcesOnly: true,
-                sourceMode: sourceMode);
+                sourceMode: sourceMode,
+                progress: BeginSearchProgress());
             InvalidateSucceededBatchSearchPreviews(result);
             RefreshActiveJobPresentation();
             if (jobs.Contains(_activeJob) && !CurrentOperationToken.IsCancellationRequested)
@@ -763,55 +686,6 @@ public partial class MainWindow : Window
     private string GetAutomaticSourceDisplayName(string sourceMode) =>
         string.Join(" + ", MetadataSearchSourceModes.AutomaticSources(sourceMode)
             .Select(name => GetMetadataProvider(name).DisplayName));
-
-    private void ShowBrowserSourceMenu()
-    {
-        var menu = new ContextMenu
-        {
-            PlacementTarget = BrowserImportButton,
-            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
-            Style = (Style)FindResource("CandidateContextMenu")
-        };
-
-        foreach (var target in BrowserImportRouting.BuildTargets(
-                     _activeJob.Metadata.Id,
-                     _activeJob.SourceResults))
-        {
-            var selectedCount = CountSelectedSourceItems(target.SourceName);
-            var sourceText = new TextBlock
-            {
-                Text = LocalizationService.Get("Browser.SourceAction", target.DisplayName),
-                Foreground = new SolidColorBrush(Color.FromRgb(111, 168, 255)),
-                FontWeight = FontWeights.SemiBold
-            };
-            var detailText = new TextBlock
-            {
-                Text = selectedCount > 0
-                    ? LocalizationService.Get("Browser.SourceInUse", selectedCount)
-                    : target.HasExistingResult
-                        ? LocalizationService.Get("Browser.SourceCandidate")
-                        : LocalizationService.Get("Browser.SourceOpen"),
-                Foreground = new SolidColorBrush(Color.FromRgb(184, 197, 214)),
-                FontSize = 11,
-                Margin = new Thickness(0, 3, 0, 0)
-            };
-            var header = new StackPanel();
-            header.Children.Add(sourceText);
-            header.Children.Add(detailText);
-            var menuItem = new MenuItem
-            {
-                Header = header,
-                Tag = target,
-                Style = (Style)FindResource("CandidateMenuItem"),
-                ToolTip = target.InitialUrl
-            };
-            menuItem.Click += async (_, _) => await OpenBrowserAsync(target);
-            menu.Items.Add(menuItem);
-        }
-
-        BrowserImportButton.ContextMenu = menu;
-        menu.IsOpen = true;
-    }
 
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
@@ -880,14 +754,9 @@ public partial class MainWindow : Window
 
         await RunBusyAsync(LocalizationService.Get("Status.Saving"), async () =>
         {
-            var transactionProgress = new Progress<FileTransactionProgress>(update =>
-                SetStatus(GetLocalizedTransactionProgress(update), null));
-            var result = await _fileOrganizationService.ExecuteAsync(
-                plan,
-                _activeJob.Metadata,
-                allowOverwrite,
-                CurrentOperationToken,
-                transactionProgress);
+            _savingAcrossVolumes = plan.RequiresVerifiedVideoCopy;
+            var progress = new SaveProgress(this, [plan]);
+            var result = await progress.ExecuteAsync(plan, _activeJob.Metadata, allowOverwrite, CurrentOperationToken);
             CancelOperationButton.IsEnabled = false;
             if (result.CleanupIssues.Count > 0)
                 ShowCleanupDetails(result.CleanupIssues, committed: true);
@@ -923,16 +792,76 @@ public partial class MainWindow : Window
                 outputSummary += LocalizationService.Get("Common.ListSeparator") +
                                  LocalizationService.Get("Status.ExtrafanartSkipped");
             }
-            SetStatus(LocalizationService.Get("Status.SaveComplete", outputSummary, fanartNote, moveNote), true);
-            if (result.CleanupIssues.Count > 0)
-                SetStatus(LocalizationService.Get("Cleanup.Committed"), false);
+            var details = LocalizationService.Get("Status.SaveComplete", outputSummary, fanartNote, moveNote);
+            if (result.CleanupIssues.Count == 0 && !plan.HasActualChanges && outputs.Count == 0)
+                SetStatus(LocalizationService.Get("Status.NoChanges"), true, details);
+            else
+                SetSaveResultStatus(1, details, result.CleanupIssues.Count > 0, canceled: false);
         });
     }
 
+    private void SourceItem_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (ReferenceEquals(sender, ManualSearchItem)) ShowManualWebsites();
+        else ManualWebsiteChoices.Visibility = Visibility.Collapsed;
+    }
+
+    private void ManualSearch_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (ManualWebsiteChoices.IsMouseOver || (e.OriginalSource is Visual hit && ManualWebsiteChoices.IsAncestorOf(hit))) return;
+        e.Handled = true;
+        ShowManualWebsites();
+    }
+
+    private void ManualSearch_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (ManualWebsiteChoices.IsKeyboardFocusWithin || e.Key is not (Key.Right or Key.Enter or Key.Space)) return;
+        e.Handled = true;
+        ShowManualWebsites(focusFirst: true);
+    }
+
+    private void ShowManualWebsites(bool focusFirst = false)
+    {
+        if (_busy || !SourceComboBox.IsDropDownOpen || !ManualSearchItem.IsEnabled) return;
+        ManualWebsiteChoices.Visibility = Visibility.Visible;
+        if (focusFirst) ((Button)ManualWebsiteChoices.Children[0]).Focus();
+    }
+
+    private void ManualWebsites_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.Left or Key.Escape)
+        {
+            e.Handled = true;
+            ManualWebsiteChoices.Visibility = Visibility.Collapsed;
+            ManualSearchItem.Focus();
+        }
+    }
+
+    private void SourceDropDown_Closed(object? sender, EventArgs e) => ManualWebsiteChoices.Visibility = Visibility.Collapsed;
+
     private void SourceSelection_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (!_uiInitialized)
+        if (!_uiInitialized || _restoringSourceSelection) return;
+        if (ReferenceEquals(SourceComboBox.SelectedItem, ManualSearchItem))
         {
+            // Manual lookup is a one-time command. Keep the automatic provider for subsequent queries.
+            var openChooser = SourceComboBox.IsDropDownOpen && ManualSearchItem.IsEnabled;
+            _restoringSourceSelection = true;
+            try
+            {
+                SourceComboBox.SelectedItem = e.RemovedItems.OfType<ComboBoxItem>().FirstOrDefault() ?? SourceComboBox.Items[0];
+            }
+            finally { _restoringSourceSelection = false; }
+
+            if (openChooser)
+            {
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, () =>
+                {
+                    if (!IsVisible || _closeRequested || _busy || !ManualSearchItem.IsEnabled) return;
+                    SourceComboBox.IsDropDownOpen = true;
+                    ShowManualWebsites(focusFirst: true);
+                });
+            }
             return;
         }
 
@@ -995,96 +924,37 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Both workspace modes share three tiers. Reserve the gear area in every source
-        // mode so switching sources never moves controls or changes the row count.
-        var wrapped = SearchToolbar.ActualWidth < 540;
-        _compactSearchToolbar = SearchToolbar.ActualWidth < 650;
-        var showAutomaticSourceLabel = SearchToolbar.ActualWidth >= 720;
-        RefreshManualWebLookupUi();
-        var selectedSourceLabel = _compactSearchToolbar && GetSelectedSourceMode() == MetadataSearchSourceModes.LibreDmm
-            ? "LibreDMM"
-            : (SourceComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? string.Empty;
-        if (!Equals(SourceComboBox.Resources["SearchSourceSelectionLabel"], selectedSourceLabel))
-            SourceComboBox.Resources["SearchSourceSelectionLabel"] = selectedSourceLabel;
-        var layoutKey = $"{wrapped}:{_compactSearchToolbar}:{showAutomaticSourceLabel}";
-        if (string.Equals(_searchToolbarLayoutKey, layoutKey, StringComparison.Ordinal))
-        {
-            return;
-        }
+        var width = SearchToolbarLayout.ActualWidth;
+        if (width <= 0) return;
+        var label = GetSelectedSourceMode() == MetadataSearchSourceModes.LibreDmm
+            ? "LibreDMM" : (SourceComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? string.Empty;
+        if (!Equals(SourceComboBox.Resources["SearchSourceSelectionLabel"], label))
+            SourceComboBox.Resources["SearchSourceSelectionLabel"] = label;
 
-        _searchToolbarLayoutKey = layoutKey;
-        SearchToolbarLayout.ColumnDefinitions.Clear();
-        static void Place(UIElement element, int row, int column, int columnSpan = 1)
-        {
-            Grid.SetRow(element, row);
-            Grid.SetColumn(element, column);
-            Grid.SetColumnSpan(element, columnSpan);
-        }
-
-        void AddColumn(GridLength width, double minWidth = 0) =>
-            SearchToolbarLayout.ColumnDefinitions.Add(new ColumnDefinition
-            {
-                Width = width,
-                MinWidth = minWidth
-            });
-
-        if (wrapped)
-        {
-            AddColumn(GridLength.Auto);
-            AddColumn(new GridLength(8));
-            AddColumn(new GridLength(1, GridUnitType.Star), 100);
-            AddColumn(new GridLength(8));
-            AddColumn(GridLength.Auto);
-
-            SearchToolbarLayout.RowDefinitions[0].Height = GridLength.Auto;
-            SearchToolbarLayout.RowDefinitions[1].Height = new GridLength(8);
-            SearchToolbarLayout.RowDefinitions[2].Height = GridLength.Auto;
-            AutomaticSourceText.Visibility = Visibility.Collapsed;
-            IdTextBox.Width = double.NaN;
-            IdTextBox.MinWidth = 70;
-            SourceComboBox.Width = double.NaN;
-            SourceComboBox.MinWidth = 100;
-            SourceSelectorHost.MinWidth = 100;
-
-            Place(MovieIdTextBlock, 0, 0);
-            Place(IdTextBox, 0, 2);
-            Place(SearchButton, 0, 4);
-            Place(BrowserImportButton, 2, 0);
-            Place(AutomaticSourceText, 2, 2);
-            Place(SourceSelectorHost, 2, 2, 3);
-            Place(BatchSourceHint, 3, 0, 5);
-            return;
-        }
-
-        AddColumn(GridLength.Auto);
-        AddColumn(new GridLength(_compactSearchToolbar ? 6 : 10));
-        AddColumn(new GridLength(100));
-        AddColumn(new GridLength(_compactSearchToolbar ? 6 : 8));
-        AddColumn(GridLength.Auto);
-        AddColumn(new GridLength(_compactSearchToolbar ? 6 : 8));
-        AddColumn(GridLength.Auto);
-        AddColumn(new GridLength(_compactSearchToolbar ? 8 : 12));
-        AddColumn(showAutomaticSourceLabel ? GridLength.Auto : new GridLength(0));
-        AddColumn(showAutomaticSourceLabel ? new GridLength(7) : new GridLength(0));
-        AddColumn(new GridLength(1, GridUnitType.Star), 120);
-
-        SearchToolbarLayout.RowDefinitions[0].Height = GridLength.Auto;
-        SearchToolbarLayout.RowDefinitions[1].Height = new GridLength(0);
-        SearchToolbarLayout.RowDefinitions[2].Height = GridLength.Auto;
-        AutomaticSourceText.Visibility = showAutomaticSourceLabel ? Visibility.Visible : Visibility.Collapsed;
-        IdTextBox.Width = 100;
-        IdTextBox.MinWidth = 100;
-        SourceComboBox.Width = double.NaN;
-        SourceComboBox.MinWidth = 120;
-        SourceSelectorHost.MinWidth = 120;
-
-        Place(MovieIdTextBlock, 0, 0);
-        Place(IdTextBox, 0, 2);
-        Place(SearchButton, 0, 4);
-        Place(BrowserImportButton, 0, 6);
-        Place(AutomaticSourceText, 0, 8);
-        Place(SourceSelectorHost, 0, 10);
-        Place(BatchSourceHint, 3, 0, 11);
+        var unconstrained = new Size(double.PositiveInfinity, double.PositiveInfinity);
+        MovieIdTextBlock.Measure(unconstrained);
+        AutomaticSourceText.Measure(unconstrained);
+        SearchButton.Measure(unconstrained);
+        SourceSelectorHost.Measure(unconstrained);
+        // The single row includes a 100-DIP ID field and four gaps (8, 6, 12, 8).
+        var singleRowWidth = 134 + MovieIdTextBlock.DesiredSize.Width + AutomaticSourceText.DesiredSize.Width +
+            SearchButton.DesiredSize.Width + SourceSelectorHost.DesiredSize.Width;
+        var wrapped = width < Math.Ceiling(singleRowWidth);
+        if (_searchToolbarWrapped == wrapped) return;
+        _searchToolbarWrapped = wrapped;
+        var columns = SearchToolbarLayout.ColumnDefinitions;
+        var star = new GridLength(1, GridUnitType.Star);
+        columns[2].Width = wrapped ? star : new GridLength(100);
+        columns[5].Width = new GridLength(wrapped ? 0 : 12);
+        columns[7].Width = new GridLength(wrapped ? 0 : 8);
+        columns[8].Width = wrapped ? new GridLength(0) : GridLength.Auto;
+        SearchToolbarLayout.RowDefinitions[1].Height = new GridLength(wrapped ? 8 : 0);
+        IdTextBox.Width = wrapped ? double.NaN : 100;
+        Grid.SetRow(AutomaticSourceText, wrapped ? 2 : 0);
+        Grid.SetColumn(AutomaticSourceText, wrapped ? 0 : 6);
+        Grid.SetRow(SourceSelectorHost, wrapped ? 2 : 0);
+        Grid.SetColumn(SourceSelectorHost, wrapped ? 2 : 8);
+        Grid.SetColumnSpan(SourceSelectorHost, wrapped ? 3 : 1);
     }
 
     private void SourceProfile_Click(object sender, RoutedEventArgs e)
@@ -1261,6 +1131,8 @@ public partial class MainWindow : Window
             (previewAllowOverwrite && item.Plan.OverwriteConflicts.Count > 0))).ToArray();
         await RunBusyAsync(LocalizationService.Get("Status.BatchSaving", preparedItems.Length), async () =>
         {
+            _savingAcrossVolumes = preparedItems.Any(item => item.Plan.RequiresVerifiedVideoCopy);
+            var progress = new SaveProgress(this, preparedItems.Select(item => item.Plan).ToArray());
             var result = await BatchSaveCoordinator.ExecuteAsync(
                 preparedItems,
                 async (item, cancellationToken) =>
@@ -1270,19 +1142,7 @@ public partial class MainWindow : Window
                         foreach (var part in parts.Where(part => part.Job != item.Job))
                             part.Job.BeginSave(part.ReviewRevision);
                     }
-                    var progress = new Progress<FileTransactionProgress>(update =>
-                        SetStatus(
-                            LocalizationService.Get(
-                                "Status.BatchSaveProgress",
-                                item.Job.Metadata.Id,
-                                GetLocalizedTransactionProgress(update)),
-                            null));
-                    return await _fileOrganizationService.ExecuteAsync(
-                        item.Plan,
-                        item.Job.Metadata,
-                        item.AllowOverwrite,
-                        cancellationToken,
-                        progress);
+                    return await progress.ExecuteAsync(item.Plan, item.Job.Metadata, item.AllowOverwrite, cancellationToken, batch: true);
                 },
                 CurrentOperationToken,
                 async item =>
@@ -1334,16 +1194,10 @@ public partial class MainWindow : Window
             AppLog.Info(
                 $"批量保存结束 requested={preparedItems.Length} completed={result.CompletedCount} " +
                 $"failed={result.FailedCount} canceled={result.CanceledCount} notStarted={result.NotStartedCount}");
-            SetStatus(
-                LocalizationService.Get(
-                    "Status.BatchSaveComplete",
-                    result.CompletedCount,
-                    result.FailedCount,
-                    result.CanceledCount,
-                    result.NotStartedCount),
-                result.FailedCount == 0 && result.CanceledCount == 0);
-            if (cleanupIssues.Length > 0)
-                SetStatus(LocalizationService.Get("Cleanup.Committed"), false);
+            var details = LocalizationService.Get("Status.BatchSaveComplete", result.CompletedCount,
+                result.FailedCount, result.CanceledCount, result.NotStartedCount);
+            SetSaveResultStatus(result.CompletedCount, details, cleanupIssues.Length > 0,
+                result.CanceledCount > 0 || (result.NotStartedCount > 0 && CurrentOperationToken.IsCancellationRequested));
         });
     }
 
@@ -1386,7 +1240,6 @@ public partial class MainWindow : Window
                 _movieQueue.SelectMany(job => job.VideoPaths).ToArray(), CurrentOperationToken);
             var requestedSets = plan.FileSets;
             var duplicateCount = plan.DuplicatePathCount;
-            if (requestedSets.Count > 1) SetWorkspaceMode(WorkspaceMode.Batch);
             var groups = _movieQueue.ToDictionary(job => job.MovieFileGroupKey, StringComparer.OrdinalIgnoreCase);
             MovieJob? firstAdded = null;
             var failedCount = 0;
@@ -1427,11 +1280,12 @@ public partial class MainWindow : Window
                 }
             }
 
+            if (requestedSets.Count - failedCount > 1) _showImportedBatch = true;
             RefreshQueueUi();
             if (firstAdded is not null)
             {
                 await ActivateMovieJobAsync(firstAdded);
-                focusIdAfterImport = _workspaceMode is WorkspaceMode.Single &&
+                focusIdAfterImport = _movieQueue.Count == 1 &&
                                      requestedSets.Count == 1 &&
                                      string.IsNullOrWhiteSpace(firstAdded.Metadata.Id);
             }
@@ -1443,6 +1297,7 @@ public partial class MainWindow : Window
 
         if (focusIdAfterImport)
         {
+            RefreshWorkspaceDetails();
             IdTextBox.Focus();
             IdTextBox.SelectAll();
         }
@@ -1463,12 +1318,23 @@ public partial class MainWindow : Window
         {
             _pendingQueueFocusVersion = focusVersion;
         }
-        await RunBusyAsync(
-            LocalizationService.Get("Status.InspectingLocal"),
-            () => ActivateMovieJobAsync(selectedJob));
-        if (restoreQueueFocus)
+        _navigationPreviewCancellation?.Cancel();
+        using var navigation = CancellationTokenSource.CreateLinkedTokenSource(_lifetimeCancellation.Token);
+        _navigationPreviewCancellation = navigation;
+        try
         {
-            RestoreQueueFocus(selectedJob, focusVersion);
+            if (restoreQueueFocus) RestoreQueueFocus(selectedJob, focusVersion);
+            await ActivateMovieJobCoreAsync(selectedJob, true, navigation.Token);
+        }
+        catch (OperationCanceledException) when (navigation.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            AppLog.Warning("Queue preview failed.", exception);
+            if (!navigation.IsCancellationRequested) SetStatus(exception.Message, false);
+        }
+        finally
+        {
+            if (ReferenceEquals(_navigationPreviewCancellation, navigation)) _navigationPreviewCancellation = null;
         }
     }
 
@@ -1498,7 +1364,7 @@ public partial class MainWindow : Window
         {
             if (focusVersion != _queueFocusVersion || _pendingQueueFocusVersion != focusVersion ||
                 _lifetimeCancellation.IsCancellationRequested ||
-                _workspaceMode is not WorkspaceMode.Batch || _busy ||
+                !QueueIsVisible || _busy ||
                 !ReferenceEquals(MovieQueueList.SelectedItem, selectedJob))
             {
                 return;
@@ -1524,30 +1390,23 @@ public partial class MainWindow : Window
     private void SelectNoneQueue_Click(object sender, RoutedEventArgs e) =>
         SetBatchSelection(false);
 
-    private void SetBatchSelection(bool isSelected)
-    {
-        if (_busy)
-        {
-            return;
-        }
+    private void SetBatchSelection(bool isSelected) => SelectMatchingJobs(_ => isSelected);
 
-        foreach (var job in _movieQueue)
-        {
-            job.IsSelectedForBatch = isSelected;
-        }
+    private void SelectRecognizedQueue_Click(object sender, RoutedEventArgs e) =>
+        SelectMatchingJobs(job => !string.IsNullOrWhiteSpace(job.Metadata.Id));
 
-        _queueRefresh.Flush();
-    }
+    private void SelectPendingQueue_Click(object sender, RoutedEventArgs e) =>
+        SelectMatchingJobs(job => !HasQueueIssue(job));
 
-    private void SelectPendingQueue_Click(object sender, RoutedEventArgs e) => SetBatchSelectionByIssue(false);
+    private void SelectIssuesQueue_Click(object sender, RoutedEventArgs e) =>
+        SelectMatchingJobs(HasQueueIssue);
 
-    private void SelectIssuesQueue_Click(object sender, RoutedEventArgs e) => SetBatchSelectionByIssue(true);
-
-    private void SetBatchSelectionByIssue(bool hasIssue)
+    private void SelectMatchingJobs(Func<MovieJob, bool> include)
     {
         if (_busy) return;
+        _rangeAnchor = null;
         foreach (var job in _movieQueue)
-            job.IsSelectedForBatch = HasQueueIssue(job) == hasIssue;
+            job.IsSelectedForBatch = include(job);
         _queueRefresh.Flush();
     }
 
@@ -1640,14 +1499,22 @@ public partial class MainWindow : Window
         RefreshQueueUi();
     }
 
-    private async Task ActivateMovieJobAsync(MovieJob job, bool loadArtworkPreview = true)
+    private Task ActivateMovieJobAsync(MovieJob job, bool loadArtworkPreview = true)
+    {
+        _navigationPreviewCancellation?.Cancel();
+        return ActivateMovieJobCoreAsync(job, loadArtworkPreview, CurrentOperationToken);
+    }
+
+    private async Task ActivateMovieJobCoreAsync(MovieJob job, bool loadArtworkPreview, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(job);
+        var statusRevision = _statusRevision;
         var previous = _activeJob;
         var switchedMovie = !ReferenceEquals(previous, job);
         if (switchedMovie)
         {
             CacheActivePreview();
+            IsEditingMetadata = false;
             previous.MetadataPropertyChanged -= Metadata_PropertyChanged;
             previous.MetadataSelectionChanged -= MetadataReview_SelectionChanged;
             _activeJob = job;
@@ -1675,6 +1542,15 @@ public partial class MainWindow : Window
             job.InitializeSaveConfiguration(CaptureCurrentSaveConfiguration());
             ApplySaveConfiguration(job.SaveConfiguration!);
         }
+        if (!ReferenceEquals(previous, job) && !_movieQueue.Contains(previous))
+        {
+            _jobLoadResults.Remove(previous);
+            _jobPreviews.Remove(previous);
+            DetachMovieJob(previous);
+            previous.Dispose();
+        }
+
+        _queueRefresh.Flush();
         if (job.VideoPath is null)
         {
             _artworkPreviewDeferred = false;
@@ -1682,7 +1558,7 @@ public partial class MainWindow : Window
             FilePathText.Text = LocalizationService.Get("Main.VideoStaysHere");
             ClearPosterPreview();
             ClearFanartPreview();
-            SetStatus(LocalizationService.Get("Main.StatusReadyInput"), true);
+            SetStatus(LocalizationService.Get("Desk.Ready"), true);
         }
         else
         {
@@ -1695,26 +1571,18 @@ public partial class MainWindow : Window
                 ClearFanartPreview();
                 if (loadArtworkPreview)
                 {
-                    await LoadSelectedArtworkPreviewAsync();
+                    await LoadArtworkPreviewAsync(token);
+                    token.ThrowIfCancellationRequested();
+                    if (!ReferenceEquals(job, _activeJob)) return;
                     CacheActivePreview();
                 }
             }
 
-            if (_jobLoadResults.TryGetValue(job, out var loadResult))
+            if (statusRevision == _statusRevision && _jobLoadResults.TryGetValue(job, out var loadResult))
             {
                 PresentMovieJobLoadStatus(job, loadResult);
             }
         }
-
-        if (!ReferenceEquals(previous, job) && !_movieQueue.Contains(previous))
-        {
-            _jobLoadResults.Remove(previous);
-            _jobPreviews.Remove(previous);
-            DetachMovieJob(previous);
-            previous.Dispose();
-        }
-
-        _queueRefresh.Flush();
     }
 
     private void RefreshQueueUi()
@@ -1729,55 +1597,71 @@ public partial class MainWindow : Window
             return;
         }
 
-        var showQueue = _workspaceMode is WorkspaceMode.Batch;
+        if (_movieQueue.Count < 2) _showImportedBatch = false;
+        var showQueue = QueueIsVisible;
+        UpdateQueueLayout();
         if (refreshView) _movieQueueView.Refresh();
         QueuePanel.Visibility = showQueue ? Visibility.Visible : Visibility.Collapsed;
         var sourceMode = GetSelectedSourceMode();
         var canSearch = MetadataSearchSourceModes.AutomaticSources(sourceMode).Count > 0;
         var usesR18 = MetadataSearchSourceModes.AutomaticSources(sourceMode)
             .Contains(MetadataSearchSourceModes.R18Dev);
-        BatchSourceHint.Visibility = showQueue && canSearch ? Visibility.Visible : Visibility.Collapsed;
-        BatchSourceHint.Text = LocalizationService.Get(usesR18
-            ? "Main.BatchSource.R18Hint"
-            : "Main.BatchSource.DmmHint");
-        BatchSourceHint.Foreground = (Brush)FindResource(usesR18 ? "BatchSourceWarningBrush" : "MutedBrush");
         var selectedCount = 0;
         var issueCount = 0;
-        var hasSearchableJob = false;
+        var searchableCount = 0;
         foreach (var job in _movieQueue)
         {
             if (job.IsSelectedForBatch) selectedCount++;
             if (HasQueueIssue(job)) issueCount++;
-            hasSearchableJob = hasSearchableJob || job.CanBatchSearch;
+            if (job.CanBatchSearch) searchableCount++;
         }
-        SearchQueueButton.IsEnabled = !_busy && canSearch && hasSearchableJob;
+        var singleCanSearch = (_movieQueue.Count == 0 || _activeJob.IsSelectedForBatch) && !string.IsNullOrWhiteSpace(_activeJob.Metadata.Id);
+        SearchQueueButton.IsEnabled = !_busy && canSearch && (UseBatchActions ? searchableCount > 0 : singleCanSearch);
+        SearchButton.IsEnabled = !_busy && canSearch && !string.IsNullOrWhiteSpace(_activeJob.Metadata.Id);
+        ManualSearchItem.IsEnabled = !_busy && !string.IsNullOrWhiteSpace(MovieIdParser.Normalize(_activeJob.Metadata.Id));
+        if (_movieQueue.Count == 0)
+            SearchQueueButton.Content = LocalizationService.Get("Main.Search");
+        else if (UseBatchActions && selectedCount > 0 && searchableCount == 0)
+            SearchQueueButton.Content = LocalizationService.Get("Desk.NoPendingLookup");
+        else
+            SearchQueueButton.Content = LocalizationService.Get(UseBatchActions ? "Desk.SearchCheckedCount" : "Desk.SearchCount",
+                UseBatchActions ? searchableCount : singleCanSearch ? 1 : 0);
+        QueueCheckAll.IsChecked = selectedCount == 0 ? false : selectedCount == _movieQueue.Count ? true : null;
+        QueueCheckAll.IsEnabled = !_busy && _movieQueue.Count > 0;
+        SaveSelectedButton.Visibility = UseBatchActions ? Visibility.Visible : Visibility.Collapsed;
+        SaveButton.Visibility = UseBatchActions ? Visibility.Collapsed : Visibility.Visible;
+        RefreshSaveAvailability();
+        RefreshWorkspaceDetails();
         QueueFilterAllItem.DataContext = _movieQueue.Count;
         QueueFilterPendingItem.DataContext = _movieQueue.Count - issueCount;
         QueueFilterIssuesItem.DataContext = issueCount;
         SearchQueueButton.ToolTip = canSearch
             ? LocalizationService.Get("Main.SearchQueueSourceTooltip", GetAutomaticSourceDisplayName(sourceMode))
             : LocalizationService.Get("Status.ManualMode");
+        if (UseBatchActions && canSearch)
+            SearchQueueButton.ToolTip += Environment.NewLine + LocalizationService.Get(
+                usesR18 ? "Main.BatchSource.R18Hint" : "Main.BatchSource.DmmHint");
         SaveSelectedButton.IsEnabled = !_busy && selectedCount > 0;
-        SelectAllQueueButton.IsEnabled = !_busy && _movieQueue.Count > 0 && selectedCount < _movieQueue.Count;
+        SelectRecognizedQueueButton.IsEnabled = !_busy && _movieQueue.Count > 0;
         SelectPendingQueueButton.IsEnabled = !_busy && _movieQueue.Count > 0;
         SelectIssuesQueueButton.IsEnabled = !_busy && _movieQueue.Count > 0;
         SelectNoneQueueButton.IsEnabled = !_busy && selectedCount > 0;
         RemoveSelectedQueueButton.IsEnabled = !_busy && selectedCount > 0;
         ClearQueueButton.IsEnabled = !_busy && _movieQueue.Count > 0;
-        SaveSelectedButton.Content = LocalizationService.Get(
-            selectedCount > 0 && selectedCount == _movieQueue.Count
-                ? "Main.SaveAllCount"
-                : "Main.SaveSelectedCount",
-            selectedCount);
+        var saveLabel = LocalizationService.Get(SkipSavePreviewCheckBox.IsChecked == true ? "Desk.SaveCount" : "Desk.PreviewCount", selectedCount);
+        SaveSelectedButton.Content = saveLabel;
+        SaveButton.Content = saveLabel;
+        ApplySelectionSettingsButton.Visibility = UseBatchActions ? Visibility.Visible : Visibility.Collapsed;
+        ApplySelectionSettingsButton.IsEnabled = !_busy && selectedCount > 0;
+        ApplySelectionSettingsButton.Content = LocalizationService.Get("Desk.ApplySelected", selectedCount);
+        SingleSavePanel.Visibility = selectedCount > 0 ? Visibility.Visible : Visibility.Collapsed;
         QueueSplitter.Visibility = showQueue ? Visibility.Visible : Visibility.Collapsed;
-        QueueCountText.Text = LocalizationService.Get(
+        QueueCountText.Text = _movieQueue.Count.ToString();
+        QueueCountText.ToolTip = LocalizationService.Get(
             "Main.QueueSummary",
             selectedCount,
             _movieQueue.Count,
             issueCount);
-        var visibleCount = MovieQueueList.Items.Count;
-        PreviousQueueButton.IsEnabled = !_busy && visibleCount > 1;
-        NextQueueButton.IsEnabled = !_busy && visibleCount > 1;
         RefreshRetryFailedSourcesUi();
         MinWidth = 930;
     }
@@ -1797,7 +1681,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (result.MovieFileSets.Count == 0)
+        if (result.MovieFileSets.Count == 0 && result.Diagnostics.Count == 0)
         {
             ShowError(LocalizationService.Get("Error.NoSupportedDroppedFiles"));
             return;
@@ -1805,13 +1689,10 @@ public partial class MainWindow : Window
 
         if (result.MovieFileSets.Count == 1 && result.Diagnostics.Count == 0)
         {
-            AppLog.Info(
-                $"智能导入识别单一影片 inputs={paths.Count} parts={result.MovieFileSets[0].Parts.Count}");
             await AddMovieFilesAsync(result.MovieFileSets[0].VideoPaths);
             return;
         }
 
-        SetWorkspaceMode(WorkspaceMode.Batch);
         var discovery = new MovieDiscoveryWindow(
             paths,
             _movieQueue.SelectMany(job => job.VideoPaths),
@@ -1820,7 +1701,12 @@ public partial class MainWindow : Window
         {
             Owner = this
         };
-        if (discovery.ShowDialog() == true)
+        // A long scan can leave another window active when the modal opens.
+        var reviewWasActive = false;
+        discovery.Closing += (_, _) => reviewWasActive = discovery.IsActive;
+        var accepted = discovery.ShowDialog() == true;
+        if (reviewWasActive && !IsActive) Activate();
+        if (accepted)
         {
             await AddMovieFilesAsync(discovery.SelectedVideoPaths);
         }
@@ -1858,42 +1744,21 @@ public partial class MainWindow : Window
         }
     }
 
-    private void PreviousQueue_Click(object sender, RoutedEventArgs e) => NavigateQueue(-1);
-
-    private void NextQueue_Click(object sender, RoutedEventArgs e) => NavigateQueue(1);
-
-    private void NavigateQueue(int offset)
-    {
-        if (_busy)
-        {
-            return;
-        }
-
-        var visibleJobs = MovieQueueList.Items.Cast<MovieJob>().ToArray();
-        if (visibleJobs.Length < 2)
-        {
-            return;
-        }
-
-        var currentIndex = Array.IndexOf(visibleJobs, _activeJob);
-        var nextIndex = currentIndex < 0
-            ? offset > 0 ? 0 : visibleJobs.Length - 1
-            : (currentIndex + offset + visibleJobs.Length) % visibleJobs.Length;
-        MovieQueueList.SelectedItem = visibleJobs[nextIndex];
-        MovieQueueList.ScrollIntoView(visibleJobs[nextIndex]);
-    }
-
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.A && Keyboard.Modifiers == ModifierKeys.Control && MovieQueueList.IsKeyboardFocusWithin && !_busy)
+        {
+            SelectAllQueue_Click(sender, e);
+            e.Handled = true;
+            return;
+        }
         if (e.Key is Key.Up or Key.Down && Keyboard.Modifiers == ModifierKeys.None &&
-            _workspaceMode is WorkspaceMode.Batch && !HasOpenTransientSurface())
+            QueueIsVisible && !HasOpenTransientSurface())
         {
             if (MovieQueueList.IsKeyboardFocusWithin || _queueNavigationKey is not null ||
                 _pendingQueueFocusVersion == _queueFocusVersion)
             {
-                // Disabling the queue during preview loading can move focus to a ComboBox.
-                // Own this gesture at window level BEFORE selection starts loading. Busy
-                // repeats are consumed, never queued or passed to the temporary focus target.
+                // Keep held arrows within the list until the user starts another gesture.
                 _queueNavigationKey = e.Key;
                 e.Handled = true;
                 NavigateQueue(e.Key);
@@ -1947,7 +1812,7 @@ public partial class MainWindow : Window
             return null;
         }
 
-        if (_workspaceMode is WorkspaceMode.Batch)
+        if (UseBatchActions)
         {
             return SaveSelectedButton.Visibility == Visibility.Visible &&
                    SaveSelectedButton.IsEnabled &&
@@ -1964,21 +1829,25 @@ public partial class MainWindow : Window
     }
 
     private bool HasOpenTransientSurface() =>
+        QueueOptions.IsOpen || AppearancePopup.IsOpen || AppearanceChoice.IsDropDownOpen ||
         LanguageComboBox.IsDropDownOpen ||
         QueueFilterComboBox.IsDropDownOpen ||
         SourceComboBox.IsDropDownOpen ||
         TargetModeComboBox.IsDropDownOpen ||
-        BrowserImportButton.ContextMenu?.IsOpen == true ||
         RecentRootsButton.ContextMenu?.IsOpen == true ||
         ArtworkSourceButton.ContextMenu?.IsOpen == true ||
         GetSourceBadgeControls().Any(item => item.Badge.ContextMenu?.IsOpen == true);
 
     private void IdTextBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key is not Key.Enter || Keyboard.Modifiers != ModifierKeys.None || _busy || !SearchButton.IsEnabled)
+        if (e.Key is not Key.Enter || Keyboard.Modifiers != ModifierKeys.None || _busy) return;
+        if (GetSelectedSourceMode() == MetadataSearchSourceModes.Manual)
         {
+            e.Handled = true;
+            SetStatus(LocalizationService.Get("Status.ManualMode"), true);
             return;
         }
+        if (!SearchButton.IsEnabled) return;
 
         e.Handled = true;
         SearchButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -2061,7 +1930,8 @@ public partial class MainWindow : Window
                 CurrentOperationToken,
                 sourceProfile: sourceProfile,
                 bestArtworkSourceResolver: ResolveBestArtworkSourceAsync,
-                sourceMode: sourceMode);
+                sourceMode: sourceMode,
+                progress: BeginSearchProgress());
             InvalidateSucceededBatchSearchPreviews(result);
             if (_activeJob.SearchState is MovieSearchState.NeedsReview)
             {
@@ -2082,9 +1952,17 @@ public partial class MainWindow : Window
                 _coverResolutionMonitor.Track(item.Job);
         AppLog.Info($"批量 metadata 搜索结束 mode={mode} requested={result.Items.Count} success={result.SucceededCount} " +
             $"partial={result.PartialCount} failed={result.FailedCount} canceled={result.CanceledCount} notStarted={result.NotStartedCount}");
-        SetStatus(LocalizationService.Get("Status.BatchSourcesComplete", result.SucceededCount, result.PartialCount,
-                result.FailedCount, result.CanceledCount, result.NotStartedCount),
-            result.PartialCount == 0 && result.FailedCount == 0 && result.CanceledCount == 0 && result.NotStartedCount == 0);
+        var details = LocalizationService.Get("Status.BatchSourcesComplete", result.SucceededCount, result.PartialCount,
+            result.FailedCount, result.CanceledCount, result.NotStartedCount);
+        string? notice = (result.FailedCount, result.PartialCount) switch
+        {
+            (> 0, > 0) => LocalizationService.Get("Footer.NeedReview", result.FailedCount + result.PartialCount),
+            (> 0, _) => LocalizationService.Get("Footer.LookupFailed", result.FailedCount),
+            (_, > 0) => LocalizationService.Get("Queue.Search.Partial"),
+            _ => null
+        };
+        SetResultStatus("Footer.Found", result.SucceededCount + result.PartialCount, details, notice,
+            result.CanceledCount > 0 || result.NotStartedCount > 0);
     }
 
     private void InvalidateSucceededBatchSearchPreviews(BatchMetadataSearchResult result)
@@ -2169,6 +2047,7 @@ public partial class MainWindow : Window
         {
             RefreshTargetLocationUi();
             SyncActiveSaveConfiguration();
+            RefreshSaveSettingsPresentation();
         }
     }
 
@@ -2202,53 +2081,41 @@ public partial class MainWindow : Window
         if (_uiInitialized)
         {
             RefreshSaveSettingsPresentation();
+            RefreshQueueUi();
         }
     }
 
     private void ToggleSaveSettings_Click(object sender, RoutedEventArgs e)
     {
         _saveSettingsExpanded = !_saveSettingsExpanded;
+        PositionOutputDrawer();
         RefreshSaveSettingsPresentation();
+        if (_saveSettingsExpanded) CloseOutputButton.Focus();
+        else SaveSettingsToggleButton.Focus();
+    }
+
+    private void PositionOutputDrawer()
+    {
+        var widthForFields = DeskLayout.ActualWidth - QueueColumn.ActualWidth - QueueSpacerColumn.ActualWidth -
+            ArtworkColumn.ActualWidth - DeskLayout.ColumnDefinitions[3].ActualWidth -
+            OutputDrawer.Width - OutputDrawer.Margin.Left;
+        var overlay = widthForFields < 370;
+        Grid.SetColumn(OutputDrawer, overlay ? 0 : 5);
+        Grid.SetColumnSpan(OutputDrawer, overlay ? 6 : 1);
     }
 
     private void RefreshSaveSettingsPresentation()
     {
-        if (!_uiInitialized || SaveSettingsOptionsPanel is null || SaveSettingsSummaryText is null)
+        if (!_uiInitialized || SaveSettingsOptionsPanel is null)
         {
             return;
         }
 
-        var outputCount = new[]
-        {
-            WriteNfoCheckBox.IsChecked,
-            DownloadPosterCheckBox.IsChecked,
-            DownloadFanartCheckBox.IsChecked,
-            DownloadExtrafanartCheckBox.IsChecked
-        }.Count(value => value == true);
-        var outputSummary = outputCount == 0
-            ? LocalizationService.Get("Main.SaveSettings.NoOutput")
-            : LocalizationService.Get("Main.SaveSettings.OutputCount", outputCount);
-        var titleSummary = IncludeIdInTitleCheckBox.IsChecked == true
-            ? LocalizationService.Get("Main.SaveSettings.TitleWithId")
-            : LocalizationService.Get("Main.SaveSettings.TitleWithoutId");
-        var previewSummary = SkipSavePreviewCheckBox.IsChecked == true
-            ? LocalizationService.Get("Main.SaveSettings.SkipPreview")
-            : LocalizationService.Get("Main.SaveSettings.ShowPreview");
-
-        SaveSettingsTitleText.Text = LocalizationService.Get(
-            _workspaceMode is WorkspaceMode.Batch
-                ? "Main.SaveSettings.Batch"
-                : "Main.SaveSettings.Single");
-        SaveSettingsSummaryText.Text = LocalizationService.Get(
-            "Main.SaveSettings.Summary",
-            outputSummary,
-            titleSummary,
-            previewSummary);
+        OutputDrawer.Visibility = _saveSettingsExpanded ? Visibility.Visible : Visibility.Collapsed;
         SaveSettingsOptionsPanel.Visibility = _saveSettingsExpanded
             ? Visibility.Visible
             : Visibility.Collapsed;
-        ((RotateTransform)SaveSettingsChevronPath.RenderTransform).Angle =
-            _saveSettingsExpanded ? 90 : 0;
+        SaveSettingsToggleButton.SetResourceReference(BackgroundProperty, _saveSettingsExpanded ? "SelectionBrush" : "WindowBrush");
         SaveSettingsToggleButton.ToolTip = LocalizationService.Get(
             _saveSettingsExpanded
                 ? "Main.SaveSettings.Collapse"
@@ -2573,7 +2440,7 @@ public partial class MainWindow : Window
         {
             _targetConfigurationError = unavailableMessage;
             TargetPathHintText.Text = unavailableMessage;
-            TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(255, 157, 166));
+            TargetPathHintText.SetResourceReference(TextBlock.ForegroundProperty, "ErrorTextBrush");
             RefreshSaveAvailability();
             return;
         }
@@ -2583,7 +2450,7 @@ public partial class MainWindow : Window
             TargetPathHintText.Text = customMode && string.IsNullOrWhiteSpace(CustomRootTextBox.Text)
                 ? LocalizationService.Get("Main.TargetHintCustom")
                 : LocalizationService.Get("Main.TargetHint");
-            TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(147, 164, 184));
+            TargetPathHintText.SetResourceReference(TextBlock.ForegroundProperty, "MutedBrush");
             RefreshSaveAvailability();
             return;
         }
@@ -2634,21 +2501,18 @@ public partial class MainWindow : Window
                 var fastCopy = GetCrossVolumeVerificationMode() is CrossVolumeVerificationMode.FileSizeOnly;
                 TargetPathHintText.Text += Environment.NewLine + LocalizationService.Get(
                     fastCopy ? "Main.FastCopy" : "Main.SafeCopy");
-                TargetPathHintText.Foreground = new SolidColorBrush(
-                    fastCopy
-                        ? Color.FromRgb(255, 209, 138)
-                        : Color.FromRgb(141, 184, 255));
+                TargetPathHintText.SetResourceReference(TextBlock.ForegroundProperty, fastCopy ? "BatchSourceWarningBrush" : "AccentTextBrush");
             }
             else
             {
-                TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(114, 227, 166));
+                TargetPathHintText.SetResourceReference(TextBlock.ForegroundProperty, "SuccessTextBrush");
             }
         }
         catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or NotSupportedException or PathTooLongException)
         {
             _targetConfigurationError = exception.Message;
             TargetPathHintText.Text = exception.Message;
-            TargetPathHintText.Foreground = new SolidColorBrush(Color.FromRgb(255, 157, 166));
+            TargetPathHintText.SetResourceReference(TextBlock.ForegroundProperty, "ErrorTextBrush");
         }
 
         RefreshSaveAvailability();
@@ -2678,7 +2542,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        SaveButton.IsEnabled = !_busy && !_activeJob.LocalNfoSaveBlocked && _targetConfigurationError is null;
+        SaveButton.IsEnabled = !_busy && _activeJob.IsSelectedForBatch && _movieQueue.Contains(_activeJob) && !_activeJob.LocalNfoSaveBlocked && _targetConfigurationError is null;
         var detail = _activeJob.LocalNfoSaveBlocked
             ? LocalizationService.Get("Status.LocalNfoUnsafe")
             : _targetConfigurationError is not null
@@ -2703,6 +2567,8 @@ public partial class MainWindow : Window
         }
 
         var result = await MovieJobLoader.LoadAsync(_activeJob, path, WindowsArtworkImageProcessor.Instance, CurrentOperationToken);
+        IsEditingMetadata = false;
+        MetadataScrollViewer.ScrollToTop();
         _activeJob.InitializeSaveConfiguration(CaptureCurrentSaveConfiguration());
         _jobLoadResults[_activeJob] = result;
         _jobPreviews.Remove(_activeJob);
@@ -2843,6 +2709,9 @@ public partial class MainWindow : Window
         }
 
         SetStatus(metadataStatus, statusSuccess);
+        if (statusSuccess && (job.LocalMetadataBundle?.Diagnostics.Count ?? 0) == 0)
+            StatusText.Text = LocalizationService.Get(result.MetadataStatus == LocalMetadataLoadStatus.Loaded
+                ? "Desk.NfoLoaded" : "Desk.Ready");
     }
 
     private async Task OpenBrowserAsync(BrowserImportTarget target)
@@ -2852,50 +2721,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        var browserTarget = target;
-        if (BrowserImportRouting.RequiresProviderResolution(target))
-        {
-            var resolutionCompleted = false;
-            await RunBusyAsync(
-                LocalizationService.Get("Status.LocatingBrowserPage", target.DisplayName),
-                async () =>
-                {
-                    try
-                    {
-                        browserTarget = await BrowserImportRouting.ResolveWithProviderAsync(
-                            target,
-                            _r18DevClient,
-                            CurrentOperationToken);
-                        AppLog.Info(
-                            $"手动网页查询已解析真实详情页 source={target.SourceName} " +
-                            $"id={target.RequestedMovieId} url={browserTarget.InitialUrl}");
-                    }
-                    catch (OperationCanceledException) when (CurrentOperationToken.IsCancellationRequested)
-                    {
-                        throw;
-                    }
-                    catch (Exception exception)
-                    {
-                        AppLog.Warning(
-                            $"手动网页查询未能预先解析详情页，回退网站手动查询 " +
-                            $"source={target.SourceName} id={target.RequestedMovieId}",
-                            exception);
-                    }
-
-                    resolutionCompleted = true;
-                });
-            if (!resolutionCompleted)
-            {
-                return;
-            }
-        }
-
-        var browser = new BrowserWindow(browserTarget) { Owner = this };
+        AppLog.Info($"打开手动搜索浏览器 source={target.SourceName}");
+        var browser = new BrowserWindow(target, _r18DevClient) { Owner = this };
         if (browser.ShowDialog() == true)
         {
             await RunBusyAsync(LocalizationService.Get("Status.ReadingBrowser"), async () =>
             {
-                var result = await ImportBrowserResultAsync(browserTarget, browser);
+                var result = await ImportBrowserResultAsync(target, browser);
                 var promotedFieldCount = _activeJob.ApplyManualWebSource(result);
                 RefreshActiveJobPresentation();
                 var artworkLoaded = await LoadSelectedArtworkPreviewAsync();
@@ -2975,33 +2807,6 @@ public partial class MainWindow : Window
     private string GetSelectedSourceMode() =>
         MetadataSearchSourceModes.Normalize((SourceComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString());
 
-    private void RefreshManualWebLookupUi()
-    {
-        if (!_uiInitialized || BrowserImportButton is null)
-        {
-            return;
-        }
-
-        BrowserImportButton.Content = LocalizationService.Get(_compactSearchToolbar
-            ? "Main.BrowserImportChooseCompact"
-            : "Main.BrowserImportChoose");
-        BrowserImportButton.ToolTip = LocalizationService.Get("Main.BrowserImportChooseTooltip");
-    }
-
-    private int CountSelectedSourceItems(string sourceName)
-    {
-        var selectedFieldCount = Enum.GetValues<MetadataField>().Count(field =>
-            string.Equals(
-                _activeJob.MetadataReview.GetSelectedCandidate(field)?.Source.Name,
-                sourceName,
-                StringComparison.OrdinalIgnoreCase));
-        var artworkSelected = string.Equals(
-            _activeJob.ArtworkReview.SelectedCandidate?.Source.Name,
-            sourceName,
-            StringComparison.OrdinalIgnoreCase);
-        return selectedFieldCount + (artworkSelected ? 1 : 0);
-    }
-
     private void ApplyMetadata(MovieMetadata result, IReadOnlyList<MovieMetadata> sourceResults)
     {
         _activeJob.ApplyMetadata(result, sourceResults);
@@ -3024,10 +2829,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        var batchCount = _workspaceMode == WorkspaceMode.Batch
+        var batchCount = UseBatchActions
             ? _movieQueue.Count(job => job.IsSelectedForBatch && CanRetrySources(job)) : 0;
-        var canRetry = !_busy && (_workspaceMode == WorkspaceMode.Batch ? batchCount > 0 : CanRetrySources(_activeJob));
-        RetryFailedSourcesButton.Content = _workspaceMode == WorkspaceMode.Batch
+        var canRetry = !_busy && (UseBatchActions ? batchCount > 0 : _activeJob.IsSelectedForBatch && CanRetrySources(_activeJob));
+        RetryFailedSourcesButton.Content = UseBatchActions
             ? LocalizationService.Get("SearchFeedback.RetryQueue", batchCount)
             : LocalizationService.Get("SearchFeedback.RetryFailed");
         RetryFailedSourcesButton.Visibility = canRetry ? Visibility.Visible : Visibility.Collapsed;
@@ -3054,6 +2859,7 @@ public partial class MainWindow : Window
     {
         if (eventArgs.PropertyName == nameof(MovieMetadata.Id))
         {
+            RefreshQueueUi();
             RefreshTargetLocationPreview();
         }
     }
@@ -3083,43 +2889,31 @@ public partial class MainWindow : Window
 
         var candidate = _activeJob.MetadataReview.GetSelectedCandidate(field);
         var candidates = _activeJob.MetadataReview.GetCandidates(field);
-        var candidateSourceName = candidate is null
-            ? string.Empty
+        var canChoose = candidates.Any(item => item != candidate);
+        var label = candidate is null
+            ? LocalizationService.Get("Main.AutomaticSourceShort")
             : GetCandidateSourceDisplayName(candidate.Source);
-        badge.Content = candidate is null
-            ? string.Empty
-            : candidates.Count > 1
-                ? $"{candidateSourceName} ▾"
-                : candidateSourceName;
-        badge.Visibility = candidate is null ? Visibility.Collapsed : Visibility.Visible;
-        badge.IsEnabled = candidates.Count > 1;
-        badge.ToolTip = candidate is null
-            ? null
-            : candidates.Count > 1
-                ? LocalizationService.Get(
-                    "Artwork.SourceFieldTooltip",
-                    GetFieldDisplayName(field),
-                    candidates.Count)
-                : string.IsNullOrWhiteSpace(candidate.Source.Url)
-                    ? LocalizationService.Get("Artwork.Source", candidateSourceName)
-                    : $"{LocalizationService.Get("Artwork.Source", candidateSourceName)}\n{candidate.Source.Url}";
+        badge.Content = canChoose ? $"{label} ▾" : label;
+        badge.Visibility = IsEditingMetadata && candidates.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        badge.IsEnabled = IsEditingMetadata && canChoose;
+        badge.ToolTip = canChoose
+            ? LocalizationService.Get("Artwork.SourceFieldTooltip", GetFieldDisplayName(field), candidates.Count)
+            : candidate is null ? null : LocalizationService.Get("Artwork.Source", label);
+        if (!canChoose && !string.IsNullOrWhiteSpace(candidate?.Source.Url))
+            badge.ToolTip = $"{badge.ToolTip}\n{candidate.Source.Url}";
     }
 
     private void SourceBadge_Click(object sender, RoutedEventArgs eventArgs)
     {
-        if (sender is not Button badge ||
+        if (!IsEditingMetadata || sender is not Button badge ||
             !Enum.TryParse<MetadataField>(badge.Tag?.ToString(), out var field))
         {
             return;
         }
 
         var candidates = _activeJob.MetadataReview.GetCandidates(field);
-        if (candidates.Count <= 1)
-        {
-            return;
-        }
-
         var selected = _activeJob.MetadataReview.GetSelectedCandidate(field);
+        if (!candidates.Any(item => item != selected)) return;
         var menu = new ContextMenu
         {
             PlacementTarget = badge,
@@ -3762,10 +3556,16 @@ public partial class MainWindow : Window
         throw new InvalidDataException(LocalizationService.Get("Error.PreviewDownload"), lastError);
     }
 
-    private async Task<(bool Poster, bool Fanart)> LoadSelectedArtworkPreviewAsync()
+    private Task<(bool Poster, bool Fanart)> LoadSelectedArtworkPreviewAsync()
+    {
+        _navigationPreviewCancellation?.Cancel();
+        return LoadArtworkPreviewAsync(CurrentOperationToken);
+    }
+
+    private async Task<(bool Poster, bool Fanart)> LoadArtworkPreviewAsync(CancellationToken token)
     {
         var request = new ArtworkPreviewRequest(_activeJob, _activeJob.Metadata,
-            _activeJob.CoverResolutionRevision, CurrentOperationToken);
+            _activeJob.CoverResolutionRevision, token);
         _artworkPreviewDeferred = false;
         // A canceled or interrupted load must not become a reusable blank/partial preview
         // when switching movies. Completed loads with genuinely missing artwork remain cacheable.
@@ -3779,7 +3579,8 @@ public partial class MainWindow : Window
         }
         catch (OperationCanceledException)
         {
-            if (ReferenceEquals(request.Job, _activeJob)) RefreshArtworkPreviewStates();
+            if (!_lifetimeCancellation.IsCancellationRequested && request.Token == CurrentOperationToken &&
+                ReferenceEquals(request.Job, _activeJob)) RefreshArtworkPreviewStates();
             throw;
         }
     }
@@ -3906,8 +3707,10 @@ public partial class MainWindow : Window
                 var imageBytes = await DownloadPreviewImageAsync(candidate, request.Token);
                 request.Token.ThrowIfCancellationRequested();
                 if (!CanApplyArtworkPreview(request)) return false;
-                var posterBytes = PosterImageProcessor.CreatePosterJpeg(imageBytes);
-                PosterImage.Source = PosterBitmapFactory.CreateFrozen(posterBytes, ArtworkPreviewLoader.MainPreviewWidth);
+                var bitmap = await Task.Run(() => PosterBitmapFactory.CreateFrozen(
+                    PosterImageProcessor.CreatePosterJpeg(imageBytes), ArtworkPreviewLoader.MainPreviewWidth), request.Token);
+                if (!CanApplyArtworkPreview(request)) return false;
+                PosterImage.Source = bitmap;
                 RefreshArtworkPreviewStates();
                 return true;
             }
@@ -3942,10 +3745,13 @@ public partial class MainWindow : Window
             try
             {
                 var imageBytes = await DownloadPreviewImageAsync(candidate, token);
-                var dimensions = PosterImageProcessor.GetDimensions(imageBytes);
+                var (dimensions, bitmap) = await Task.Run(() => (
+                    PosterImageProcessor.GetDimensions(imageBytes),
+                    PosterBitmapFactory.CreateFrozen(PosterImageProcessor.CreateFanartJpeg(imageBytes),
+                        ArtworkPreviewLoader.MainPreviewWidth)), token);
                 token.ThrowIfCancellationRequested();
                 if (!CanApplyArtworkPreview(request)) return false;
-                FanartImage.Source = PosterBitmapFactory.CreateFrozen(PosterImageProcessor.CreateFanartJpeg(imageBytes), ArtworkPreviewLoader.MainPreviewWidth);
+                FanartImage.Source = bitmap;
                 _fanartDimensions = dimensions;
                 if (ReferenceEquals(metadata, job.Metadata))
                     _coverResolutionMonitor.Observe(job, revision, new(candidate, dimensions.Width, dimensions.Height));
@@ -4139,6 +3945,7 @@ public partial class MainWindow : Window
         FanartPreviewStateText.Visibility = Visibility.Visible;
         PosterPreviewBorder.Cursor = Cursors.Arrow;
         FanartPreviewBorder.Cursor = Cursors.Arrow;
+        SizeArtwork();
     }
 
     private void RefreshArtworkPreviewStates()
@@ -4155,8 +3962,9 @@ public partial class MainWindow : Window
             : string.Empty;
         if (_activeJob.HasLowResolutionCover)
             FanartHintText.Text = LocalizationService.Get("CoverCheck.Low") + " · " + _activeJob.CoverResolution!.Dimensions;
-        FanartHintText.Foreground = _activeJob.HasLowResolutionCover
-            ? Brushes.Orange : (Brush)FindResource("MutedBrush");
+        FanartHintText.Visibility = string.IsNullOrEmpty(FanartHintText.Text) ? Visibility.Collapsed : Visibility.Visible;
+        FanartHintText.SetResourceReference(TextBlock.ForegroundProperty,
+            _activeJob.HasLowResolutionCover ? "BatchSourceWarningBrush" : "MutedBrush");
         DropHint.Visibility = !hasVideo && PosterImage.Source is null
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -4177,6 +3985,7 @@ public partial class MainWindow : Window
             : Visibility.Collapsed;
         PosterPreviewBorder.Cursor = PosterImage.Source is null ? Cursors.Arrow : Cursors.Hand;
         FanartPreviewBorder.Cursor = FanartImage.Source is null ? Cursors.Arrow : Cursors.Hand;
+        SizeArtwork();
         ArtworkViewerButton.IsEnabled = PosterImage.Source is not null ||
                                         FanartImage.Source is not null ||
                                         _activeJob.AvailableScreenshotUrls.Count > 0;
@@ -4214,11 +4023,8 @@ public partial class MainWindow : Window
         update.Stage switch
         {
             FileTransactionStage.Preparing => LocalizationService.Get("Progress.Preparing"),
-            FileTransactionStage.CopyingMovie when update.TotalBytes > 0 =>
-                LocalizationService.Get("Progress.CopyingPercent", update.Percentage),
             FileTransactionStage.CopyingMovie => LocalizationService.Get("Progress.Copying"),
-            FileTransactionStage.VerifyingMovie when update.TotalBytes > 0 =>
-                LocalizationService.Get("Progress.VerifyingPercent", update.Percentage),
+            FileTransactionStage.VerifyingSource => LocalizationService.Get("Progress.VerifyingSource"),
             FileTransactionStage.VerifyingMovie => LocalizationService.Get("Progress.Verifying"),
             FileTransactionStage.Committing => LocalizationService.Get("Progress.Committing"),
             FileTransactionStage.RetiringSource => LocalizationService.Get("Progress.RetiringSource"),
@@ -4243,12 +4049,10 @@ public partial class MainWindow : Window
         SaveButton.IsEnabled = false;
         ArtworkSourceButton.IsEnabled = false;
         ChooseVideoButton.IsEnabled = false;
-        ScanFolderButton.IsEnabled = false;
-        SingleModeButton.IsEnabled = false;
-        BatchModeButton.IsEnabled = false;
+        ManualSearchItem.IsEnabled = false;
         SearchQueueButton.IsEnabled = false;
         SaveSelectedButton.IsEnabled = false;
-        SelectAllQueueButton.IsEnabled = false;
+        SelectRecognizedQueueButton.IsEnabled = !_busy && _movieQueue.Count > 0;
         SelectPendingQueueButton.IsEnabled = false;
         SelectIssuesQueueButton.IsEnabled = false;
         SelectNoneQueueButton.IsEnabled = false;
@@ -4261,6 +4065,10 @@ public partial class MainWindow : Window
         CancelOperationButton.IsEnabled = true;
         CancelOperationButton.SetResourceReference(ContentControl.ContentProperty, "Main.CancelOperation");
         CancelOperationButton.Visibility = Visibility.Visible;
+        OperationProgressBar.Value = 0;
+        OperationProgressBar.IsIndeterminate = true;
+        ProgressPercent.Visibility = Visibility.Collapsed;
+        _ = ShowActivityIfStillBusyAsync(operationCancellation);
         Mouse.OverrideCursor = Cursors.Wait;
         SetStatus(message, null);
 
@@ -4278,6 +4086,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
+            EndTransferClosePrompt();
             // Keep recovery errors visible; do not close on a failed/incomplete rollback.
             _closeRequested = false;
             AppLog.Error(message, exception);
@@ -4296,16 +4105,16 @@ public partial class MainWindow : Window
         }
         finally
         {
+            EndTransferClosePrompt();
             Mouse.OverrideCursor = null;
             SearchButton.IsEnabled = true;
             ChooseVideoButton.IsEnabled = true;
-            ScanFolderButton.IsEnabled = true;
-            SingleModeButton.IsEnabled = true;
-            BatchModeButton.IsEnabled = true;
             MovieQueueList.IsEnabled = true;
             MetadataPanel.IsEnabled = true;
             ArtworkPanel.IsEnabled = true;
             CancelOperationButton.Visibility = Visibility.Collapsed;
+            OperationProgressPanel.Visibility = Visibility.Collapsed;
+            OperationProgressBar.IsIndeterminate = false;
             _activeOperationCancellation = null;
             _busy = false;
             if (operationCancellation.IsCancellationRequested) _coverResolutionMonitor.CancelAll();
@@ -4314,7 +4123,7 @@ public partial class MainWindow : Window
             RefreshSaveAvailability();
             RefreshArtworkSourceBadge();
             RefreshQueueUi();
-            RefreshWorkspaceModeUi();
+            RefreshWorkspacePresentation();
             RefreshRetryFailedSourcesUi();
             if (_closeRequested)
             {
@@ -4348,9 +4157,34 @@ public partial class MainWindow : Window
         _coverResolutionMonitor.CancelAll();
     }
 
-    private void SetStatus(string message, bool? success)
+    private void SetSaveResultStatus(int completed, string details, bool cleanupPending, bool canceled)
     {
+        if (cleanupPending)
+            details += Environment.NewLine + LocalizationService.Get("Cleanup.Committed");
+        SetResultStatus("Footer.Saved", completed, details,
+            cleanupPending ? LocalizationService.Get("Footer.CleanupPending") : null, canceled);
+    }
+
+    private void SetResultStatus(string countKey, int completed, string details, string? notice = null, bool canceled = false)
+    {
+        var summary = new List<string>();
+        if (completed > 0 || (notice is null && !canceled))
+            summary.Add(LocalizationService.Get(countKey, completed));
+        if (notice is not null) summary.Add(notice);
+        if (canceled) summary.Add(LocalizationService.Get("Footer.Canceled"));
+        SetStatus(string.Join(" · ", summary), notice is null && !canceled, details);
+    }
+
+    private void SetStatus(string message, bool? success, string? details = null)
+    {
+        _statusRevision++;
         StatusText.Text = message;
+        StatusText.ToolTip = details ?? message;
+        if (success is null && _busy)
+        {
+            StatusDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "TabBrush");
+            return;
+        }
         StatusDot.Fill = new SolidColorBrush(success switch
         {
             true => Color.FromRgb(114, 227, 166),
@@ -4368,6 +4202,7 @@ public partial class MainWindow : Window
     private void ShowCleanupDetails(IReadOnlyList<TemporaryCleanupIssue> issues, bool committed, Exception? originalError = null)
     {
         _closeRequested = false;
+        EndTransferClosePrompt();
         var summary = LocalizationService.Get(committed ? "Cleanup.Committed" : "Cleanup.Incomplete");
         SetStatus(summary, false);
         var details = summary + Environment.NewLine + Environment.NewLine +
@@ -4424,16 +4259,63 @@ public partial class MainWindow : Window
         return paths.Length > 0;
     }
 
+    private void EndTransferClosePrompt()
+    {
+        _savingAcrossVolumes = false;
+        var dialog = _transferCloseDialog;
+        _transferCloseDialog = null;
+        if (dialog?.IsVisible == true) dialog.Close();
+    }
+
+    private void ConfirmCloseDuringTransfer()
+    {
+        if (_transferCloseDialog is not null) return;
+        var dialog = new AppDialogWindow(LocalizationService.Get("TransferClose.Title"),
+            LocalizationService.Get("TransferClose.Message"), LocalizationService.Get("TransferClose.Stop"));
+        dialog.CancelButton.Content = LocalizationService.Get("TransferClose.Continue");
+        _transferCloseDialog = dialog;
+        // Let WPF finish canceling this Closing event before starting a modal dispatcher loop.
+        _ = Dispatcher.InvokeAsync(() =>
+        {
+            if (_transferCloseDialog != dialog) return;
+            dialog.Owner = this;
+            Mouse.OverrideCursor = null;
+            try
+            {
+                if (dialog.ShowDialog() == true && _transferCloseDialog == dialog)
+                {
+                    _closeRequested = true;
+                    CancelOperation_Click(this, new RoutedEventArgs());
+                }
+            }
+            finally
+            {
+                if (_transferCloseDialog == dialog)
+                {
+                    _transferCloseDialog = null;
+                    if (_busy) Mouse.OverrideCursor = Cursors.Wait;
+                }
+            }
+        });
+    }
+
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (_busy)
         {
             e.Cancel = true;
+            if (_closeRequested) return;
+            if (_savingAcrossVolumes)
+            {
+                ConfirmCloseDuringTransfer();
+                return;
+            }
             _closeRequested = true;
             CancelOperation_Click(this, new RoutedEventArgs());
             return;
         }
         AppLog.Info("JavMetaLite 关闭");
+        _navigationPreviewCancellation?.Cancel();
         _coverResolutionMonitor.Dispose();
         PersistPreferencesOnClose();
         _activeJob.MetadataPropertyChanged -= Metadata_PropertyChanged;

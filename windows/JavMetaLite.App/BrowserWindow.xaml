@@ -6,7 +6,7 @@
         Icon="/JavMetaLite;component/Resources/Brand/JavMetaLite.ico"
         Width="1050" Height="760" MinWidth="800" MinHeight="560"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource WindowBrush}">
+        Background="{DynamicResource WindowBrush}">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -15,7 +15,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Border x:Name="BrowserToolbar" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="18,14">
+        <Border x:Name="BrowserToolbar" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="18,14">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -24,7 +24,7 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock x:Name="BrowserInstruction" Text="{DynamicResource Browser.Instruction}" FontWeight="SemiBold" FontSize="14" TextWrapping="Wrap" />
-                    <TextBlock x:Name="UrlText" Foreground="{StaticResource MutedBrush}" FontFamily="Segoe UI" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
+                    <TextBlock x:Name="UrlText" Foreground="{DynamicResource MutedBrush}" FontFamily="Segoe UI" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
                 </StackPanel>
                 <Button x:Name="ImportButton" Grid.Column="2" Style="{StaticResource PrimaryButton}" Content="{DynamicResource Browser.ReadCurrent}" Click="Import_Click" />
             </Grid>
@@ -33,12 +33,12 @@
         <Border x:Name="BrowserStatusPanel"
                 Grid.Row="1"
                 Visibility="Collapsed"
-                Background="#2D271D"
-                BorderBrush="#9C6B2A"
+                Background="{DynamicResource WarningFillBrush}"
+                BorderBrush="{DynamicResource BatchSourceWarningBrush}"
                 BorderThickness="0,0,0,1"
                 Padding="18,10">
             <TextBlock x:Name="BrowserStatusText"
-                       Foreground="#FFD08A"
+                       Foreground="{DynamicResource BatchSourceWarningBrush}"
                        FontSize="12"
                        TextWrapping="Wrap" />
         </Border>
@@ -48,8 +48,8 @@
                       NavigationStarting="Browser_NavigationStarting"
                       NavigationCompleted="Browser_NavigationCompleted" />
 
-        <Border Grid.Row="3" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="18,10">
-            <TextBlock Text="{DynamicResource Browser.Privacy}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" />
+        <Border Grid.Row="3" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="18,10">
+            <TextBlock Text="{DynamicResource Browser.Privacy}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" />
         </Border>
     </Grid>
 </Window>

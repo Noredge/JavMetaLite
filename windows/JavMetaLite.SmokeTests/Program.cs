@@ -107,6 +107,7 @@ var tests = new List<(string Name, Func<Task> Run)>
     ("Preview 46 71片来源选择矩阵", BatchSourceRoutingTests.SourceMatrix),
     ("Preview 45 单来源失败与定向重试", BatchSourceRoutingTests.SingleSourceFailureAndRetry),
     ("Preview 45 重试来源范围与JAVLibrary手动资料保留", BatchSourceRoutingTests.ScopedRetryAndManualImport),
+    ("重新查询保留未查询来源及剧照，清除本次失败来源旧候选", BatchSourceRoutingTests.RequeryKeepsOnlyCurrentCandidates),
     ("Preview 45 单来源批量取消", BatchSourceRoutingTests.SingleSourceCancellation),
     ("Preview 2 选择、revision 与顺序保存", TestReviewRevisionAndBatchSave),
     ("Preview 11 自定义字段来源与候选追踪", TestMetadataReviewSession),

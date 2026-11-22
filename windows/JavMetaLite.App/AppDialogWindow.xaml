@@ -8,11 +8,11 @@
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
-        Background="{StaticResource WindowBrush}">
+        Background="{DynamicResource WindowBrush}">
     <Border Margin="1"
             Padding="20"
-            Background="{StaticResource ChromeBrush}"
-            BorderBrush="{StaticResource BorderBrush}"
+            Background="{DynamicResource ChromeBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="1"
             CornerRadius="10">
         <Grid>
@@ -31,12 +31,12 @@
                         Height="28"
                         HorizontalAlignment="Left"
                         VerticalAlignment="Top"
-                        Background="#4A3218"
-                        BorderBrush="#8A5A24"
+                        Background="{DynamicResource WarningFillBrush}"
+                        BorderBrush="{DynamicResource BatchSourceWarningBrush}"
                         BorderThickness="1"
                         CornerRadius="14">
                     <TextBlock Text="!"
-                               Foreground="#FFD18A"
+                               Foreground="{DynamicResource BatchSourceWarningBrush}"
                                FontSize="16"
                                FontWeight="Bold"
                                HorizontalAlignment="Center"
@@ -53,7 +53,7 @@
             <TextBlock x:Name="DialogMessageText"
                        Grid.Row="1"
                        Margin="36,14,0,0"
-                       Foreground="{StaticResource MutedBrush}"
+                       Foreground="{DynamicResource MutedBrush}"
                        FontSize="13"
                        LineHeight="20"
                        TextWrapping="Wrap" />

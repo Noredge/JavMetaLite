@@ -113,6 +113,8 @@ public sealed class AppPreferencesStore
             {
                 return new AppPreferencesLoadResult(AppPreferences.CreateSafeDefaults() with
                 {
+                    Appearance = NormalizeAppearance(preferences.Appearance),
+                    QueueVisible = preferences.QueueVisible,
                     UiLanguage = UiLanguageCodes.Normalize(preferences.UiLanguage),
                     CustomSourceProfile = MetadataSourcePreferenceProfile.Normalize(preferences.CustomSourceProfile)
                 });
@@ -145,6 +147,8 @@ public sealed class AppPreferencesStore
                 ? preferences
                 : AppPreferences.CreateSafeDefaults() with
                 {
+                    Appearance = NormalizeAppearance(preferences.Appearance),
+                    QueueVisible = preferences.QueueVisible,
                     UiLanguage = preferences.UiLanguage,
                     CustomSourceProfile = MetadataSourcePreferenceProfile.Normalize(preferences.CustomSourceProfile)
                 };
@@ -213,6 +217,7 @@ public sealed class AppPreferencesStore
         return preferences with
         {
             SchemaVersion = AppPreferences.CurrentSchemaVersion,
+            Appearance = NormalizeAppearance(preferences.Appearance),
             UiLanguage = UiLanguageCodes.Normalize(preferences.UiLanguage),
             SearchSourceMode = MetadataSearchSourceModes.Normalize(preferences.SearchSourceMode),
             TargetMode = Enum.IsDefined(preferences.TargetMode)
@@ -229,6 +234,8 @@ public sealed class AppPreferencesStore
             CustomSourceProfile = MetadataSourcePreferenceProfile.Normalize(preferences.CustomSourceProfile)
         };
     }
+
+    private static string NormalizeAppearance(string? appearance) => appearance is "light" or "dark" ? appearance : "system";
 
     private static JsonSerializerOptions CreateJsonOptions()
     {
