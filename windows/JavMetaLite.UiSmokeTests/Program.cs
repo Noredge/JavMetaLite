@@ -550,12 +550,7 @@ internal static partial class Program
         if (viewer.FindName("ArtworkImage") is not Image { Source: not null } ||
             viewer.FindName("ArtworkPositionText") is not TextBlock { Text: "3 / 4" } ||
             artworkTypeComboBox is not { Items.Count: 4, SelectedIndex: 0 } ||
-            artworkTypeComboBox.Background is not SolidColorBrush artworkTypeBackground ||
-            artworkTypeBackground.Color.R > 40 ||
-            artworkTypeComboBox.Foreground is not SolidColorBrush artworkTypeForeground ||
-            artworkTypeForeground.Color.R < 180 ||
-            artworkTypePopupBorder?.Background is not SolidColorBrush artworkPopupBackground ||
-            artworkPopupBackground.Color.R > 40 ||
+            artworkTypePopupBorder is null ||
             artworkTypePopupScrollViewer is null ||
             PreciseScrollBehavior.GetAxis(artworkTypePopupScrollViewer) != PreciseScrollAxis.Vertical ||
             localThumbnailScrollViewer is null ||
@@ -608,6 +603,7 @@ internal static partial class Program
         {
             throw new InvalidOperationException("Preview 34 图片查看器分行、批量操作或半透明缩略图选择框状态不正确。 ");
         }
+        CheckComboBoxPalettes(artworkTypeComboBox, artworkTypePopupBorder);
         var artworkPreviewBottom = artworkPreviewBorder
             .TranslatePoint(new Point(0, artworkPreviewBorder.ActualHeight), viewer).Y;
         var artworkPreviewRight = artworkPreviewBorder
@@ -986,23 +982,18 @@ internal static partial class Program
             ?? throw new InvalidOperationException("自定义来源窗口没有生成来源下拉框。 ");
         profileSourceComboBox.ApplyTemplate();
         var profilePopup = profileSourceComboBox.Template.FindName("PART_Popup", profileSourceComboBox) as Popup
-            ?? throw new InvalidOperationException("自定义来源下拉框没有深色弹出模板。 ");
+            ?? throw new InvalidOperationException("自定义来源下拉框没有弹出模板。 ");
         var profilePopupBorder = profilePopup.Child as Border
             ?? throw new InvalidOperationException("自定义来源下拉框没有弹出背景。 ");
         var profilePopupScrollViewer = FindVisualChildren<ScrollViewer>(profilePopupBorder).FirstOrDefault()
             ?? throw new InvalidOperationException("Preview 37 自定义来源下拉滚动视口未创建。 ");
         var sourceRowsScrollViewer = sourceProfileWindow.FindName("SourceRowsScrollViewer") as ScrollViewer
             ?? throw new InvalidOperationException("Preview 37 自定义来源内容滚动视口未创建。 ");
-        if (profileSourceComboBox.Background is not SolidColorBrush profileBackground ||
-            profileBackground.Color.R > 40 ||
-            profilePopupBorder.Background is not SolidColorBrush profilePopupBackground ||
-            profilePopupBackground.Color.R > 40 ||
-            profileSourceComboBox.Foreground is not SolidColorBrush profileForeground ||
-            profileForeground.Color.R < 180 ||
-            PreciseScrollBehavior.GetAxis(profilePopupScrollViewer) != PreciseScrollAxis.Vertical ||
+        CheckComboBoxPalettes(profileSourceComboBox, profilePopupBorder);
+        if (PreciseScrollBehavior.GetAxis(profilePopupScrollViewer) != PreciseScrollAxis.Vertical ||
             PreciseScrollBehavior.GetAxis(sourceRowsScrollViewer) != PreciseScrollAxis.Vertical)
         {
-            throw new InvalidOperationException("Preview 37 自定义来源窗口没有保持深色背景或统一像素滚动。 ");
+            throw new InvalidOperationException("自定义来源窗口没有使用统一像素滚动。 ");
         }
         sourceProfileWindow.Rows.Single(row => row.Field == MetadataField.Title).SourceName =
             MetadataSourcePreferenceProfile.R18Dev;
@@ -3099,6 +3090,40 @@ internal static partial class Program
             Dispatcher.PushFrame(frame);
             timer.Stop();
         }
+    }
+
+    private sealed class HighlightedComboBoxItem : ComboBoxItem
+    {
+        public HighlightedComboBoxItem() => IsHighlighted = true;
+    }
+
+    private static void CheckComboBoxPalettes(ComboBox combo, Border popup)
+    {
+        var appearance = WindowVisualTheme.Appearance;
+        try
+        {
+            foreach (var theme in new[] { "light", "dark" })
+            {
+                WindowVisualTheme.SetAppearance(theme);
+                var item = new HighlightedComboBoxItem { Style = combo.ItemContainerStyle };
+                item.ApplyTemplate();
+                var row = (Border)item.Template.FindName("ItemBorder", item);
+
+                void CheckBrush(Brush? actual, string key, string part)
+                {
+                    var expected = (SolidColorBrush)combo.FindResource(key);
+                    if (actual is not SolidColorBrush brush || brush.Color != expected.Color)
+                        throw new InvalidOperationException($"{combo.Name} {theme} {part}: expected {key} ({expected}), got {actual}.");
+                }
+
+                CheckBrush(combo.Background, "InputBrush", "background");
+                CheckBrush(popup.Background, "InputBrush", "popup");
+                CheckBrush(combo.Foreground, "TextBrush", "text");
+                CheckBrush(item.Foreground, "TextBrush", "highlighted text");
+                CheckBrush(row.Background, "PanelAltBrush", "highlighted background");
+            }
+        }
+        finally { WindowVisualTheme.SetAppearance(appearance); }
     }
 
     private static bool FitsInside(FrameworkElement child, FrameworkElement container, double tolerance = 1.5)

@@ -1,6 +1,6 @@
 # Changelog
 
-## Windows 2.0.0-preview.16
+## Windows 1.3.0
 
 - Add videos and folders together, select recognized movies on import, and manage a collapsible queue with thumbnails.
 - Review metadata, the poster and the full cover in one workspace. Search checked movies again with another source or open a source page from the manual search menu.

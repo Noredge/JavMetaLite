@@ -122,7 +122,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource PanelAltBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource SelectionBrush}" />
